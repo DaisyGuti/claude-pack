@@ -1,0 +1,28 @@
+# Reference Compose file: runtime hardening for one service. Copy the keys you need.
+# Compose applies these at `docker compose up`. On Cloud Run or GKE the same settings
+# live in the service or pod spec (securityContext); see references/runtime-hardening.md.
+services:
+  app:
+    # Replace the placeholder digest with the digest of the image your pipeline pushed.
+    image: us-docker.pkg.dev/PROJECT_ID/REPOSITORY/app:1.0.0@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 512m
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped

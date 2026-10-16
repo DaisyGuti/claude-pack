@@ -1,0 +1,34 @@
+# Reference Dockerfile: Python service, multi-stage build, distroless runtime, non-root.
+#
+# Before use:
+#   1. Re-resolve both digests and keep them current with Renovate or Dependabot:
+#        docker buildx imagetools inspect python:3.13-slim-trixie
+#        docker buildx imagetools inspect gcr.io/distroless/python3-debian13:nonroot
+#   2. Keep the build and runtime Python minor versions equal. The distroless image ships
+#      the Debian release's own Python, so the build stage uses the same minor version.
+#   3. Compile requirements.txt with hashes (pip-compile --generate-hashes or
+#      uv pip compile --generate-hashes) so --require-hashes can refuse a swapped package.
+#   4. A private package index that needs credentials gets them from a build secret:
+#        docker build --secret id=pip_conf,src=<path to pip.conf> .
+#      Never pass credentials with ARG or ENV: both stay in the image history.
+
+FROM python:3.13-slim-trixie@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f AS build
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
+WORKDIR /src
+COPY requirements.txt ./
+RUN --mount=type=secret,id=pip_conf,target=/etc/pip.conf,required=false \
+    pip install --require-hashes --no-deps --target /opt/deps -r requirements.txt
+COPY app/ ./app/
+
+FROM gcr.io/distroless/python3-debian13:nonroot@sha256:83aa8d4f74a4d7f7cf2d472054139bef71a927b76c680c0f2e1021d6b1d6d732
+WORKDIR /app
+COPY --from=build /opt/deps /opt/deps
+COPY --from=build /src/app ./app
+ENV PYTHONPATH=/opt/deps PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+USER 65532:65532
+EXPOSE 8080
+# Distroless has no shell or curl, so the probe is the interpreter itself. Kubernetes and
+# Cloud Run ignore HEALTHCHECK; define a readiness probe in the deployment as well.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD ["python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)"]
+ENTRYPOINT ["python3", "-m", "app"]
