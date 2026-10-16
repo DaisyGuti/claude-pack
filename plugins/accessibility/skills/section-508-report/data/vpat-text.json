@@ -1,0 +1,34 @@
+{
+ "source": "ITI VPAT 2.5Rev Word files read on 2026-10-16: Revised Section 508 Edition, WCAG Edition and International Edition. Strings are the template's own wording.",
+ "terms": {
+  "Supports": "The functionality of the product has at least one method that meets the criterion without known defects or meets with equivalent facilitation.",
+  "Partially Supports": "Some functionality of the product does not meet the criterion.",
+  "Does Not Support": "The majority of product functionality does not meet the criterion.",
+  "Not Applicable": "The criterion is not relevant to the product.",
+  "Not Evaluated": "The product has not been evaluated against the criterion. This can only be used in WCAG Level AAA criteria."
+ },
+ "standards": {
+  "wcag": "Web Content Accessibility Guidelines {version}",
+  "section508": "Revised Section 508 standards published January 18, 2017 and corrected January 22, 2018",
+  "en301549": "EN 301 549 Accessibility requirements for ICT products and services - V3.1.1 (2019-11) AND EN 301 549 Accessibility requirements for ICT products and services - V3.2.1 (2021-03)"
+ },
+ "editions": {
+  "508": {
+   "title": "Revised Section 508 Edition",
+   "wcag_heading": "WCAG 2.0 Report",
+   "wcag_note": "When reporting on conformance with the WCAG 2.0 Success Criteria, they are scoped for full pages, complete processes, and accessibility-supported ways of using technology as documented in the WCAG 2.0 Conformance Requirements.",
+   "also_documents": "Tables 1 and 2 also document conformance with Revised Section 508: Chapter 5 - 501.1 Scope, 504.2 Content Creation or Editing; Chapter 6 - 602.3 Electronic Support Documentation.",
+   "parsing_remark": "For WCAG 2.0 and the 508 standards, the September 2023 errata update indicates this criterion is always supported. See the WCAG 2.0 Editorial Errata."
+  },
+  "international": {
+   "title": "International Edition",
+   "wcag_heading": "WCAG 2.x Report",
+   "wcag_note": "When reporting on conformance with the WCAG 2.x Success Criteria, they are scoped for full pages, complete processes, and accessibility-supported ways of using technology as documented in the WCAG 2.1 Conformance Requirements.",
+   "also_documents": "Tables 1 and 2 also document conformance with Revised Section 508: Chapter 5 - 501.1 Scope and 504.2 Content Creation or Editing; Chapter 6 - 602.3 Electronic Support Documentation.",
+   "parsing_remark": "For WCAG 2.0, 2.1, EN 301 549, and Revised 508 Standards, the September 2023 errata update indicates this criterion is always supported. See the WCAG 2.0 Editorial Errata and the WCAG 2.1 Editorial Errata."
+  }
+ },
+ "crossref_remark": "See information in the WCAG 2.x section.",
+ "hardware_note": "Chapter 4 (Hardware) is not included in this report. The product is software delivered over the web and has no hardware component. The VPAT instructions allow an entire section that does not apply to be removed when the notes say why.",
+ "aaa_note": "Level AAA success criteria are not part of this report. Section 508 does not require them."
+}
