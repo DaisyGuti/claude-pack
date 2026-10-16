@@ -1,0 +1,99 @@
+{
+ "SchemaVersion": 2,
+ "ArtifactName": ".",
+ "Results": [
+  {
+   "Target": "requirements.txt",
+   "Class": "lang-pkgs",
+   "Type": "pip",
+   "Vulnerabilities": [
+    {
+     "VulnerabilityID": "CVE-2018-18074",
+     "PkgName": "requests",
+     "InstalledVersion": "2.19.0",
+     "FixedVersion": "2.20.0",
+     "Status": "fixed",
+     "Title": "python-requests: Redirect from HTTPS to HTTP does not remove Authorization header",
+     "Severity": "HIGH"
+    },
+    {
+     "VulnerabilityID": "CVE-2023-32681",
+     "PkgName": "requests",
+     "InstalledVersion": "2.19.0",
+     "FixedVersion": "2.31.0",
+     "Status": "fixed",
+     "Title": "python-requests: Unintended leak of Proxy-Authorization header",
+     "Severity": "MEDIUM"
+    }
+   ]
+  },
+  {
+   "Target": "Dockerfile",
+   "Class": "config",
+   "Type": "dockerfile",
+   "Misconfigurations": [
+    {
+     "ID": "DS-0002",
+     "Title": "Image user should not be 'root'",
+     "Message": "Specify at least 1 USER command in Dockerfile with non-root user as argument",
+     "Resolution": "Add 'USER <non root user name>' line to the Dockerfile",
+     "Severity": "HIGH",
+     "Status": "FAIL",
+     "CauseMetadata": {
+      "Provider": "Dockerfile",
+      "Service": "general"
+     }
+    },
+    {
+     "ID": "DS-0026",
+     "Title": "No HEALTHCHECK defined",
+     "Message": "Add HEALTHCHECK instruction in your Dockerfile",
+     "Resolution": "Add HEALTHCHECK instruction in Dockerfile",
+     "Severity": "LOW",
+     "Status": "FAIL",
+     "CauseMetadata": {
+      "Provider": "Dockerfile",
+      "Service": "general"
+     }
+    }
+   ]
+  },
+  {
+   "Target": "main.tf",
+   "Class": "config",
+   "Type": "terraform",
+   "Misconfigurations": [
+    {
+     "ID": "AWS-0086",
+     "Title": "S3 Access block should block public ACL",
+     "Message": "No public access block so not blocking public acls",
+     "Resolution": "Enable blocking any PUT calls with a public ACL specified",
+     "Severity": "HIGH",
+     "Status": "FAIL",
+     "CauseMetadata": {
+      "Provider": "AWS",
+      "Service": "s3",
+      "StartLine": 1,
+      "EndLine": 4,
+      "Resource": "aws_s3_bucket.b"
+     }
+    },
+    {
+     "ID": "AWS-0087",
+     "Title": "S3 Access block should block public policy",
+     "Message": "No public access block so not blocking public policies",
+     "Resolution": "Prevent policies that allow public access being PUT",
+     "Severity": "HIGH",
+     "Status": "FAIL",
+     "CauseMetadata": {
+      "Provider": "AWS",
+      "Service": "s3",
+      "StartLine": 1,
+      "EndLine": 4,
+      "Resource": "aws_s3_bucket.b"
+     }
+    }
+   ]
+  }
+ ]
+}

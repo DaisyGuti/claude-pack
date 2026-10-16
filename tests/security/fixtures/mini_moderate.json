@@ -1,0 +1,23 @@
+{
+ "profile": {
+  "metadata": {
+   "title": "Mini moderate"
+  },
+  "imports": [
+   {
+    "href": "x",
+    "include-controls": [
+     {
+      "with-ids": [
+       "ac-2",
+       "ac-2.1",
+       "au-2",
+       "sc-7",
+       "sc-7.5"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

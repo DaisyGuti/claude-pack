@@ -1,0 +1,70 @@
+[
+ {
+  "check_type": "terraform",
+  "results": {
+   "failed_checks": [
+    {
+     "check_id": "CKV2_AWS_62",
+     "check_name": "Ensure S3 buckets should have event notifications enabled",
+     "file_path": "/main.tf",
+     "file_line_range": [
+      1,
+      4
+     ],
+     "resource": "aws_s3_bucket.b",
+     "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/aws-policies/aws-logging-policies/bc-aws-2-62",
+     "severity": null
+    },
+    {
+     "check_id": "CKV_AWS_20",
+     "check_name": "S3 Bucket has an ACL defined which allows public READ access.",
+     "file_path": "/main.tf",
+     "file_line_range": [
+      1,
+      4
+     ],
+     "resource": "aws_s3_bucket.b",
+     "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/aws-policies/s3-policies/s3-1-acl-read-permissions-everyone",
+     "severity": null
+    }
+   ]
+  },
+  "summary": {
+   "failed": 8
+  }
+ },
+ {
+  "check_type": "dockerfile",
+  "results": {
+   "failed_checks": [
+    {
+     "check_id": "CKV_DOCKER_2",
+     "check_name": "Ensure that HEALTHCHECK instructions have been added to container images",
+     "file_path": "/Dockerfile",
+     "file_line_range": [
+      1,
+      2
+     ],
+     "resource": "/Dockerfile.",
+     "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/docker-policies/docker-policy-index/ensure-that-healthcheck-instructions-have-been-added-to-container-images",
+     "severity": null
+    },
+    {
+     "check_id": "CKV_DOCKER_3",
+     "check_name": "Ensure that a user for the container has been created",
+     "file_path": "/Dockerfile",
+     "file_line_range": [
+      1,
+      2
+     ],
+     "resource": "/Dockerfile.",
+     "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/docker-policies/docker-policy-index/ensure-that-a-user-for-the-container-has-been-created",
+     "severity": null
+    }
+   ]
+  },
+  "summary": {
+   "failed": 2
+  }
+ }
+]
