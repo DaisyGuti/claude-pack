@@ -1,6 +1,13 @@
 ---
 name: status-update
-description: Builds a daily standup (yesterday, today, blockers) or a weekly update from the user's git commits, pull requests or merge requests, and tickets on GitHub (gh) or GitLab (glab), formatted for Slack. Use when the user asks for "my standup", "what did I do yesterday", "weekly update", "status for the team", "summarize my week", "what did I ship", or "update for Friday", even if they do not say Slack. Drafts the text only; posting is a separate step, /team-comms:slack-send.
+description: >-
+  Builds a daily standup (yesterday, today, blockers) or a weekly update from the user's git
+  commits, pull requests or merge requests, and tickets on GitHub (gh) or GitLab (glab),
+  formatted for Slack. Use when the user asks for "my standup", "what did I do yesterday",
+  "weekly update", "status for the team", "summarize my week", "what did I ship", or "update for
+  Friday", even if they do not say Slack. Drafts the text only; posting is a separate step,
+  /team-comms:slack-send. For a standup built from the user's own Slack messages, the Slack
+  plugin's /slack:standup does that.
 argument-hint: "[standup|weekly] [repo paths]"
 ---
 

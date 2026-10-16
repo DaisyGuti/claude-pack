@@ -1,6 +1,17 @@
 ---
 name: gcp-review
-description: Runs a read-only security review of Google Cloud projects with gcloud and reports evidence, gaps and drafted fixes without changing anything. Use when someone asks to review, audit or harden a GCP project, check IAM least privilege, basic roles (owner, editor), service account keys, allUsers or allAuthenticatedUsers bindings, organization policies, Workload Identity Federation for GitHub Actions or GitLab CI, VPC Service Controls, CMEK, audit logs and Data Access logs, Artifact Registry, Binary Authorization, Cloud Run or GKE hardening, or Assured Workloads for FedRAMP Moderate, FedRAMP High, IL4 or IL5, even if they do not name this skill or mention gcloud. Also use when someone asks to "just fix" a risky GCP setting, because this skill drafts the fix for a person to run. Writing new infrastructure code and reviewing a Dockerfile belong to other skills.
+description: >-
+  Runs a read-only security review of Google Cloud projects with gcloud and reports evidence,
+  gaps and drafted fixes without changing anything. Use when someone asks to review, audit or
+  harden a GCP project, check IAM least privilege, basic roles (owner, editor), service account
+  keys, allUsers or allAuthenticatedUsers bindings, organization policies, Workload Identity
+  Federation for GitHub Actions or GitLab CI, VPC Service Controls, CMEK, audit logs and Data
+  Access logs, Artifact Registry, Binary Authorization, Cloud Run or GKE hardening, or Assured
+  Workloads for FedRAMP Moderate, FedRAMP High, IL4 or IL5, even if they do not name this skill
+  or mention gcloud. Also use when someone asks to "just fix" a risky GCP setting, because this
+  skill drafts the fix for a person to run. Writing new infrastructure code and reviewing a
+  Dockerfile belong to other skills. For the pipeline side of keyless auth (a workflow or
+  .gitlab-ci.yml change), use ci-harden.
 allowed-tools:
   - Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/*)
   - Read

@@ -4,6 +4,9 @@ The eng agent reads this before it spawns anything. Sources: Claude Code sub-age
 documentation, sections "Choose a model" and "Choose an effort level"
 (<https://code.claude.com/docs/en/sub-agents>), read 2026-10-16. Model names change, so
 this file uses the aliases `haiku`, `sonnet` and `opus` and no version numbers.
+For a full recommendation with the current lineup, prices and effort levels fetched live, use
+the `model-recommender` skill in the models plugin when it is installed; this file is the short
+rule the eng agent applies while delegating.
 
 ## The rule
 

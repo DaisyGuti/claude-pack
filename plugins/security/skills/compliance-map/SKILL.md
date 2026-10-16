@@ -1,6 +1,17 @@
 ---
 name: compliance-map
-description: Maps a system's evidence (code, configuration, infrastructure-as-code, CI and docs) to the frameworks a government product meets and writes a control-by-control table of evidence found, gaps and next steps. Covers NIST SP 800-53 Rev 5 with the FedRAMP baselines and FedRAMP 20x, NIST SSDF SP 800-218 and the CISA secure software attestation, NIST SP 800-171 and CMMC Level 2, DoD Cloud Computing SRG impact levels, FIPS 140-3 validated cryptography and SBOM expectations. Use when asked about FedRAMP, ATO or authorization evidence, CMMC, 800-171, 800-53 controls, SSDF, a compliance gap analysis, input for a system security plan, "are we ready for", or what a government customer will ask for, even if no framework is named. Produces evidence and gaps only and never states that a system is compliant, certified or authorized.
+description: >-
+  Maps a system's evidence (code, configuration, infrastructure-as-code, CI and docs) to the
+  frameworks a government product meets and writes a control-by-control table of evidence found,
+  gaps and next steps. Covers NIST SP 800-53 Rev 5 with the FedRAMP baselines and FedRAMP 20x,
+  NIST SSDF SP 800-218 and the CISA secure software attestation, NIST SP 800-171 and CMMC Level
+  2, DoD Cloud Computing SRG impact levels, FIPS 140-3 validated cryptography and SBOM
+  expectations. Use when asked about FedRAMP, ATO or authorization evidence, CMMC, 800-171,
+  800-53 controls, SSDF, a compliance gap analysis, input for a system security plan, "are we
+  ready for", or what a government customer will ask for, even if no framework is named.
+  Produces evidence and gaps only and never states that a system is compliant, certified or
+  authorized. For a VPAT or Section 508 accessibility report, use section-508-report
+  (accessibility plugin).
 argument-hint: "[framework or impact level] [path]"
 allowed-tools:
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/nist_catalog.py *)

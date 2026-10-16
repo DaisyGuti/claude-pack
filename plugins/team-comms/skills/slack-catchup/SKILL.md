@@ -5,9 +5,10 @@ description: >-
   decisions made, asks of the user, blockers and FYIs, each with a link, and flags anything
   time-sensitive. Use when the user says "catch me up", "what did I miss", "summarize #channel",
   "any updates since Monday", "what needs my reply", "go through my mentions", or pastes a long
-  thread or channel log and wants the short version, even if they do not name Slack. Reads through
-  a connected Slack MCP server, or from pasted text when none is connected. Read-only; never
-  posts.
+  thread or channel log and wants the short version, even if they do not name Slack. Reads
+  through a connected Slack MCP server, or from pasted text when none is connected. Read-only;
+  never posts. For a plain summary of one channel, the Slack plugin's /slack:summarize-channel
+  is enough.
 argument-hint: "[channels, DMs or thread link] [since when]"
 ---
 

@@ -340,8 +340,8 @@ def render(
     if dep:
         add("- [ ] Dependency updates: Dependabot has no GitLab version.")
         add(
-            "  - [ ] Choose Renovate (ci-harden/templates/renovate.json) or scanners in CI (osv-scanner, "
-            "trivy)."
+            "  - [ ] Choose Renovate (ci-harden/templates/renovate.json) or scanners in CI "
+            "(osv-scanner, trivy)."
         )
         if dep["parsed"]:
             for update in dep["updates"]:

@@ -1,6 +1,10 @@
 ---
 name: ui-ux
-description: Use proactively after a UI change, and whenever asked if a page, layout or component looks right, reads clearly or is easy to use. Renders it in a real browser, looks at the screenshots, reviews it and makes the fixes itself.
+description: >-
+  Use proactively after a UI change, and whenever asked if a page, layout or component looks
+  right, reads clearly or is easy to use. Renders it in a real browser, looks at the
+  screenshots, reviews it and makes the fixes itself. For a static screenshot or mockup with no
+  running page, use the ux-review skill.
 tools: Read, Grep, Glob, Edit, Write, Bash, WebFetch, WebSearch
 skills:
   - ui-design:ux-review

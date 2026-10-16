@@ -11,7 +11,7 @@ is the platform fact and this file is the house choice built on it.
    `tests/<their plugin>/`.
 2. **Shared files go through the integrator.** These change only through the integrator:
    `.claude-plugin/marketplace.json`, `pyproject.toml`, `README.md`,
-   `THIRD_PARTY_NOTICES.md`, `docs/`, `scripts/`, `.gitignore`. If you need a change in
+   `THIRD_PARTY_NOTICES.md`, `docs/`, `scripts/`, `install.sh`, `preferences/`, `.gitignore`. If you need a change in
    one, say so in your hand-off message.
 3. **Official first.** Before building, check
    `~/.claude/plugins/marketplaces/claude-plugins-official/` (plugins and
@@ -19,8 +19,8 @@ is the platform fact and this file is the house choice built on it.
    recommends installing it and this repo builds only the gap. Today that includes
    `claude-security`, `security-guidance`, `code-review`, `pr-review-toolkit`,
    `feature-dev`, `frontend-design`, `claude-md-management`, `claude-code-setup`,
-   `commit-commands`, `hookify`, `skill-creator`, `session-report`, and the `github` and
-   `gitlab` integrations. Re-read that folder at build time; the list moves.
+   `commit-commands`, `hookify`, `skill-creator`, `session-report`, and the `slack`, `github`
+   and `gitlab` integrations. Re-read that folder at build time; the list moves.
 
 ## Team-safe content
 
@@ -132,7 +132,8 @@ is the platform fact and this file is the house choice built on it.
 33. **Tests live in `tests/<plugin>/`** and run under `uv run pytest tests/<plugin>`. Every
     script has tests, including the failure paths. Tests need no network and no
     credentials.
-34. **Style gates.** `uv run ruff check` and `uv run ruff format --check` pass.
+34. **Style gates.** `uv run ruff check` and `uv run ruff format --check` pass. A shell script
+    also passes `shellcheck -x`.
 
 ## Evals
 

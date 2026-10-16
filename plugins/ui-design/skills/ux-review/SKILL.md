@@ -1,6 +1,15 @@
 ---
 name: ux-review
-description: Judges an existing design for usability, accessibility and visual craft, and says what to change. Use when asked to review or critique a UI, screenshot, mockup, prototype, flow or component, to "roast" or grade a design, to explain why a page looks generic or AI-made, to check contrast, keyboard or reading-order risks from a design, or to answer whether a screen works for its user. Gives a readiness verdict and a ranked list of fixes with concrete values (label text, px size, hex). Judges what is shown; it does not build new UI (use frontend-design), review framework source line by line (use web-design-guidelines), or run live-page accessibility tests (use the accessibility plugin).
+description: >-
+  Judges an existing design for usability, accessibility and visual craft, and says what to
+  change. Use when asked to review or critique a UI, screenshot, mockup, prototype, flow or
+  component, to "roast" or grade a design, to explain why a page looks generic or AI-made, to
+  check contrast, keyboard or reading-order risks from a design, or to answer whether a screen
+  works for its user. Gives a readiness verdict and a ranked list of fixes with concrete values
+  (label text, px size, hex). Judges what is shown; it does not build new UI (use
+  frontend-design), review framework source line by line (use web-design-guidelines), or run
+  live-page accessibility tests (use the accessibility plugin). To render the page in a real
+  browser and make the fixes, use the ui-ux agent.
 when_to_use: Also covers fast scored critiques ("grade this design in 60 seconds"), WCAG-minded design reviews of screenshots, and the usability pass on a design built with the U.S. Web Design System (load uswds as well).
 ---
 

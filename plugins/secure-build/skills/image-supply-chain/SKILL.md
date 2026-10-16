@@ -5,12 +5,13 @@ description: >-
   CycloneDX and SPDX SBOMs (syft), and plans or checks signing and attestation with cosign
   keyless signing through the CI identity, SLSA build provenance on GitHub and GitLab, pushing
   to Google Artifact Registry, and enforcing signatures with Binary Authorization. Verifies a
-  signed image against a pinned signer identity. Use it for "scan this image", "what CVEs are
-  in our container", "generate an SBOM", "sign our images", "add provenance or attestations",
+  signed image against a pinned signer identity. Use it for "scan this image", "what CVEs are in
+  our container", "generate an SBOM", "sign our images", "add provenance or attestations",
   "verify this image was built by our pipeline", "push to Artifact Registry", "block unsigned
   images on GKE or Cloud Run", or "container supply chain", even when the user does not name
   cosign, SBOM or SLSA. For editing a Dockerfile use dockerfile-harden; for writing the CI
-  pipeline that runs these steps use ci-harden.
+  pipeline that runs these steps use ci-harden. To scan source code, dependencies or
+  infrastructure-as-code in a repository, use security-scan (security plugin).
 allowed-tools: Read Grep Glob Bash(sh ${CLAUDE_SKILL_DIR}/scripts/*) Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/*)
 ---
 

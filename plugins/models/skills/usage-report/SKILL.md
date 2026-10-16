@@ -1,6 +1,15 @@
 ---
 name: usage-report
-description: Reports Claude Code token use and estimated list-price cost across sessions, grouped by model, subagent type, project and session, from the local session transcripts, and flags subagent runs that used a top-tier model for work that looks mechanical. Use when asked how much has been used or spent, which model is burning tokens, what subagents are costing, whether Opus is running where Sonnet or Haiku would do, for a weekly cost report, or for usage by project, even if the user never mentions transcripts. For this session's total alone, point to the built-in /usage (aliases /cost and /stats); for an HTML report with cache and skill breakdowns, point to the session-report plugin.
+description: >-
+  Reports Claude Code token use and estimated list-price cost across sessions, grouped by model,
+  subagent type, project and session, from the local session transcripts, and flags subagent
+  runs that used a top-tier model for work that looks mechanical. Use when asked how much has
+  been used or spent, which model is burning tokens, what subagents are costing, whether Opus is
+  running where Sonnet or Haiku would do, for a weekly cost report, or for usage by project,
+  even if the user never mentions transcripts. For this session's total alone, point to the
+  built-in /usage (aliases /cost and /stats); for an HTML report with cache and skill
+  breakdowns, point to the session-report plugin. For the model calls inside a product's code,
+  use model-usage-audit.
 argument-hint: '[7d | 24h | 30d | all | YYYY-MM-DD]'
 allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/usage_report.py *) Read WebFetch
 ---

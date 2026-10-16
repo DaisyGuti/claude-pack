@@ -1,6 +1,17 @@
 ---
 name: model-usage-audit
-description: Audits how a product codebase uses AI models and writes a findings report with fixes. Inventories every call site (Anthropic SDK, Claude on Vertex AI or Bedrock, Gemini on Vertex AI, OpenAI, LangChain, LlamaIndex, LiteLLM, raw HTTP) with file:line, then checks model ids (pinned or floating, deprecated or retired), max tokens, timeouts, retries, streaming, prompt caching, cost per call path, where data goes (provider, region, and the authorization status of that route, fetched fresh and never assumed), prompts and logs that may carry personal or controlled data, key handling, and eval coverage. Use when asked to audit, review or inventory the AI or LLM usage in a repo, to find deprecated model ids before a retirement date, to prepare a model migration, to check AI data flow before a security or compliance review, or to find out what the AI calls cost, even if the user never says "audit".
+description: >-
+  Audits how a product codebase uses AI models and writes a findings report with fixes.
+  Inventories every call site (Anthropic SDK, Claude on Vertex AI or Bedrock, Gemini on Vertex
+  AI, OpenAI, LangChain, LlamaIndex, LiteLLM, raw HTTP) with file:line, then checks model ids
+  (pinned or floating, deprecated or retired), max tokens, timeouts, retries, streaming, prompt
+  caching, cost per call path, where data goes (provider, region, and the authorization status
+  of that route, fetched fresh and never assumed), prompts and logs that may carry personal or
+  controlled data, key handling, and eval coverage. Use when asked to audit, review or inventory
+  the AI or LLM usage in a repo, to find deprecated model ids before a retirement date, to
+  prepare a model migration, to check AI data flow before a security or compliance review, or to
+  find out what the AI calls cost, even if the user never says "audit". For the user's own
+  Claude Code spending, use usage-report.
 argument-hint: '[path to repository, default current folder]'
 allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/inventory_model_calls.py *) Read Grep Glob WebFetch
 ---

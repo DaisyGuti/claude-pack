@@ -35,7 +35,6 @@ OFFICIAL_COMPANIONS="code-review pr-review-toolkit claude-security security-guid
 THIRD_PARTY_COMPANIONS="accesslint|accesslint/skills|accesslint typography|bencium/bencium-marketplace|bencium-marketplace"
 
 # Lowest Claude Code version each feature needs.
-MIN_PLUGINS="2.1.289"   # claude plugin validate, install and list --json used here
 MIN_EVAL="2.1.269"      # claude plugin eval
 MIN_EFFORT="2.1.292"    # the per-ticket effort label in the tickets plugin
 MIN_GUARDRAILS="2.1.295" # onFailure: block, so a crashed hook cannot let a command through
@@ -239,7 +238,6 @@ check_prerequisites() { # check_prerequisites : exits on a missing hard requirem
   if command -v claude >/dev/null 2>&1; then
     cv="$(claude --version | awk '{print $1}')"
     say "  ok: claude $cv"
-    feature_line "$cv" "$MIN_PLUGINS" "installing plugins from a marketplace"
     feature_line "$cv" "$MIN_EVAL" "claude plugin eval (running the eval suites)"
     feature_line "$cv" "$MIN_EFFORT" "the tickets plugin's per-ticket effort label"
     feature_line "$cv" "$MIN_GUARDRAILS" "guardrails failing closed when a hook crashes"
@@ -313,7 +311,7 @@ ensure_marketplace() { # ensure_marketplace NAME SOURCE : add it if missing, ref
   if [ -n "$found" ]; then
     have="${found%%"$TAB"*}"
     if [ "$have" != "$want" ]; then
-      say "refused: marketplace '$name' is already configured from $have, not $want."
+      say "refused: marketplace '$name' is already configured from $have, and this run asked for $want."
       say "  Remove it first (claude plugin marketplace remove $name) or rerun with --source $have."
       return 1
     fi
