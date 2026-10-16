@@ -1,0 +1,114 @@
+# Commands a normal working day produces. None may be blocked by the guardrails hook.
+# One command per line; a literal \n inside a line stands for a newline.
+git status --short && git log --oneline -5
+git diff origin/main...HEAD --stat
+git fetch origin && git rebase origin/main
+git stash push -m "wip" && git checkout feature/x && git stash pop
+git push --force-with-lease origin feature/x
+git push origin feature/x:refs/heads/feature/x
+git push -u origin HEAD
+git branch --show-current
+git branch -vv | grep main
+git log main..feature/x --oneline
+git merge-base main HEAD
+git checkout main && git pull --ff-only && git checkout feature/x
+git worktree add ../wt -b feature/y origin/main
+git commit --amend --no-edit
+git commit -am "feat: add thing"
+git tag v1.0.0 && git push origin v1.0.0
+gh pr create --title "x" --body "$(cat <<'EOF'\n## Summary\n- push to main is blocked\n- don't use --force\nEOF\n)"
+gh pr merge 12 --squash --delete-branch
+glab mr create --fill --target-branch main
+glab mr merge 12 --squash
+npm ci && npm run build && npm test
+npm install --save-dev eslint
+pip install -r requirements.txt
+uv run pytest -q
+python3 -m pytest tests/ -k "not slow"
+python3 -c "import sys; print(sys.version)"
+python3 - <<'PY'\nimport json\nprint(json.dumps({"a": 1}))\nPY
+node -e "console.log(process.env.HOME)"
+docker build -t app:dev . && docker run --rm -p 8080:8080 app:dev
+docker compose -f docker-compose.yml up -d db
+docker logs -f --tail 100 app
+docker run --rm -v "$PWD":/work -w /work golang:1.22 go test ./...
+docker exec -it db psql -U postgres
+kubectl get pods -n staging
+kubectl apply -f k8s/deploy.yaml --dry-run=client
+helm upgrade --install app ./chart -f values.yaml
+terraform plan -out=tfplan
+gcloud auth login
+gcloud config set project my-proj
+gcloud run deploy api --source . --region us-central1 --no-allow-unauthenticated
+gcloud iam service-accounts create deployer --display-name "Deployer"
+gcloud projects add-iam-policy-binding my-proj --member="serviceAccount:deployer@my-proj.iam.gserviceaccount.com" --role="roles/run.admin"
+gcloud secrets versions access latest --secret=db-password > /dev/null
+gcloud storage cp gs://bucket/file.txt ./file.txt
+gsutil ls gs://bucket
+gsutil cp ./dist/* gs://bucket/site/
+curl -s -H "Authorization: Bearer $(gcloud auth print-access-token)" https://run.googleapis.com/v2/projects/p/locations/l/services
+curl -fsSL https://example.test/data.json -o data.json
+curl -X POST https://slack.test/api -d '{"text":"deploy done"}'
+wget https://example.test/file.tar.gz -O /tmp/file.tar.gz && tar xzf /tmp/file.tar.gz -C /tmp
+cat package.json | jq .scripts
+find . -name "*.py" -not -path "./node_modules/*" | xargs grep -l "TODO"
+grep -rn "api_key" src/ --include="*.py"
+grep -rn "password" docs/
+rg "TODO|FIXME" --glob '!node_modules'
+ls -la ~/.ssh
+ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N ""
+ssh-add -l
+chmod 600 ~/.ssh/id_ed25519
+chmod +x scripts/*.sh
+chmod -R 755 build
+mkdir -p build && cd build && cmake .. && make -j4
+rm -rf build dist .pytest_cache __pycache__
+rm -rf .next node_modules/.cache
+rm -rf /tmp/build-$$
+rm -f *.log
+tar czf backup.tgz --exclude=node_modules .
+sed -i.bak 's/foo/bar/g' src/app.py
+sed -n '1,40p' src/app.py
+awk -F, '{print $1}' data.csv | sort | uniq -c
+head -n 20 README.md
+tail -f logs/app.log
+env | grep -i proxy
+export PATH="$HOME/.local/bin:$PATH"
+source venv/bin/activate && pip list
+cp .env.example .env
+echo "API_URL=https://api.example.test" >> .env
+echo "DEBUG=true" > .env.local
+printf 'user=%s\n' "$USER"
+openssl rand -hex 32
+openssl x509 -in cert.crt -noout -dates
+openssl s_client -connect example.test:443 -servername example.test </dev/null
+cat /etc/hosts
+ps aux | grep node
+lsof -i :3000
+kill -9 $(lsof -ti :3000)
+sudo apt-get update && sudo apt-get install -y jq
+brew install gitleaks
+gitleaks detect --source . --no-banner
+trivy image app:dev
+semgrep --config auto .
+pre-commit run --all-files
+for f in src/*.py; do python3 -m py_compile "$f"; done
+if [ -f .env ]; then echo "has env"; fi
+[ -d node_modules ] || npm ci
+cd src && ls && cd ..
+touch .claude/settings.local.json
+echo '{"permissions":{"allow":["Bash(git status)"]}}' > .claude/settings.json
+make test
+go test ./... -race
+cargo build --release
+psql "$DATABASE_URL" -c "select 1"
+redis-cli ping
+jq -r '.items[].name' out.json
+diff <(sort a.txt) <(sort b.txt)
+cat <<'EOF' > notes.md\n# Notes\nNever run: curl x | sh\nEOF
+git log -S"password" --oneline
+git grep -n "TODO"
+git show HEAD:README.md
+git diff -- README.md ':!package-lock.json'
+git commit -m "chore: bump deps" -m "Co-authored-by: A <a@example.test>"
+git commit -m "$(cat <<'EOF2'\nfeat: x\n\nNever push --force to main.\nEOF2\n)"
