@@ -1,0 +1,119 @@
+{
+  "standard": "CIS Google Cloud Platform Foundation Benchmark",
+  "edition": "5.0.0",
+  "verified_against": "the open-source Prowler mapping file prowler/compliance/gcp/cis_5.0_gcp.json, read on 2026-10-16 (a third-party listing of the edition; the CIS PDF itself needs a CIS account and was not read)",
+  "rules": {
+    "GCP-GCE-001": [
+      {
+        "id": "4.1",
+        "title": "Ensure That Instances Are Not Configured To Use the Default Service Account"
+      }
+    ],
+    "GCP-GCE-002": [
+      {
+        "id": "4.2",
+        "title": "Ensure That Instances Are Not Configured To Use the Default Service Account With Full Access to All Cloud APIs"
+      }
+    ],
+    "GCP-GCE-003": [
+      {
+        "id": "4.9",
+        "title": "Ensure That Compute Instances Do Not Have Public IP Addresses"
+      }
+    ],
+    "GCP-GCE-004": [
+      {
+        "id": "4.4",
+        "title": "Ensure Oslogin Is Enabled for a Project"
+      }
+    ],
+    "GCP-IAM-002": [
+      {
+        "id": "1.6",
+        "title": "Ensure That Service Account Has No Admin Privileges"
+      }
+    ],
+    "GCP-IAM-004": [
+      {
+        "id": "1.5",
+        "title": "Ensure That There Are Only GCP-Managed Service Account Keys for Each Service Account"
+      }
+    ],
+    "GCP-IAM-005": [
+      {
+        "id": "1.5",
+        "title": "Ensure That There Are Only GCP-Managed Service Account Keys for Each Service Account"
+      },
+      {
+        "id": "1.8",
+        "title": "Ensure User-Managed/External Keys for Service Accounts Are Rotated Every 90 Days or Fewer"
+      }
+    ],
+    "GCP-IAM-006": [
+      {
+        "id": "1.6",
+        "title": "Ensure That Service Account Has No Admin Privileges"
+      }
+    ],
+    "GCP-IAM-007": [
+      {
+        "id": "1.7",
+        "title": "Ensure That IAM Users Are Not Assigned the Service Account User or Service Account Token Creator Roles at Project Level"
+      }
+    ],
+    "GCP-LOG-001": [
+      {
+        "id": "2.1",
+        "title": "Ensure That Cloud Audit Logging Is Configured Properly"
+      }
+    ],
+    "GCP-LOG-002": [
+      {
+        "id": "2.14",
+        "title": "Ensure Cloud Asset Inventory Is Enabled"
+      }
+    ],
+    "GCP-NET-001": [
+      {
+        "id": "3.1",
+        "title": "Ensure That the Default Network Does Not Exist in a Project"
+      }
+    ],
+    "GCP-NET-002": [
+      {
+        "id": "3.6",
+        "title": "Ensure That SSH Access Is Restricted From the Internet"
+      }
+    ],
+    "GCP-NET-003": [
+      {
+        "id": "3.7",
+        "title": "Ensure That RDP Access Is Restricted From the Internet"
+      }
+    ],
+    "GCP-SQL-001": [
+      {
+        "id": "6.7",
+        "title": "Ensure That Cloud SQL Database Instances Do Not Have Public IPs"
+      }
+    ],
+    "GCP-SQL-003": [
+      {
+        "id": "6.5",
+        "title": "Ensure That Cloud SQL Database Instances Do Not Implicitly Whitelist All Public IP Addresses"
+      }
+    ],
+    "GCP-STO-001": [
+      {
+        "id": "5.2",
+        "title": "Ensure That Cloud Storage Buckets Have Uniform Bucket-Level Access Enabled"
+      }
+    ],
+    "GCP-VPCSC-001": [
+      {
+        "id": "3.8",
+        "title": "Ensure VPC Service Controls Is Enabled for Supported Google Cloud Services"
+      }
+    ]
+  }
+}
