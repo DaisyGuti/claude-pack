@@ -21,7 +21,7 @@ FAKE_CLAUDE = textwrap.dedent(
     """\
     #!/usr/bin/env python3
     # Stand-in for the claude command: keeps marketplaces and plugins in $FAKE_CLAUDE_STATE.
-    import json, os, sys
+    import json, os, subprocess, sys
     state_file = os.environ["FAKE_CLAUDE_STATE"]
     state = json.load(open(state_file)) if os.path.exists(state_file) else {"m": {}, "p": {}}
     args = sys.argv[1:]
@@ -29,6 +29,15 @@ FAKE_CLAUDE = textwrap.dedent(
         json.dump(state, open(state_file, "w"))
     def flag(name):
         return args[args.index(name) + 1] if name in args else "user"
+    def version_of(plugin_id, record):
+        # Like the real CLI: the commit prefix (12 chars) of the marketplace checkout, or empty
+        # when that path is not a git repo. A test can pin a version to model a stale plugin.
+        if "version" in record:
+            return record["version"]
+        path = state["m"].get(plugin_id.split("@", 1)[1], "")
+        cmd = ["git", "-C", path, "rev-parse", "HEAD"]
+        done = subprocess.run(cmd, capture_output=True, text=True)
+        return done.stdout.strip()[:12] if path and done.returncode == 0 else ""
     if args == ["--version"]:
         print("2.1.300 (Claude Code)")
     elif args[:3] == ["plugin", "marketplace", "list"]:
@@ -45,7 +54,8 @@ FAKE_CLAUDE = textwrap.dedent(
         state["p"] = {k: v for k, v in state["p"].items() if not k.endswith("@" + args[3])}
         save()
     elif args[:2] == ["plugin", "list"]:
-        print(json.dumps([{"id": k, "scope": v["scope"], "enabled": v["enabled"], "version": "abc"}
+        print(json.dumps([{"id": k, "scope": v["scope"], "enabled": v["enabled"],
+                           "version": version_of(k, v)}
                           for k, v in state["p"].items()]))
     elif args[:2] == ["plugin", "install"]:
         state["p"][args[2]] = {"scope": flag("--scope"), "enabled": True}
@@ -144,6 +154,37 @@ def test_check_reports_missing_then_clean(env: Env) -> None:
     assert "problem: marketplace claude-pack is not configured" in missing.stdout
     env.run()
     assert env.run("--check").returncode == 0
+
+
+def test_check_flags_a_plugin_behind_the_marketplace_copy(env: Env, tmp_path: Path) -> None:
+    # The version comparison only runs when the marketplace copy has a .git directory, which a
+    # linked worktree does not (its .git is a file). Use a throwaway checkout of our own.
+    source = tmp_path / "source"
+    shutil.copytree(ROOT / ".claude-plugin", source / ".claude-plugin")
+    git = ["git", "-C", str(source), "-c", "user.name=t", "-c", "user.email=t@example.com"]
+    subprocess.run([*git, "init", "-q"], check=True)
+    subprocess.run([*git, "add", "."], check=True)
+    subprocess.run([*git, "commit", "-q", "-m", "init", "--no-gpg-sign"], check=True)
+
+    def run_installer(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [str(INSTALL), "--source", str(source), *args],
+            capture_output=True,
+            text=True,
+            env=env.env,
+            check=False,
+        )
+
+    install = run_installer()
+    assert install.returncode == 0, install.stdout + install.stderr
+    assert run_installer("--check").returncode == 0
+    data = json.loads(env.state.read_text())
+    data["p"]["core@claude-pack"]["version"] = "000000000000"
+    env.state.write_text(json.dumps(data))
+    result = run_installer("--check")
+    assert result.returncode == 1
+    assert "core@claude-pack is at 000000000000 but the marketplace copy is at" in result.stdout
+    assert "1 problem(s)" in result.stderr
 
 
 def test_check_flags_a_disabled_plugin_and_changes_nothing(env: Env) -> None:
