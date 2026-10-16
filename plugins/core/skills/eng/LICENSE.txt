@@ -1,0 +1,32 @@
+Notice for ../../agents/reviewer.md
+
+The review instructions in agents/reviewer.md adapt the review prompt and the findings shape
+(title, body, confidence, priority, file and line location, an overall verdict) from the
+OpenAI Cookbook example examples/codex/build_code_review_with_codex_sdk.md
+(https://github.com/openai/openai-cookbook). The text was rewritten for Claude Code, the
+output was changed from JSON to a Markdown report, and the severity definitions, the scope
+check and the security checklist were added for this pack.
+
+The upstream license follows.
+
+MIT License
+
+Copyright (c) 2025 OpenAI
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
