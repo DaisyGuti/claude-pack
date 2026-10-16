@@ -1,0 +1,21 @@
+# Copy to .github/dependabot.yml. Keeps SHA-pinned actions and digest-pinned base images
+# current. The cooldown delays a new release by a week, which gives the community time to
+# notice a compromised release before a pull request proposes it.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7

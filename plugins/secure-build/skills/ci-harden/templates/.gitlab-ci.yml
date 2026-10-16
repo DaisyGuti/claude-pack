@@ -1,0 +1,230 @@
+# Reference pipeline: build a container image, lint, scan it, write SBOMs, sign it and
+# attest it, then push to Google Artifact Registry, authenticating to GCP with Workload
+# Identity Federation. There is no service-account key and no stored credential.
+#
+# Copy to .gitlab-ci.yml, then:
+#   1. Set these CI/CD variables in Settings > CI/CD > Variables (none is a secret, so none
+#      needs masking): GCP_PROJECT_ID, GCP_PROJECT_NUMBER, GCP_WIF_POOL, GCP_WIF_PROVIDER,
+#      GCP_SERVICE_ACCOUNT, AR_LOCATION, AR_REPOSITORY, IMAGE_NAME.
+#   2. Protect the default branch and the v* tags. The Workload Identity provider's attribute
+#      condition lets only protected refs of this project assume the service account
+#      (references/gcp-workload-identity.md has the commands).
+#   3. The audience under id_tokens below is the GitLab instance address. It must equal an
+#      allowed audience on that provider; change it for a self-managed instance.
+#   4. Re-resolve every image digest and tool checksum before the first run (commands in
+#      references/gitlab-ci.md) and let Renovate keep them current.
+#
+# Design notes:
+#   * No Docker-in-Docker and no privileged runner. The image is built with rootless BuildKit
+#     and the scan, SBOM and signing tools are downloaded as release binaries whose SHA-256
+#     is pinned here and checked before use.
+#   * The pipeline file is the signer identity. cosign records
+#     <instance>/<project path>//.gitlab-ci.yml@<ref> in the signing certificate.
+#   * Runners: use ephemeral runners reserved for this project or group. Do not share a
+#     runner that builds untrusted merge requests with one that holds publish jobs.
+#
+# UNVERIFIED in this build: the live token exchange with Google (no GCP project was
+# available) and rootless BuildKit on the team's own runners. Run the pipeline once on a
+# scratch branch and read every job log before trusting it.
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+
+stages: [audit, build, scan, sign]
+
+default:
+  interruptible: true
+  timeout: 30m
+  # tags: [secure-build]   # route to the dedicated runner pool
+
+variables:
+  AR_HOST: ${AR_LOCATION}-docker.pkg.dev
+  IMAGE: ${AR_LOCATION}-docker.pkg.dev/${GCP_PROJECT_ID}/${AR_REPOSITORY}/${IMAGE_NAME}
+  # Pinned release binaries for linux/amd64. SHA-256 values come from each project's
+  # published checksums file.
+  TRIVY_URL: https://github.com/aquasecurity/trivy/releases/download/v0.76.0/trivy_0.76.0_Linux-64bit.tar.gz
+  TRIVY_SHA256: e24b1c51293c1b15e4ba8d45bbc7891ba053f90278ec2698f3562c993e145fe7
+  SYFT_URL: https://github.com/anchore/syft/releases/download/v1.54.1/syft_1.54.1_linux_amd64.tar.gz
+  SYFT_SHA256: c069905b391cc4c20a5ba65ad5c10be2a7ba074f8ea6ad203e24d14e303dad47
+  COSIGN_URL: https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-linux-amd64
+  COSIGN_SHA256: 4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71
+
+.toolbox:
+  image: alpine@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 # 3.24
+  before_script:
+    - |
+      install_tool() {
+        name=$1; url=$2; sum=$3
+        wget -q -O "/tmp/$name.download" "$url"
+        echo "$sum  /tmp/$name.download" | sha256sum -c - >/dev/null || { echo "checksum mismatch for $name" >&2; exit 1; }
+        case "$url" in
+          *.tar.gz) tar -xzf "/tmp/$name.download" -C /usr/local/bin "$name" ;;
+          *) install -m 0755 "/tmp/$name.download" "/usr/local/bin/$name" ;;
+        esac
+        rm -f "/tmp/$name.download"
+      }
+      install_tool trivy "$TRIVY_URL" "$TRIVY_SHA256"
+      install_tool syft "$SYFT_URL" "$SYFT_SHA256"
+      install_tool cosign "$COSIGN_URL" "$COSIGN_SHA256"
+
+# Exchanges the job's OIDC token for a short-lived Google access token (Workload Identity
+# Federation, then service-account impersonation) and writes it to the Docker config that
+# BuildKit, trivy, syft and cosign all read. The token never appears in a log. Each job that
+# uses it declares the GCP_ID_TOKEN id_tokens entry itself.
+.gcp_login:
+  script:
+    - |
+      set -e
+      audience="//iam.googleapis.com/projects/${GCP_PROJECT_NUMBER}/locations/global/workloadIdentityPools/${GCP_WIF_POOL}/providers/${GCP_WIF_PROVIDER}"
+      sts=$(wget -qO- --header "Content-Type: application/json" \
+        --post-data "{\"audience\":\"${audience}\",\"grantType\":\"urn:ietf:params:oauth:grant-type:token-exchange\",\"requestedTokenType\":\"urn:ietf:params:oauth:token-type:access_token\",\"scope\":\"https://www.googleapis.com/auth/cloud-platform\",\"subjectTokenType\":\"urn:ietf:params:oauth:token-type:jwt\",\"subjectToken\":\"${GCP_ID_TOKEN}\"}" \
+        https://sts.googleapis.com/v1/token)
+      federated=$(printf '%s' "$sts" | tr -d '\n' | sed -n 's/.*"access_token" *: *"\([^"]*\)".*/\1/p')
+      [ -n "$federated" ] || { echo "Google STS returned no token. Check the provider's attribute condition and allowed audience." >&2; exit 1; }
+      iam=$(wget -qO- --header "Authorization: Bearer ${federated}" --header "Content-Type: application/json" \
+        --post-data '{"scope":["https://www.googleapis.com/auth/cloud-platform"]}' \
+        "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${GCP_SERVICE_ACCOUNT}:generateAccessToken")
+      token=$(printf '%s' "$iam" | tr -d '\n' | sed -n 's/.*"accessToken" *: *"\([^"]*\)".*/\1/p')
+      [ -n "$token" ] || { echo "Service-account impersonation returned no token. Check roles/iam.workloadIdentityUser on the service account." >&2; exit 1; }
+      mkdir -p "$HOME/.docker"
+      printf '{"auths":{"%s":{"auth":"%s"}}}' "$AR_HOST" "$(printf 'oauth2accesstoken:%s' "$token" | base64 | tr -d '\n')" > "$HOME/.docker/config.json"
+
+dockerfile-lint:
+  stage: audit
+  image:
+    name: ghcr.io/hadolint/hadolint@sha256:9a3944b7fddcb947d1ffd90829ac1a6e5c30479223358f249d8b96c7d0019e27 # v2.15.1-debian
+    entrypoint: [""]
+  script:
+    - hadolint --failure-threshold warning Dockerfile
+
+# ---- Merge requests: build and scan without touching the cloud ----
+
+mr-build:
+  stage: build
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  image:
+    name: moby/buildkit@sha256:65eca3c01cd1180c8f64565c4e3c5983af5145818b0e6fa863385d099eb73855 # v0.34.0-rootless
+    entrypoint: [""]
+  variables:
+    BUILDKITD_FLAGS: --oci-worker-no-process-sandbox
+  script:
+    - |
+      buildctl-daemonless.sh build \
+        --frontend dockerfile.v0 --local context=. --local dockerfile=. \
+        --output type=docker,name=local/app:mr,dest=image.tar
+  artifacts:
+    paths: [image.tar]
+    expire_in: 1 hour
+
+mr-scan:
+  extends: .toolbox
+  stage: scan
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  needs: [mr-build]
+  script:
+    # Fails the job on HIGH or CRITICAL findings. Add --ignore-unfixed only if the team has
+    # agreed that an unfixed vulnerability does not block a build, and write that down.
+    - trivy image --input image.tar --scanners vuln,secret --severity HIGH,CRITICAL --exit-code 1
+    - mkdir -p evidence
+    - syft docker-archive:image.tar -o cyclonedx-json=evidence/sbom.cdx.json -o spdx-json=evidence/sbom.spdx.json
+  artifacts:
+    when: always
+    paths: [evidence/]
+    expire_in: 14 days
+
+# ---- Default branch and release tags: publish ----
+
+build-push:
+  stage: build
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+  interruptible: false
+  image:
+    name: moby/buildkit@sha256:65eca3c01cd1180c8f64565c4e3c5983af5145818b0e6fa863385d099eb73855 # v0.34.0-rootless
+    entrypoint: [""]
+  variables:
+    BUILDKITD_FLAGS: --oci-worker-no-process-sandbox
+  id_tokens:
+    GCP_ID_TOKEN:
+      aud: https://gitlab.com
+  script:
+    - !reference [.gcp_login, script]
+    - |
+      buildctl-daemonless.sh build \
+        --frontend dockerfile.v0 --local context=. --local dockerfile=. \
+        --output "type=image,name=${IMAGE}:${CI_COMMIT_SHA},push=true" \
+        --metadata-file metadata.json
+    - |
+      digest=$(sed -n 's/.*"containerimage.digest" *: *"\(sha256:[0-9a-f]*\)".*/\1/p' metadata.json)
+      [ -n "$digest" ] || { echo "BuildKit wrote no image digest to metadata.json." >&2; exit 1; }
+      echo "IMAGE_DIGEST=${digest}" > build.env
+  artifacts:
+    reports:
+      dotenv: build.env
+
+scan-image:
+  extends: .toolbox
+  stage: scan
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+  interruptible: false
+  needs: [build-push]
+  id_tokens:
+    GCP_ID_TOKEN:
+      aud: https://gitlab.com
+  script:
+    - !reference [.gcp_login, script]
+    - mkdir -p evidence
+    # Scans the exact digest that was pushed. A failing scan stops the signing job, and an
+    # unsigned image is refused by the deploy gate.
+    - trivy image --scanners vuln,secret --format json --output evidence/trivy.json "${IMAGE}@${IMAGE_DIGEST}"
+    - trivy convert --format table --severity HIGH,CRITICAL --exit-code 1 evidence/trivy.json
+    - syft "${IMAGE}@${IMAGE_DIGEST}" -o cyclonedx-json=evidence/sbom.cdx.json -o spdx-json=evidence/sbom.spdx.json
+  artifacts:
+    when: always
+    paths: [evidence/]
+    expire_in: 90 days
+
+sign-image:
+  extends: .toolbox
+  stage: sign
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+  interruptible: false
+  needs: [build-push, scan-image]
+  # environment: release   # a protected environment with approvals needs GitLab Premium
+  variables:
+    COSIGN_YES: "true"
+  id_tokens:
+    GCP_ID_TOKEN:
+      aud: https://gitlab.com
+    SIGSTORE_ID_TOKEN:
+      aud: sigstore
+  script:
+    - !reference [.gcp_login, script]
+    # Keyless: the signing certificate carries this pipeline's identity, issued from the
+    # job's OIDC token. The entry lands in Sigstore's public transparency log, project path
+    # included; see references/gitlab-ci.md before using this on a private project.
+    - cosign sign "${IMAGE}@${IMAGE_DIGEST}"
+    - cosign attest --type cyclonedx --predicate evidence/sbom.cdx.json "${IMAGE}@${IMAGE_DIGEST}"
+    - cosign attest --type spdxjson --predicate evidence/sbom.spdx.json "${IMAGE}@${IMAGE_DIGEST}"
+    - |
+      if [ -n "${CI_COMMIT_TAG:-}" ]; then ref="refs/tags/${CI_COMMIT_TAG}"; else ref="refs/heads/${CI_COMMIT_BRANCH}"; fi
+      cosign verify "${IMAGE}@${IMAGE_DIGEST}" \
+        --certificate-identity "${CI_SERVER_URL}/${CI_PROJECT_PATH}//.gitlab-ci.yml@${ref}" \
+        --certificate-oidc-issuer "${CI_SERVER_URL}"
+
+# GitLab's own scanners. SAST and secret detection write a JSON report on every tier; the
+# merge request widget and the vulnerability report need Ultimate. Dependency scanning is
+# Ultimate; osv-scanner and the trivy job above are the free alternatives.
+# include:
+#   - template: Jobs/SAST.gitlab-ci.yml
+#   - template: Jobs/Secret-Detection.gitlab-ci.yml
