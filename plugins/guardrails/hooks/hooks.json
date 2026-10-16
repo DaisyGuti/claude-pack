@@ -1,0 +1,19 @@
+{
+  "description": "Blocks risky Bash commands and file writes before they run: protected-branch pushes, skipped hooks, downloaded code run unread, TLS verification off, public GCP access, privileged containers, destructive deletes, and credentials in files or in the conversation.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit|Read|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/guardrails.py"],
+            "timeout": 15,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ]
+  }
+}
