@@ -1,0 +1,31 @@
+# Reference Dockerfile: Node.js service, multi-stage build, distroless runtime, non-root.
+#
+# Before use:
+#   1. Re-resolve both digests and keep them current with Renovate or Dependabot:
+#        docker buildx imagetools inspect node:24-trixie-slim
+#        docker buildx imagetools inspect gcr.io/distroless/nodejs24-debian13:nonroot
+#   2. Keep the build and runtime Node major versions equal.
+#   3. Commit package-lock.json: npm ci installs exactly what the lockfile pins.
+#   4. --ignore-scripts blocks install-time code execution from dependencies. Remove it only
+#      for a package that needs a build step, and then rebuild that package by name.
+#   5. A private registry that needs a token gets it from a build secret:
+#        docker build --secret id=npmrc,src=<path to .npmrc> .
+
+FROM node:24-trixie-slim@sha256:7f486cabe892bff8fef04c0f7da8dba84a560be3e4e2740b7a86afc57ebec315 AS build
+WORKDIR /src
+COPY package.json package-lock.json ./
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
+    npm ci --omit=dev --ignore-scripts
+COPY src/ ./src/
+
+FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:59c479c9b8c123e66047315c968aa2d35e31ae5149c856e4110a79c8b3563f0b
+WORKDIR /app
+COPY --from=build --chown=65532:65532 /src /app
+ENV NODE_ENV=production
+USER 65532:65532
+EXPOSE 8080
+# Distroless has no shell or curl, so the probe is node itself. Kubernetes and Cloud Run
+# ignore HEALTHCHECK; define a readiness probe in the deployment as well.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD ["/nodejs/bin/node", "-e", "fetch('http://127.0.0.1:8080/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+CMD ["src/server.js"]

@@ -1,0 +1,11 @@
+# Copy to CODEOWNERS (GitHub: repository root, docs/ or .github/; GitLab: repository root,
+# docs/ or .gitlab/). Replace the handle with the team that reviews build and release
+# changes. Enforce it with branch protection that requires code owner review.
+/.github/workflows/   @ORG/security-reviewers
+/.gitlab-ci.yml       @ORG/security-reviewers
+/ci/                  @ORG/security-reviewers
+Dockerfile*           @ORG/security-reviewers
+/.dockerignore        @ORG/security-reviewers
+/CODEOWNERS           @ORG/security-reviewers
+/renovate.json        @ORG/security-reviewers
+/.github/dependabot.yml @ORG/security-reviewers

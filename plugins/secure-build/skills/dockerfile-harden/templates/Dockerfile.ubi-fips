@@ -1,0 +1,38 @@
+# Reference Dockerfile: Red Hat UBI micro runtime for workloads that must run on a
+# FIPS-enabled host. Packages are installed into a separate root in a build stage and
+# copied onto ubi9-micro, which has no package manager of its own.
+#
+# FIPS notes:
+#   * Cryptographic modules in a UBI container follow the host. The host kernel must run
+#     in FIPS mode (cat /proc/sys/crypto/fips_enabled prints 1) for the container's
+#     libraries to enforce it. On GKE and Cloud Run the host is Google's: confirm what
+#     Google documents for the platform before relying on it.
+#   * This file does not make a system FIPS compliant. It is one input to an assessment
+#     that a person with the authority makes.
+#
+# Before use, re-resolve both digests and keep them current with Renovate or Dependabot:
+#   docker buildx imagetools inspect registry.access.redhat.com/ubi9/ubi-minimal
+#   docker buildx imagetools inspect registry.access.redhat.com/ubi9/ubi-micro
+
+FROM registry.access.redhat.com/ubi9/ubi-minimal@sha256:c4c285d42941ebb2bd4da878479008e1e4536bb599aad1dbe568f89de9053661 AS build
+ARG PACKAGES="python3.12"
+# microdnf refuses --installroot unless the config, plugin and path options are all given.
+RUN mkdir -p /mnt/rootfs \
+    && microdnf install --installroot /mnt/rootfs --releasever 9 \
+        --config /etc/dnf/dnf.conf --noplugins \
+        --setopt=cachedir=/var/cache/dnf --setopt=reposdir=/etc/yum.repos.d \
+        --setopt=varsdir=/etc/dnf/vars --setopt=install_weak_deps=0 --nodocs -y ${PACKAGES} \
+    && microdnf clean all \
+    && rm -rf /mnt/rootfs/var/cache/* /mnt/rootfs/var/log/*
+WORKDIR /src
+COPY app/ ./app/
+
+FROM registry.access.redhat.com/ubi9/ubi-micro@sha256:5be877a2a280ae36eb9ab80ca4efb28bbf77c57abbba38137cdc37a03b8465e6
+COPY --from=build /mnt/rootfs/ /
+COPY --from=build /src/app /app/app
+WORKDIR /app
+USER 10001:10001
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD ["python3.12", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)"]
+ENTRYPOINT ["python3.12", "-m", "app"]

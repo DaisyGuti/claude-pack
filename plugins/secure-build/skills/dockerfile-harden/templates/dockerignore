@@ -1,0 +1,46 @@
+# Copy to .dockerignore beside the Dockerfile. Anything listed stays out of the build
+# context, so a broad COPY cannot put it into a layer.
+.git
+.gitignore
+.github
+.gitlab-ci.yml
+.dockerignore
+Dockerfile*
+compose*.y*ml
+docker-compose*.y*ml
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+.npmrc
+.pypirc
+.netrc
+.aws
+.config/gcloud
+**/service-account*.json
+**/credentials.json
+**/id_rsa*
+**/id_ed25519*
+
+# Build output, caches and local tooling
+node_modules
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache
+.ruff_cache
+coverage
+dist
+build
+target
+*.log
+.idea
+.vscode
+.DS_Store
