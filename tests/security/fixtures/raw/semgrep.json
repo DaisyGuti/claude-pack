@@ -1,0 +1,34 @@
+{
+ "version": "1.181.0",
+ "results": [
+  {
+   "check_id": "demo-shell-true",
+   "path": "app.py",
+   "start": {
+    "line": 3,
+    "col": 12,
+    "offset": 43
+   },
+   "end": {
+    "line": 3,
+    "col": 44,
+    "offset": 75
+   },
+   "extra": {
+    "message": "subprocess call with shell=True allows command injection",
+    "metadata": {
+     "cwe": [
+      "CWE-78: Improper Neutralization of Special Elements used in an OS Command"
+     ],
+     "confidence": "HIGH"
+    },
+    "severity": "ERROR",
+    "fingerprint": "requires login",
+    "lines": "requires login",
+    "validation_state": "NO_VALIDATOR",
+    "engine_kind": "OSS"
+   }
+  }
+ ],
+ "errors": []
+}

@@ -1,0 +1,75 @@
+{
+ "catalog": {
+  "metadata": {
+   "title": "Mini catalog for tests",
+   "version": "0"
+  },
+  "groups": [
+   {
+    "id": "ac",
+    "controls": [
+     {
+      "id": "ac-2",
+      "title": "Account Management",
+      "controls": [
+       {
+        "id": "ac-2.1",
+        "title": "Automated System Account Management"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "id": "au",
+    "controls": [
+     {
+      "id": "au-2",
+      "title": "Event Logging"
+     },
+     {
+      "id": "au-12",
+      "title": "Audit Record Generation"
+     }
+    ]
+   },
+   {
+    "id": "ia",
+    "controls": [
+     {
+      "id": "ia-2",
+      "title": "Identification and Authentication (Organizational Users)"
+     }
+    ]
+   },
+   {
+    "id": "sc",
+    "controls": [
+     {
+      "id": "sc-7",
+      "title": "Boundary Protection",
+      "controls": [
+       {
+        "id": "sc-7.5",
+        "title": "Deny by Default - Allow by Exception"
+       }
+      ]
+     },
+     {
+      "id": "sc-13",
+      "title": "Cryptographic Protection"
+     }
+    ]
+   },
+   {
+    "id": "si",
+    "controls": [
+     {
+      "id": "si-10",
+      "title": "Information Input Validation"
+     }
+    ]
+   }
+  ]
+ }
+}

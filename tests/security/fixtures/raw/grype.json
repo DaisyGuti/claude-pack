@@ -1,0 +1,62 @@
+{
+ "matches": [
+  {
+   "vulnerability": {
+    "id": "GHSA-x84v-xcm2-53pg",
+    "severity": "High",
+    "fix": {
+     "versions": [
+      "2.20.0"
+     ],
+     "state": "fixed"
+    }
+   },
+   "relatedVulnerabilities": [
+    {
+     "id": "CVE-2018-18074",
+     "severity": "High"
+    }
+   ],
+   "artifact": {
+    "name": "requests",
+    "version": "2.19.0",
+    "type": "python",
+    "locations": [
+     {
+      "path": "/requirements.txt",
+      "accessPath": "/requirements.txt"
+     }
+    ]
+   }
+  },
+  {
+   "vulnerability": {
+    "id": "GHSA-j8r2-6x86-q33q",
+    "severity": "Medium",
+    "fix": {
+     "versions": [
+      "2.31.0"
+     ],
+     "state": "fixed"
+    }
+   },
+   "relatedVulnerabilities": [
+    {
+     "id": "CVE-2023-32681",
+     "severity": "Medium"
+    }
+   ],
+   "artifact": {
+    "name": "requests",
+    "version": "2.19.0",
+    "type": "python",
+    "locations": [
+     {
+      "path": "/requirements.txt",
+      "accessPath": "/requirements.txt"
+     }
+    ]
+   }
+  }
+ ]
+}
