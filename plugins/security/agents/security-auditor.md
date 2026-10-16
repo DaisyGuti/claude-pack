@@ -1,6 +1,10 @@
 ---
 name: security-auditor
-description: Read-only security auditor for a repository. Use proactively before a release or merge, or when asked to audit a repo's security, to run the scanners, review the code for government-specific control gaps, challenge each finding, and return a ranked list.
+description: >-
+  Read-only security auditor for a repository. Use proactively before a release or merge, or
+  when asked to audit a repo's security, to run the scanners, review the code for
+  government-specific control gaps, challenge each finding, and return a ranked list. For a deep
+  vulnerability hunt in code, use the official claude-security plugin.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 effort: high

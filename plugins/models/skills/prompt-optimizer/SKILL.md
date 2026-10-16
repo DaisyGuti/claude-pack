@@ -1,6 +1,15 @@
 ---
 name: prompt-optimizer
-description: Rewrites a prompt for Claude (system prompt, agent or skill instructions, API prompt, or a task prompt for a coding session) against Anthropic's current prompt-engineering guidance, then names the Claude model and effort that should run it and which parts can run in parallel. Use when someone asks to optimize, improve, tighten, review, debug or "fix" a prompt, asks why Claude ignores or over-applies an instruction, wants a better system prompt, wants a prompt that costs less, or pastes a prompt and asks how to run it, even if they never say "optimize". Out of scope: auditing a whole repository of prompts and agent files for outdated patterns (use the claude-api skill's prompt-audit) and picking a model when there is no prompt to rewrite (use model-recommender).
+description: >-
+  Rewrites a prompt for Claude (system prompt, agent or skill instructions, API prompt, or a
+  task prompt for a coding session) against Anthropic's current prompt-engineering guidance,
+  then names the Claude model and effort that should run it and which parts can run in
+  parallel. Use when someone asks to optimize, improve, tighten, review, debug or "fix" a
+  prompt, asks why Claude ignores or over-applies an instruction, wants a better system
+  prompt, wants a prompt that costs less, or pastes a prompt and asks how to run it, even if
+  they never say "optimize". Out of scope: auditing a whole repository of prompts and agent
+  files for outdated patterns (use the claude-api skill's prompt-audit) and picking a model
+  when there is no prompt to rewrite (use model-recommender).
 argument-hint: '[--file PATH] [--context "..."] [--model MODEL_ID]'
 allowed-tools: Read WebFetch
 ---

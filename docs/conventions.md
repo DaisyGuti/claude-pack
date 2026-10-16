@@ -11,7 +11,7 @@ is the platform fact and this file is the house choice built on it.
    `tests/<their plugin>/`.
 2. **Shared files go through the integrator.** These change only through the integrator:
    `.claude-plugin/marketplace.json`, `pyproject.toml`, `README.md`,
-   `THIRD_PARTY_NOTICES.md`, `docs/`, `scripts/`, `.gitignore`. If you need a change in
+   `THIRD_PARTY_NOTICES.md`, `docs/`, `scripts/`, `install.sh`, `preferences/`, `.gitignore`. If you need a change in
    one, say so in your hand-off message.
 3. **Official first.** Before building, check
    `~/.claude/plugins/marketplaces/claude-plugins-official/` (plugins and
@@ -19,8 +19,8 @@ is the platform fact and this file is the house choice built on it.
    recommends installing it and this repo builds only the gap. Today that includes
    `claude-security`, `security-guidance`, `code-review`, `pr-review-toolkit`,
    `feature-dev`, `frontend-design`, `claude-md-management`, `claude-code-setup`,
-   `commit-commands`, `hookify`, `skill-creator`, `session-report`, and the `github` and
-   `gitlab` integrations. Re-read that folder at build time; the list moves.
+   `commit-commands`, `hookify`, `skill-creator`, `session-report`, and the `slack`, `github`
+   and `gitlab` integrations. Re-read that folder at build time; the list moves.
 
 ## Team-safe content
 
@@ -57,7 +57,11 @@ is the platform fact and this file is the house choice built on it.
 13. **Draft first for anything with a side effect.** A skill that posts, sends, pushes,
     merges or deploys drafts the action, shows it, and acts only on the user's explicit go.
     It sets `disable-model-invocation: true` (G12). `allowed-tools` only pre-approves and
-    does not restrict (G14).
+    does not restrict (G14). One exception is built in: an engineering agent that pushes its
+    own branch and opens its own pull or merge request has reached the expected end of an
+    engineering task, and needs no extra go. It never merges, never enables auto-merge and
+    never pushes to the default branch. Merging, deploying, posting a message and sending
+    an email still need the user's explicit go.
 
 ## Skills
 
@@ -92,9 +96,11 @@ is the platform fact and this file is the house choice built on it.
 22. **Frontmatter.** `name` and `description` present, opening `---` on line 1 (G56). The
     description is short and says when to delegate ("Use proactively after..."); detail
     goes in the body (G67).
-23. **Least privilege.** Set a `tools` allowlist. Reviewer-type agents are read-only
-    (`Read, Grep, Glob`). Never put `Skill` in `tools`; list skills under `skills:` (G61,
-    G64, G69).
+23. **Least privilege.** Set a `tools` allowlist. Reviewer and auditor agents are read-only
+    and may hold `Bash` (to print a diff or run a scanner), because the `guardrails` plugin
+    enforces their read-only behavior; an agent that needs no command stays on
+    `Read, Grep, Glob`. Never put `Skill` in `tools`; list skills under `skills:` (G61, G64,
+    G69).
 24. **Model by difficulty.** Choose `model` and `effort` on purpose: `haiku` or `sonnet` for
     mechanical work, `opus` for judgment, `inherit` otherwise (G59). Set `maxTurns` as a
     cost guard.
@@ -126,18 +132,34 @@ is the platform fact and this file is the house choice built on it.
 33. **Tests live in `tests/<plugin>/`** and run under `uv run pytest tests/<plugin>`. Every
     script has tests, including the failure paths. Tests need no network and no
     credentials.
-34. **Style gates.** `uv run ruff check` and `uv run ruff format --check` pass.
+34. **Style gates.** `uv run ruff check` and `uv run ruff format --check` pass. A shell script
+    also passes `shellcheck -x`.
 
 ## Evals
 
 35. **At least three `claude plugin eval` cases per skill** under `plugins/<plugin>/evals/`.
     At least one is a should-trigger case with a `tool_used` grader on `Skill`, and at
     least one is a near-miss that should not trigger it (`min: 0`, `max: 0`, `arm: both`)
-    (G47, G49, G120, G121). Each agent gets at least one delegation case.
+    (G47, G49, G120, G121). Each agent gets at least one delegation case. A manual-only
+    skill (`disable-model-invocation: true`) is typed as `/plugin:skill`, and a typed slash
+    command makes no `Skill` tool call. Its should-trigger case therefore starts the prompt
+    with the slash command and grades the trace (a `regex` grader with `target: trace` on a
+    string only that skill produces, plus `tool_used` checks on what it ran). Its natural
+    language near-miss keeps the `Skill` grader with `min: 0`, `max: 0`.
 36. **Layout.** `evals/<skill>-<case>/prompt.md` with the prompt phrased as a user would
     type it (without naming the skill), plus `evals/<skill>-<case>/graders/<name>.md`.
     Prefer deterministic graders (`regex`, `tool_used`, `file_exists`); write `llm` rubrics
-    as concrete PASS and FAIL conditions. The trigger grader:
+    as concrete PASS and FAIL conditions. Four format traps found while writing the first
+    suites:
+
+    - Quote a `description:` value that contains a colon.
+    - A plain (unquoted) YAML value is cut at a space followed by `#`. Write long text as a
+      folded block (`description: >-`).
+    - A `regex` grader rejects inline flags such as `(?i)` or `(?s)`. Use the `flags:` field.
+    - An eval that grants `Bash` fails on a machine whose `~/.docker` holds a symlink. Run
+      those cases on a machine without one, or leave them unrun and say so in the PR.
+
+    The trigger grader:
 
     ```markdown
     ---
@@ -158,8 +180,10 @@ is the platform fact and this file is the house choice built on it.
     follows the git commit (G94). Never add it in only one place.
 39. **`--strict` cannot pass while `version` is omitted**, because it turns the validator's
     "No version specified" warning into a failure. The gate is
-    `uv run python scripts/validate.py [plugin ...]`: it runs `claude plugin validate` and
-    fails on any error and on any warning except that one.
+    `uv run python scripts/validate.py [plugin ...]`: it runs `claude plugin validate` on the
+    marketplace, on each plugin and on each plugin's `skills/` and `agents/` folders, checks
+    every SKILL.md and agent file's frontmatter itself (the validator passes a broken agent
+    file), and fails on any error and on any warning except that one.
 40. **Names.** No plugin name starts with `claude-` or `anthropic-` (G91). The marketplace
     entry `name` equals the plugin's `plugin.json` `name` (G101). Plugin skills appear as
     `/<plugin>:<skill>` and agents as `<plugin>:<name>` (G110).

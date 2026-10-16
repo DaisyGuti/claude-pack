@@ -147,7 +147,8 @@ GitLab has no Dependabot. Options, free first:
    the masked variable `RENOVATE_TOKEN`, and a GitHub token with minimal scope as
    `RENOVATE_GITHUB_COM_TOKEN` so changelog and tag lookups are not rate limited. Limit the bot
    with `--autodiscover-filter` to the team's group. Never fork the runner project, per its README.
-   Put `templates/renovate.json` (bundled with this skill) at the repository root.
+   Put `ci-harden/templates/renovate.json` (the `ci-harden` skill in this plugin; from this
+   skill folder, `../ci-harden/templates/renovate.json`) at the repository root.
 2. **Scanners in CI** (free): `osv-scanner` and `trivy fs` on every merge request and on a schedule.
    They report; they do not open update merge requests.
 3. **GitLab dependency scanning** (Ultimate): report and merge request widget integration. Pick it

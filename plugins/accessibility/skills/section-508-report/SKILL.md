@@ -1,6 +1,17 @@
 ---
 name: section-508-report
-description: Builds an Accessibility Conformance Report (ACR) on the ITI VPAT 2.5Rev template from audit findings and test notes - the WCAG Level A and AA rows plus Revised Section 508 chapters 3, 5 and 6, each marked Supports, Partially Supports, Does Not Support, Not Applicable or Not Evaluated with remarks, plus the GSA ACR Issue Detail Supplement. Use when asked to fill in a VPAT, write an ACR or Section 508 conformance report, answer a federal buyer's accessibility questionnaire, or turn accessibility audit results into a customer-facing statement, even if the user does not say VPAT. Refuses to mark a row Supports without a passing check run by a person, lists the rows that still need a human tester (keyboard, screen reader), and never declares a product compliant. It does not run the audit itself; use the AccessLint skills for scanning, inspecting, auditing or fixing.
+description: >-
+  Builds an Accessibility Conformance Report (ACR) on the ITI VPAT 2.5Rev template from audit
+  findings and test notes - the WCAG Level A and AA rows plus Revised Section 508 chapters 3, 5
+  and 6, each marked Supports, Partially Supports, Does Not Support, Not Applicable or Not
+  Evaluated with remarks, plus the GSA ACR Issue Detail Supplement. Use when asked to fill in a
+  VPAT, write an ACR or Section 508 conformance report, answer a federal buyer's accessibility
+  questionnaire, or turn accessibility audit results into a customer-facing statement, even if
+  the user does not say VPAT. Refuses to mark a row Supports without a passing check run by a
+  person, lists the rows that still need a human tester (keyboard, screen reader), and never
+  declares a product compliant. It does not run the audit itself; use the AccessLint skills for
+  scanning, inspecting, auditing or fixing. For FedRAMP, NIST 800-53, CMMC or SSDF evidence, use
+  compliance-map (security plugin).
 argument-hint: "[path to audit report or evidence file]"
 allowed-tools: Read Write Bash(${CLAUDE_SKILL_DIR}/scripts/acr.py *) WebFetch(domain:www.itic.org) WebFetch(domain:www.section508.gov)
 ---

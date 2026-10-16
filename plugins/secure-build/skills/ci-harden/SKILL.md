@@ -12,7 +12,9 @@ description: >-
   workflow", "harden our pipeline", "secure our CI", "pin our actions", "remove the GCP key from
   CI", "set up keyless auth to GCP", "write a secure build pipeline", ".gitlab-ci.yml review",
   or any CI/CD security question, even if the user does not mention hardening. For Dockerfile
-  edits use dockerfile-harden; for image signing details use image-supply-chain.
+  edits use dockerfile-harden; for image signing details use image-supply-chain. To review the
+  Google Cloud side (IAM bindings, Workload Identity pools, organization policies), use
+  gcp-review.
 allowed-tools: >-
   Read Grep Glob Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/*) Bash(zizmor *) Bash(uvx zizmor *)
   Bash(glab ci lint *)

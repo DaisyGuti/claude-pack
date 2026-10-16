@@ -21,14 +21,14 @@
       "description": "Model choice, prompt optimizing, a Claude Code usage report, and an audit of how the product's code uses AI models."
     },
     {
-      "name": "design",
-      "source": "./plugins/design",
+      "name": "ui-design",
+      "source": "./plugins/ui-design",
       "description": "UI/UX agent and design skills for typography, UX review, web interface guidelines, React patterns and the U.S. Web Design System."
     },
     {
       "name": "accessibility",
       "source": "./plugins/accessibility",
-      "description": "WCAG 2.2 scan, inspect, audit, fix and diff, plus Section 508 conformance reports."
+      "description": "Section 508 Accessibility Conformance Reports (VPAT) built from audit evidence; recommends AccessLint for WCAG 2.2 scan, inspect, audit, fix and diff."
     },
     {
       "name": "security",
@@ -43,7 +43,7 @@
     {
       "name": "guardrails",
       "source": "./plugins/guardrails",
-      "description": "Hooks that block risky commands and secret leaks while Claude works."
+      "description": "Blocking hooks and a help skill"
     },
     {
       "name": "team-comms",

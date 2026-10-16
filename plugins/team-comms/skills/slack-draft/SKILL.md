@@ -2,12 +2,14 @@
 name: slack-draft
 description: >-
   Drafts Slack messages and thread replies for a stated goal - answer a technical question, ask
-  for help with the right context, request a PR or MR review, post a status or incident update, or
-  announce a release. Use when the user says "draft a Slack message", "reply to this thread", "how
-  should I ask for a review", "write an update for #channel", "help me word this", "announce the
-  release", or pastes a message and asks what to say, even if they do not name Slack. Drafts only:
-  it shows the text and never posts, schedules or saves anything to Slack. Sending is a separate
-  step, /team-comms:slack-send.
+  for help with the right context, request a PR or MR review, post a status or incident update,
+  or announce a release. Use when the user says "draft a Slack message", "reply to this thread",
+  "how should I ask for a review", "write an update for #channel", "help me word this",
+  "announce the release", or pastes a message and asks what to say, even if they do not name
+  Slack. Drafts only: it shows the text and never posts, schedules or saves anything to Slack.
+  Sending is a separate step, /team-comms:slack-send. For a formatted announcement saved as a
+  Slack draft, use the Slack plugin's /slack:draft-announcement; its slack-messaging skill
+  covers Slack formatting.
 argument-hint: "[goal] [channel or thread link]"
 ---
 

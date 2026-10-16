@@ -77,7 +77,6 @@ def _split_frontmatter(path: Path) -> tuple[dict, str]:
 def _skill_text_files() -> list[Path]:
     files = [SKILL_MD, *sorted((SKILL / "references").glob("*.md"))]
     files += sorted((SKILL / "scripts").glob("*.py"))
-    files += [SKILL / "templates/renovate.json"]
     files += sorted(EVALS.glob("gitlab-migration-*/**/*.md"))
     return files
 
@@ -249,9 +248,11 @@ def test_scripts_are_stdlib_only_executable_with_shebang(script: Path):
 # ------------------------------------------------------------------------------ template
 
 
-def test_renovate_template():
-    data = json.loads((SKILL / "templates/renovate.json").read_text())
-    assert data["extends"] == ["config:recommended"]
+def test_renovate_template_lives_in_ci_harden_only():
+    shared = SKILL.parent / "ci-harden/templates/renovate.json"
+    assert json.loads(shared.read_text())["extends"] == ["config:best-practices"]
+    assert not (SKILL / "templates/renovate.json").exists()
+    assert (SKILL / "../ci-harden/templates/renovate.json").resolve() == shared.resolve()
 
 
 # --------------------------------------------------------------------------------- evals

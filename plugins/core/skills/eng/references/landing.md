@@ -1,8 +1,10 @@
 # Landing a change: per-host commands
 
 Every change lands as a pull request (GitHub) or merge request (GitLab) into the default
-branch. Nothing is committed or pushed to the default branch, even where the repo's
-instruction files allow it. Sources: GitHub CLI manual, `gh pr create`
+branch. The agent pushes its own branch and opens the review by default: opening it is
+the expected end of an engineering task and needs no separate go. A person merges it.
+Nothing is committed or pushed to the default branch, even where the repo's instruction
+files allow it, and the agent never merges or enables auto-merge. Sources: GitHub CLI manual, `gh pr create`
 (<https://cli.github.com/manual/gh_pr_create>), and GitLab CLI documentation,
 `glab mr create` (<https://docs.gitlab.com/cli/mr/create/>), both read 2026-10-16.
 Re-read the page when a flag below is rejected.
@@ -48,8 +50,8 @@ git worktree add ../<repo>-<branch> -b <type>/<short-name> origin/<default-branc
 
 ## Open the review on GitHub
 
-Only after the caller or the repo's CLAUDE.md asked for it, and after the full gates
-passed on exactly what you push.
+After the full gates passed on exactly what you push. Skip this only when the brief says
+to leave the work local.
 
 ```sh
 git push -u origin <branch>
@@ -72,7 +74,7 @@ Add `--draft` for a draft. Never merge it yourself.
 
 ## When the review cannot be opened
 
-No remote, an unknown host, a CLI that is missing or signed out, or no instruction to
-open one: leave the commit on the branch, and put in the report the branch name, the exact
+No remote, an unknown host, a CLI that is missing or signed out, or a brief that says to
+leave the work local: leave the commit on the branch, and put in the report the branch name, the exact
 push and create commands above with the values filled in, and the drafted title and body.
 Retry a transient network failure twice, then stop and report.

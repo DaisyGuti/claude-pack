@@ -1,6 +1,6 @@
 {
   "name": "accessibility",
-  "description": "WCAG 2.2 scan, inspect, audit, fix and diff, plus Section 508 conformance reports.",
+  "description": "Section 508 Accessibility Conformance Reports (VPAT) built from audit evidence; recommends AccessLint for WCAG 2.2 scan, inspect, audit, fix and diff.",
   "author": {
     "name": "Daisy Gutierrez"
   }
