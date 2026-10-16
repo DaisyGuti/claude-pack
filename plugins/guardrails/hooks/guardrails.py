@@ -57,7 +57,7 @@ import re
 import subprocess
 import sys
 import time
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
 
 # --------------------------------------------------------------------------------------
@@ -167,6 +167,15 @@ RULES: list[Rule] = [
         "a rule that Claude can switch off mid-session is not a rule",
         "Ask the user to edit `.claude/guardrails-allow.txt` or to disable the plugin themselves.",
         allowlistable=False,
+    ),
+    Rule(
+        "read-only-agent",
+        "writes, state changes and unlisted commands from a read-only agent (see READ_ONLY_AGENTS)",
+        "this agent is read-only: it may look at the repository, the remote and the cloud, and "
+        "leaves every change to the caller (a plugin agent cannot carry its own permission mode)",
+        "Report what you found and leave the change to the caller. Read with Read, Grep and "
+        "Glob, and use only read-only commands (`git diff`/`log`/`show`, `gh pr diff`, `glab mr "
+        "diff`, the scanners writing to $TMPDIR). If a change is needed, say so in your report.",
     ),
     Rule(
         "cannot-decide",
@@ -1102,14 +1111,518 @@ _BRANCH_SUBST_RE = re.compile(
 _SYMBOLIC_MODE_RE = re.compile(r"^([ugoa]*)([-+=])([rwxXst]*|[ugo])$")
 
 
-class Analyzer:
+# --------------------------------------------------------------------------------------
+# Read-only agents
+# --------------------------------------------------------------------------------------
+
+#: Plugin-scoped ids ("<plugin>:<agent name>", the form Claude Code puts in `agent_type`
+#: inside a plugin subagent) of agents that must only read. A plugin agent cannot carry its
+#: own hooks or permission mode, so this list is where "read-only" is enforced. Adding a
+#: read-only agent is one more entry here.
+READ_ONLY_AGENTS = frozenset({"core:reviewer", "security:security-auditor"})
+
+# Commands that only read, or only print. The flags that make one of them write are checked
+# in `_ro_plain`. Anything not named here (or in the tool tables below) is refused.
+_RO_PLAIN = _words(
+    "ls cat head tail less more nl wc stat file du df pwd echo printf true false test [ [[ "
+    "basename dirname realpath readlink date uname whoami id which type tree diff cmp "
+    "sort uniq cut tr column fold fmt rev tac paste comm join expand unexpand od xxd hexdump "
+    "strings base64 sha256sum sha1sum shasum md5sum md5 cksum jq yq grep egrep fgrep zgrep rg "
+    "ag ack sed find tee hostname sleep cd pushd popd export unset read local declare "
+    "typeset readonly set shift mktemp"
+)
+_RO_KEYWORDS = _words("for select case function")  # shell syntax, not programs
+_RO_BAD_WRAPPERS = _words("sudo doas nohup exec setsid watch flock")
+_RO_BAD_ENV = _words(
+    "GIT_EXTERNAL_DIFF GIT_SSH_COMMAND GIT_PAGER GIT_ASKPASS GIT_PROXY_COMMAND PAGER LESSOPEN "
+    "LD_PRELOAD DYLD_INSERT_LIBRARIES BASH_ENV ENV PATH"
+)  # each makes an otherwise read-only command run something else
+_RO_GIT = _words(
+    "diff log show blame status rev-parse rev-list merge-base ls-files ls-tree cat-file grep "
+    "shortlog describe name-rev show-ref for-each-ref diff-tree diff-index whatchanged "
+    "count-objects check-ignore check-attr ls-remote range-diff cherry annotate var version help"
+)
+_RO_GIT_BAD_FLAGS = _words("--output -O --open-files-in-pager --ext-diff")
+_RO_GIT_BRANCH_WRITE = _words(
+    "-d -D --delete -m -M --move -c -C --copy -u --set-upstream-to --unset-upstream -f "
+    "--force --edit-description --track --no-track -t"
+)
+_RO_GIT_LISTING = _words(
+    "-l --list -a --all -r --remotes -v -vv --verbose --show-current --contains --no-contains "
+    "--merged --no-merged --points-at --sort --format -i --ignore-case"
+)
+_RO_GIT_TAG_WRITE = _words("-d --delete -a --annotate -s --sign -f --force -m -F -u -e --edit")
+_RO_FORGE = {
+    # tool: (groups whose list/view verbs only read, verbs that only read)
+    "gh": (
+        _words("pr issue repo run release workflow gist label project cache ruleset variable"),
+        _words("view list diff checks status"),
+    ),
+    "glab": (
+        _words("mr issue ci pipeline repo release label variable snippet job"),
+        _words("view list diff status trace get lint"),
+    ),
+}
+_RO_GCLOUD_READ = _words(
+    "describe list get-iam-policy get-value get read search-all-resources "
+    "search-all-iam-policies info version lookup cat ls du"
+)
+_RO_GCLOUD_WRITE = _words(
+    "create delete update add remove set patch deploy import export start stop restart reset "
+    "resize attach detach apply replace enable disable undelete move rename copy cp mv rm ssh "
+    "scp submit cancel rollback revoke grant login activate install upgrade push publish "
+    "access print configure init execute invoke call write"
+)
+_RO_GCLOUD_VALUE_FLAGS = _words(
+    "--project --account --format --configuration --billing-project "
+    "--impersonate-service-account --verbosity --flags-file --filter --limit --sort-by "
+    "--region --zone --location"
+)
+_RO_GSUTIL_READ = _words("ls cat stat du hash version help")
+_RO_GSUTIL_GET_GROUPS = _words(
+    "iam acl defacl lifecycle cors label versioning logging notification retention ubla "
+    "requesterpays web defstorageclass kms rpo"
+)
+_RO_KUBECTL_READ = _words(
+    "get describe logs top explain api-resources api-versions version cluster-info events diff"
+)
+_RO_KUBECTL_VALUE_FLAGS = _words(
+    "-n --namespace --context --cluster --user --kubeconfig -l --selector -o --output "
+    "--field-selector -c --container --since --tail -f --filename"
+)
+_RO_DOCKER_TOP = _words("ps images inspect logs version info stats top port diff history search")
+_RO_DOCKER_GROUPS = {
+    "container": _words("ls list ps inspect logs top port diff stats"),
+    "image": _words("ls list inspect history"),
+    "network": _words("ls list inspect"),
+    "volume": _words("ls list inspect"),
+    "system": _words("df info"),
+    "compose": _words("ps logs config images ls top version"),
+    "manifest": _words("inspect"),
+    "context": _words("ls list inspect show"),
+}
+# Scanner -> flags that name an output FILE (a format flag such as grype's `-o json` is not).
+_RO_SCANNERS: dict[str, frozenset[str]] = {
+    "trivy": _words("-o --output"),
+    "gitleaks": _words("-r --report-path"),
+    "semgrep": _words(
+        "-o --output --sarif-output --json-output --text-output --emacs-output --vim-output "
+        "--junit-xml-output --gitlab-sast-output --gitlab-secrets-output"
+    ),
+    "grype": _words("--file"),
+    "syft": _words("--file"),
+    "osv-scanner": _words("--output --output-file"),
+    "checkov": _words("--output-file-path"),
+    "hadolint": frozenset(),
+    "dockle": _words("-o --output"),
+    "zizmor": frozenset(),
+}
+_RO_SCANNER_FIXERS = _words("--fix --autofix --auto-fix --write")
+_RO_FIND_ACTIONS = _words("-delete -exec -execdir -ok -okdir -fprint -fprint0 -fprintf -fls")
+_RO_PY_SAFE_MODULES = _words("json sys re collections itertools textwrap csv base64 math string")
+_RO_PY_FORBIDDEN = re.compile(
+    r"\b(?:open|exec|eval|compile|getattr|setattr|delattr|globals|locals|vars|breakpoint|input)"
+    r"\s*\(|__\w+__|\bmodules\b|\.\s*(?:system|popen|remove|unlink|rmdir|rename|write_text"
+    r"|write_bytes|mkdir)\b"
+)
+_RO_PY_IMPORT = re.compile(r"\bimport\s+([\w., ]+?)\s*(?=[;\n]|$)|\bfrom\s+(\w+)\s+import\b")
+_RO_SED_PRINT = re.compile(r"\s*(?:\d+|\$)?(?:,\s*(?:\d+|\$))?\s*p\s*")
+_RO_SED_SUBST = re.compile(r"s(.)(?:(?!\1).)*\1(?:(?!\1).)*\1[gGiI0-9]*")
+_RO_TEMP_ROOTS = ("/tmp", "/private/tmp", "/var/tmp")
+_RO_MKTEMP_RE = re.compile(r"(?:\$\(|`)\s*mktemp(?:\s[^)`]*)?\s*(?:\)|`)")
+
+
+def _out_values(args: list[str], short: str, long_: Collection[str]) -> list[str]:
+    """Values given to output flags: `-o X`, `-oX`, `--output X` and `--output=X`."""
+    values: list[str] = []
+    for i, tok in enumerate(args):
+        if tok.startswith("--"):
+            flag, eq, val = tok.partition("=")
+            if flag in long_:
+                values.append(val if eq else (args[i + 1] if i + 1 < len(args) else ""))
+        elif _is_option(tok):
+            for idx, ch in enumerate(tok[1:]):
+                if ch in short:
+                    rest = tok[idx + 2 :]
+                    values.append(rest or (args[i + 1] if i + 1 < len(args) else ""))
+                    break
+    return values
+
+
+class _ReadOnlyMixin:
+    """Checks for an agent that must only read.
+
+    Mixed into `Analyzer`, which supplies `add`, `resolve`, `ctx` and `agent` (the agent id,
+    or None in the main session, where none of this runs).
+    """
+
+    # -- helpers ----------------------------------------------------------------------
+    def _ro_refuse(self, argv: list[str], reason: str) -> None:
+        short = " ".join(argv[:4])
+        short = short if len(short) <= 60 else short[:57] + "..."
+        self.add("read-only-agent", f"{self.agent} running `{short}` ({reason})")
+
+    def _ro_temp_roots(self) -> set[str]:
+        tmpdir = self.ctx.environ.get("TMPDIR", "")
+        return {os.path.realpath(p) for p in (tmpdir, *_RO_TEMP_ROOTS) if p}
+
+    def _ro_temp_ok(self, text: str, cwd: str | None) -> bool:
+        """Whether *text* names a place an agent may write: /dev/null, or the temp folder."""
+        if text in ("/dev/null", "/dev/stdout", "/dev/stderr") or text.startswith("/dev/fd/"):
+            return True
+        path = self.resolve(text, cwd)
+        if path is None:
+            return False
+        if not any(path.startswith(r.rstrip("/") + "/") for r in self._ro_temp_roots()):
+            return False
+        # a repository that happens to sit under the temp folder is still the repository
+        ctx = self.ctx
+        guarded = {ctx.project_dir, ctx.cwd, ctx.repo_root()} - {None}
+        return not any(path == g or path.startswith(g.rstrip("/") + "/") for g in guarded)
+
+    def _ro_bad_outputs(self, values: list[str], cwd: str | None) -> list[str]:
+        return [v for v in values if not self._ro_temp_ok(v, cwd)]
+
+    # -- entry point ------------------------------------------------------------------
+    def read_only_checks(
+        self, cmd: Command, words: list[Word], assigns: list[str], cwd: str | None
+    ) -> None:
+        for op, target in cmd.redirects:
+            writes = op in (">", ">>", ">|", "&>", "&>>", "<>") or (
+                op == ">&" and not (target.text.isdigit() or target.text == "-")
+            )
+            if writes and not self._ro_temp_ok(target.text, cwd):
+                self._ro_refuse(["redirect", op, target.text], "writes a file outside temp")
+        for a in assigns:
+            name = a.partition("=")[0]
+            if name in _RO_BAD_ENV:
+                self._ro_refuse([name + "=..."], "makes a read-only command run other code")
+        skipped = cmd.words[: len(cmd.words) - len(words)]
+        for w in skipped:
+            if _base(w.text) in _RO_BAD_WRAPPERS:
+                self._ro_refuse([w.text], "runs with other privileges or detached")
+        if not words:
+            if skipped:  # `env` or `time` alone prints the environment
+                self._ro_refuse([skipped[0].text], "prints the environment")
+            return
+        argv = [w.text for w in words]
+        reason = self._ro_reason(_base(argv[0]), argv, cwd)
+        if reason:
+            self._ro_refuse(argv, reason)
+
+    def _ro_reason(self, name: str, argv: list[str], cwd: str | None) -> str | None:
+        args = argv[1:]
+        if name in _RO_PLAIN:
+            return self._ro_plain(name, args, cwd)
+        if name in _RO_KEYWORDS:
+            return None
+        if name in _SHELLS:
+            # the -c text is analysed as a command line of its own
+            ok = Analyzer._code_arg(argv, 0) is not None
+            return None if ok else "a shell running a script file or standard input"
+        if name == "git":
+            return self._ro_git(argv)
+        if name in _RO_FORGE:
+            return self._ro_forge(name, args)
+        if name == "gcloud":
+            return self._ro_gcloud(args)
+        if name == "gsutil":
+            return self._ro_gsutil(args)
+        if name == "kubectl":
+            return self._ro_kubectl(args)
+        if name in ("docker", "podman"):
+            return self._ro_docker(args)
+        if name == "curl":
+            return self._ro_curl(args, cwd)
+        if name == "wget":
+            return self._ro_wget(args, cwd)
+        if name in _RO_SCANNERS:
+            return self._ro_scanner(name, args, cwd)
+        if _PY_RE.match(name):
+            return self._ro_python(argv, cwd)
+        return f"`{name}` is not on the read-only list"
+
+    # -- plain commands ---------------------------------------------------------------
+    def _ro_plain(self, name: str, args: list[str], cwd: str | None) -> str | None:
+        positional = [a for a in args if not _is_option(a)]
+        if name in ("sort", "base64", "tree"):
+            bad = self._ro_bad_outputs(_out_values(args, "o", ("--output",)), cwd)
+            return "writes its output to a file" if bad else None
+        if name == "tee":
+            return "writes to a file" if self._ro_bad_outputs(positional, cwd) else None
+        if name == "uniq":
+            skip = {args[i + 1] for i, a in enumerate(args[:-1]) if a in ("-f", "-s", "-w")}
+            files = [p for p in positional if p not in skip]
+            return "its second file argument is written to" if len(files) > 1 else None
+        if name == "sed":
+            return self._ro_sed(args)
+        if name == "find":
+            bad = [a for a in args if a in _RO_FIND_ACTIONS]
+            return f"`find {bad[0]}` acts on files" if bad else None
+        if name == "yq":
+            return "edits in place" if any(a in ("-i", "--inplace") for a in args) else None
+        if name == "rg":
+            return "runs a preprocessor" if any(a.startswith("--pre") for a in args) else None
+        if name == "date":
+            return "sets the clock" if any(a in ("-s", "--set") for a in args) else None
+        if name == "hostname":
+            return "sets the host name" if positional else None
+        if name == "xxd":
+            return "writes a binary file" if any(a in ("-r", "-revert") for a in args) else None
+        if name == "set":
+            return None if args else "prints every shell variable"
+        if name == "mktemp":
+            vals = _out_values(args, "p", ("--tmpdir",)) + [p for p in positional if "/" in p]
+            return "outside the temp folder" if self._ro_bad_outputs(vals, cwd) else None
+        return None
+
+    @staticmethod
+    def _ro_sed(args: list[str]) -> str | None:
+        in_place = any(
+            a == "--in-place" or (_is_option(a) and not a.startswith("--") and "i" in a[1:])
+            for a in args
+        )
+        if in_place:
+            return "edits in place"
+        scripts: list[str] = []
+        positional: list[str] = []
+        for i, a in enumerate(args):
+            if a in ("-e", "--expression") and i + 1 < len(args):
+                scripts.append(args[i + 1])
+            elif a in ("-f", "--file") or a.startswith("--file="):
+                return "reads its script from a file"
+            elif not _is_option(a) and not (i > 0 and args[i - 1] in ("-e", "--expression")):
+                positional.append(a)
+        if not scripts and positional:
+            scripts = [positional[0]]
+        for s in scripts:
+            if not (_RO_SED_PRINT.fullmatch(s) or _RO_SED_SUBST.fullmatch(s.strip())):
+                return "a sed script other than a line print or a plain s///"
+        return None
+
+    # -- git --------------------------------------------------------------------------
+    @staticmethod
+    def _ro_git(argv: list[str]) -> str | None:
+        cfg, _, sub, args, _ = _git_parts(argv)
+        if cfg:
+            return "`git -c` can make git run other programs"
+        if sub is None:
+            return None
+        flags = [a.split("=", 1)[0] for a in args if a.startswith("-")]
+        if sub in _RO_GIT:
+            bad = [f for f in flags if f in _RO_GIT_BAD_FLAGS]
+            return f"`git {sub} {bad[0]}` writes a file or runs a program" if bad else None
+        positional = [a for a in args if not a.startswith("-")]
+        if sub == "branch":
+            if any(f in _RO_GIT_BRANCH_WRITE for f in flags):
+                return "`git branch` with a change flag"
+            listing = any(f in _RO_GIT_LISTING for f in flags)
+            return None if (listing or not positional) else "`git branch <name>` creates a branch"
+        if sub == "tag":
+            if any(f in _RO_GIT_TAG_WRITE for f in flags):
+                return "`git tag` with a change flag"
+            listing = any(
+                f in ("-l", "--list", "--contains", "--points-at", "--merged") for f in flags
+            )
+            return None if (listing or not positional) else "`git tag <name>` creates a tag"
+        if sub == "remote":
+            ok = not positional or positional[0] in ("show", "get-url")
+            return None if ok else "`git remote` with a change verb"
+        if sub == "config":
+            gets = ("--get", "--get-all", "--get-regexp", "--list", "-l", "--show-origin")
+            return None if any(f in gets for f in flags) else "`git config` that is not a read"
+        if sub == "stash":
+            return None if positional[:1] in (["list"], ["show"]) else "`git stash` that changes"
+        if sub == "worktree":
+            return None if positional[:1] == ["list"] else "`git worktree` that changes"
+        if sub == "reflog":
+            ok = not positional or positional[0] == "show"
+            return None if ok else "`git reflog` with a change verb"
+        return f"`git {sub}` can change the repository or the remote"
+
+    # -- forges, cloud, containers ----------------------------------------------------
+    @staticmethod
+    def _ro_forge(name: str, args: list[str]) -> str | None:
+        groups, verbs = _RO_FORGE[name]
+        positional: list[str] = []
+        for i, a in enumerate(args):
+            skipped = i > 0 and args[i - 1] in ("-R", "--repo", "-H", "--hostname")
+            if not a.startswith("-") and not skipped:
+                positional.append(a)
+        group = positional[0] if positional else ""
+        if group == "api":
+            method = "GET"
+            for j, a in enumerate(args):
+                if a in ("-X", "--method") and j + 1 < len(args):
+                    method = args[j + 1].upper()
+                elif a.startswith("--method="):
+                    method = a.split("=", 1)[1].upper()
+                elif a in ("-f", "-F", "--field", "--raw-field", "--input"):
+                    return f"`{name} api` with a request body"
+            return None if method == "GET" else f"`{name} api` with method {method}"
+        if group == "search" or positional[:2] == ["auth", "status"] or positional == ["status"]:
+            return None
+        if group in groups and len(positional) > 1 and positional[1] in verbs:
+            return None
+        return f"`{name} {' '.join(positional[:2])}` is not a read-only subcommand"
+
+    @staticmethod
+    def _ro_gcloud(args: list[str]) -> str | None:
+        positional: list[str] = []
+        for i, a in enumerate(args):
+            if not a.startswith("-") and not (i > 0 and args[i - 1] in _RO_GCLOUD_VALUE_FLAGS):
+                positional.append(a)
+
+        def writes(tok: str) -> bool:
+            return any(tok == w or tok.startswith(w + "-") for w in _RO_GCLOUD_WRITE)
+
+        if any(writes(p) for p in positional):
+            return "a gcloud verb that changes state or prints a credential"
+        if any(p in _RO_GCLOUD_READ for p in positional):
+            return None
+        return "no read-only gcloud verb (describe, list, get-iam-policy, read, ...)"
+
+    @staticmethod
+    def _ro_gsutil(args: list[str]) -> str | None:
+        positional = [
+            a
+            for i, a in enumerate(args)
+            if not a.startswith("-") and not (i > 0 and args[i - 1] in ("-o", "-h", "-u"))
+        ]
+        if not positional or positional[0] in _RO_GSUTIL_READ:
+            return None
+        if positional[0] in _RO_GSUTIL_GET_GROUPS and positional[1:2] in (["get"], ["list"]):
+            return None
+        return f"`gsutil {positional[0]}` can change buckets or objects"
+
+    @staticmethod
+    def _ro_kubectl(args: list[str]) -> str | None:
+        positional = [
+            a
+            for i, a in enumerate(args)
+            if not a.startswith("-") and not (i > 0 and args[i - 1] in _RO_KUBECTL_VALUE_FLAGS)
+        ]
+        verb = positional[0] if positional else ""
+        rest = positional[1:]
+        if verb in ("get", "describe") and rest[:1] and rest[0] in ("secret", "secrets"):
+            return "would print Kubernetes secret values"
+        if verb in _RO_KUBECTL_READ:
+            return None
+        if verb == "config" and rest[:1] in (["view"], ["get-contexts"], ["current-context"]):
+            return None
+        if verb == "auth" and rest[:1] == ["can-i"]:
+            return None
+        if verb == "rollout" and rest[:1] in (["status"], ["history"]):
+            return None
+        return f"`kubectl {verb}` can change the cluster"
+
+    @staticmethod
+    def _ro_docker(args: list[str]) -> str | None:
+        i = 0
+        while i < len(args) and args[i].startswith("-"):
+            i += 2 if args[i] in ("-H", "--host", "-c", "--context", "--config", "-l") else 1
+        positional = [a for a in args[i:] if not a.startswith("-")]
+        if not positional or positional[0] in _RO_DOCKER_TOP:
+            return None
+        group = _RO_DOCKER_GROUPS.get(positional[0])
+        if group and positional[1:2] and positional[1] in group:
+            return None
+        return f"`docker {positional[0]}` can change containers, images or the host"
+
+    # -- network, scanners, python ----------------------------------------------------
+    def _ro_curl(self, args: list[str], cwd: str | None) -> str | None:
+        long_bad = _words(
+            "--data --data-raw --data-binary --data-urlencode --form --form-string --upload-file "
+            "--json --remote-name --remote-name-all --config --cookie-jar --create-dirs"
+        )
+        outputs = _out_values(args, "D", ("--output", "--dump-header", "--trace", "--trace-ascii"))
+        outputs += _out_values(args, "o", ())
+        if self._ro_bad_outputs(outputs, cwd):
+            return "saves a response outside the temp folder"
+        i = 0
+        while i < len(args):
+            tok = args[i]
+            if tok.startswith("--"):
+                flag, eq, val = tok.partition("=")
+                if flag in long_bad:
+                    return f"`curl {flag}` sends or saves data"
+                if flag == "--request":
+                    method = (val if eq else (args[i + 1] if i + 1 < len(args) else "")).upper()
+                    if method not in ("GET", "HEAD"):
+                        return f"`curl` with method {method}"
+                if flag in _CURL_VALUE_LONG and not eq:
+                    i += 1
+            elif _is_option(tok):
+                letters, takes_next = _short_flags(tok, _CURL_VALUE_SHORT)
+                if {"O", "J"} & set(letters):
+                    return "`curl -O` saves a file in the current directory"
+                if letters[-1] in "dFTKc" and letters[-1] in _CURL_VALUE_SHORT:
+                    return f"`curl -{letters[-1]}` sends or saves data"
+                if letters[-1] == "X":
+                    val = tok[len(letters) + 1 :] or (args[i + 1] if i + 1 < len(args) else "")
+                    if val.upper() not in ("GET", "HEAD"):
+                        return f"`curl -X {val}`"
+                if takes_next:
+                    i += 1
+            i += 1
+        return None
+
+    def _ro_wget(self, args: list[str], cwd: str | None) -> str | None:
+        docs = _out_values(args, "O", ("--output-document",))
+        if not docs or any(d != "-" and not self._ro_temp_ok(d, cwd) for d in docs):
+            return "`wget` saves a file unless it is given `-O -`"
+        logs = _out_values(args, "oa", ("--output-file", "--append-output"))
+        if self._ro_bad_outputs(logs, cwd):
+            return "`wget` log file outside the temp folder"
+        sends = ("--post", "--method", "--body", "--mirror", "-P", "--directory-prefix")
+        if any(a.startswith(sends) for a in args):
+            return "`wget` sends data or saves files"
+        return None
+
+    def _ro_scanner(self, name: str, args: list[str], cwd: str | None) -> str | None:
+        if any(a.split("=", 1)[0] in _RO_SCANNER_FIXERS for a in args):
+            return f"`{name}` option that rewrites source files"
+        flags = _RO_SCANNERS[name]
+        short = "".join(f[1] for f in flags if len(f) == 2 and f[0] == "-")
+        long_ = tuple(f for f in flags if f.startswith("--"))
+        bad = self._ro_bad_outputs(_out_values(args, short, long_), cwd)
+        return f"`{name}` report written outside the temp folder" if bad else None
+
+    @staticmethod
+    def _ro_python_code_is_safe(code: str) -> bool:
+        modules: set[str] = set()
+        for m in _RO_PY_IMPORT.finditer(code):
+            names = m.group(1) or m.group(2) or ""
+            modules |= {n.split(" as ")[0].strip().split(".")[0] for n in names.split(",")}
+        return not _RO_PY_FORBIDDEN.search(code) and modules <= _RO_PY_SAFE_MODULES
+
+    def _ro_python(self, argv: list[str], cwd: str | None) -> str | None:
+        args = argv[1:]
+        code = Analyzer._inline_code(argv)
+        if code is not None:
+            if self._ro_python_code_is_safe(code):
+                return None
+            return "inline Python that can write files or run programs"
+        if args[:2] == ["-m", "json.tool"]:
+            return None
+        script = next((a for a in args if not _is_option(a)), "")
+        if script.replace("\\", "/").endswith("/skills/security-scan/scripts/security_scan.py"):
+            bad = self._ro_bad_outputs(_out_values(args, "", ("--out",)), cwd)
+            return "the scan report must go to the temp folder (--out)" if bad else None
+        return "Python other than the security-scan script, `-m json.tool` or a read-only `-c`"
+
+
+class Analyzer(_ReadOnlyMixin):
     """Walks one command line (and the command lines nested inside it)."""
 
-    def __init__(self, ctx: Ctx) -> None:
+    def __init__(self, ctx: Ctx, agent: str | None = None) -> None:
         self.ctx = ctx
+        self.agent = agent  # a READ_ONLY_AGENTS id, or None in the main session
         self.findings: list[Finding] = []
         # Shell variables assigned earlier in this command line (`BR=main; git push origin $BR`)
         self.vars: dict[str, str] = {}
+        if agent:  # a read-only agent may write its scratch files under the temp folder
+            self.vars["TMPDIR"] = ctx.environ.get("TMPDIR") or "/tmp"
         # Branch a repo is on after a `git checkout` / `git switch` earlier in the same line
         self.sim_branch: dict[str, str | None] = {}
 
@@ -1151,6 +1664,8 @@ class Analyzer:
                 self.vars[n] = w.text
         self.check_tls_assignments(assigns, [w.text for w in words])
         self.check_tamper_redirects(cmd)
+        if self.agent:
+            self.read_only_checks(cmd, words, assigns, cwd)
         if not words:
             return cwd
         argv = [w.text for w in words]
@@ -1200,6 +1715,9 @@ class Analyzer:
         if "$" not in text and "`" not in text:
             return text
         text = _VAR_RE.sub(lambda m: self.vars.get(m.group(1) or m.group(2), m.group(0)), text)
+        if self.agent and "mktemp" in text:  # a fresh directory under the temp folder
+            temp = self.vars["TMPDIR"].rstrip("/") + "/mktemp.x"
+            text = _RO_MKTEMP_RE.sub(lambda _: temp, text)
         if cwd and _BRANCH_SUBST_RE.search(text):
             branch = self.branch_now(cwd)
             if branch:
@@ -2017,12 +2535,14 @@ def evaluate(payload: Mapping[str, object], environ: Mapping[str, str]) -> list[
         return []
     if not isinstance(tool_input, dict):
         return [Finding("cannot-decide", f"a {tool} call with no readable tool_input")]
+    agent_type = payload.get("agent_type")
+    agent = agent_type if isinstance(agent_type, str) and agent_type in READ_ONLY_AGENTS else None
 
     if tool == "Bash":
         command = _str_field(tool_input, "command")
         if command is None:
             return [Finding("cannot-decide", "a Bash call with no readable command")]
-        analyzer = Analyzer(ctx)
+        analyzer = Analyzer(ctx, agent)
         analyzer.run(command, ctx.cwd)
         return analyzer.findings
 
@@ -2037,7 +2557,10 @@ def evaluate(payload: Mapping[str, object], environ: Mapping[str, str]) -> list[
                 break
         return findings
 
-    return _evaluate_file_write(str(tool), tool_input, ctx)
+    findings = _evaluate_file_write(str(tool), tool_input, ctx)
+    if agent:
+        findings.insert(0, Finding("read-only-agent", f"{agent} using {tool} to change a file"))
+    return findings
 
 
 def _evaluate_file_write(tool: str, tool_input: dict[str, object], ctx: Ctx) -> list[Finding]:
@@ -2085,7 +2608,7 @@ def message_for(finding: Finding, extra: int) -> str:
     rule = RULE_BY_ID[finding.rule]
     more = f" (+{extra} more)" if extra else ""
     return (
-        f"guardrails[{rule.id}]: {finding.detail} is blocked{more} because {rule.why}. "
+        f"guardrails[{rule.id}]: {redact(finding.detail)} is blocked{more} because {rule.why}. "
         f"{rule.instead} Do not retry it another way; if it is truly needed, tell the user "
         f"and let them run it."
     )
@@ -2145,7 +2668,12 @@ def decide(raw: str, environ: Mapping[str, str]) -> tuple[int, str]:
         return 0, ""
     log_event(
         data_dir,
-        {**base, "event": "block", "rules": [f.rule for f in live], "detail": live[0].detail},
+        {
+            **base,
+            "event": "block",
+            "rules": [f.rule for f in live],
+            "detail": redact(live[0].detail),
+        },
     )
     return 2, message_for(live[0], len(live) - 1)
 
@@ -2157,6 +2685,8 @@ def list_rules() -> str:
         lines.append(
             f"{r.id}{flag}\n  blocks:  {r.summary}\n  why:     {r.why}\n  instead: {r.instead}"
         )
+        if r.id == "read-only-agent":
+            lines.append(f"  applies to: {', '.join(sorted(READ_ONLY_AGENTS))}")
     return "\n".join(lines)
 
 
