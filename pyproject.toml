@@ -1,0 +1,30 @@
+# claude-pack: the dev toolchain only. Every script in the pack is Python 3.11+ standard
+# library or POSIX sh, so there are no runtime dependencies to declare.
+[project]
+name = "claude-pack"
+version = "0.1.0"
+description = "Claude Code plugin marketplace: skills, agents and hooks for engineering work on government products"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Test files in different plugin folders may share a name (test_hooks.py); importlib mode
+# keeps them from colliding without needing __init__.py files.
+addopts = ["--import-mode=importlib"]

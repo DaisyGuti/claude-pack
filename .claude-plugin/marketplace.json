@@ -1,0 +1,54 @@
+{
+  "name": "claude-pack",
+  "owner": {
+    "name": "Daisy Gutierrez"
+  },
+  "description": "A team marketplace of Claude Code skills, agents and hooks for engineering work on government products.",
+  "plugins": [
+    {
+      "name": "core",
+      "source": "./plugins/core",
+      "description": "Engineering agent, read-only reviewer and forward-tester agents, and repo setup that writes a repository's CLAUDE.md."
+    },
+    {
+      "name": "tickets",
+      "source": "./plugins/tickets",
+      "description": "GitHub and GitLab ticket flow: write, plan, groom and work tickets."
+    },
+    {
+      "name": "models",
+      "source": "./plugins/models",
+      "description": "Model choice, prompt optimizing, a Claude Code usage report, and an audit of how the product's code uses AI models."
+    },
+    {
+      "name": "design",
+      "source": "./plugins/design",
+      "description": "UI/UX agent and design skills for typography, UX review, web interface guidelines, React patterns and the U.S. Web Design System."
+    },
+    {
+      "name": "accessibility",
+      "source": "./plugins/accessibility",
+      "description": "WCAG 2.2 scan, inspect, audit, fix and diff, plus Section 508 conformance reports."
+    },
+    {
+      "name": "security",
+      "source": "./plugins/security",
+      "description": "Threat modeling, secure code review, secret and dependency scans, government compliance mapping, and a security-auditor agent."
+    },
+    {
+      "name": "secure-build",
+      "source": "./plugins/secure-build",
+      "description": "Hardened Dockerfiles and images, image scanning, signing and SBOMs, hardened GitHub Actions and GitLab CI, GCP security review, and GitHub-to-GitLab migration."
+    },
+    {
+      "name": "guardrails",
+      "source": "./plugins/guardrails",
+      "description": "Hooks that block risky commands and secret leaks while Claude works."
+    },
+    {
+      "name": "team-comms",
+      "source": "./plugins/team-comms",
+      "description": "Slack thread summaries and replies, status updates, standups, design docs and decision records."
+    }
+  ]
+}

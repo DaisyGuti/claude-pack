@@ -1,0 +1,12 @@
+# claude plugin eval writes results here
+evals/results/
+**/evals/results/
+
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+
+# Per-machine list of strings no tracked file may contain.
+/.personal-strings

@@ -1,0 +1,7 @@
+{
+  "name": "guardrails",
+  "description": "Hooks that block risky commands and secret leaks while Claude works.",
+  "author": {
+    "name": "Daisy Gutierrez"
+  }
+}

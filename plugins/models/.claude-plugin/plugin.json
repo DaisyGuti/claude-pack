@@ -1,0 +1,7 @@
+{
+  "name": "models",
+  "description": "Model choice, prompt optimizing, a Claude Code usage report, and an audit of how the product's code uses AI models.",
+  "author": {
+    "name": "Daisy Gutierrez"
+  }
+}

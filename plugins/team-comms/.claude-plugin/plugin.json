@@ -1,0 +1,7 @@
+{
+  "name": "team-comms",
+  "description": "Slack thread summaries and replies, status updates, standups, design docs and decision records.",
+  "author": {
+    "name": "Daisy Gutierrez"
+  }
+}

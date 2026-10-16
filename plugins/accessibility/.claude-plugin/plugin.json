@@ -1,0 +1,7 @@
+{
+  "name": "accessibility",
+  "description": "WCAG 2.2 scan, inspect, audit, fix and diff, plus Section 508 conformance reports.",
+  "author": {
+    "name": "Daisy Gutierrez"
+  }
+}

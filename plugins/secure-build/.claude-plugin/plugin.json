@@ -1,0 +1,7 @@
+{
+  "name": "secure-build",
+  "description": "Hardened Dockerfiles and images, image scanning, signing and SBOMs, hardened GitHub Actions and GitLab CI, GCP security review, and GitHub-to-GitLab migration.",
+  "author": {
+    "name": "Daisy Gutierrez"
+  }
+}
