@@ -3,5 +3,6 @@
   "description": "Engineering agent, read-only reviewer and forward-tester agents, and repo setup that writes a repository's CLAUDE.md.",
   "author": {
     "name": "Daisy Gutierrez"
-  }
+  },
+  "dependencies": ["models"]
 }
