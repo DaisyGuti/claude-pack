@@ -40,6 +40,21 @@ Each line is JSON with `ts`, `event`, `rules`, `tool`, `cwd`, `session` and the 
 credential-shaped text replaced by `[redacted]`). `event` is `block`, or `allowed-by-config` when
 the repo's allowlist let a rule through. Summarize repeats by rule so the user sees patterns.
 
+## Read-only agents
+
+Some agents are defined as read-only (the `core:reviewer` and `security:security-auditor` agents,
+and any others in `READ_ONLY_AGENTS` in the script). A plugin agent cannot carry its own
+permission mode, so the `read-only-agent` rule enforces it: when a call comes from one of them,
+Write, Edit, MultiEdit and NotebookEdit are refused, and Bash is limited to a list of read-only
+commands (`git diff`/`log`/`show`, `gh pr diff`, `glab mr diff`, `cat`, `grep`, `find` without
+actions, the scanners). A report or scan result may be written under `$TMPDIR` only. Anything
+that changes the repository, the remote, files or cloud state is refused. A read-only agent that
+hits the rule should say in its report what change it would have made and stop.
+
+The main session is never affected by this rule. To let a reviewer run a command the list does
+not cover, a person adds `read-only-agent` to the allowlist for that repo (it turns the rule off
+for every read-only agent there) or adds the command to the script in a pull request.
+
 ## How a person runs a blocked command on purpose
 
 Hooks fire only when Claude calls a tool, so a person has three routes:

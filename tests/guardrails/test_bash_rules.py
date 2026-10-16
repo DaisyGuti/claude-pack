@@ -503,7 +503,8 @@ def test_safe_lookalike(bash, fill, command):
 
 def test_every_rule_has_a_blocked_case(g):
     covered = {rule for rule, _ in BLOCKED}
-    assert {r.id for r in g.RULES} <= covered | {"secret-in-content"}
+    # read-only-agent needs an agent_type in the payload; test_read_only_agents.py covers it
+    assert {r.id for r in g.RULES} <= covered | {"secret-in-content", "read-only-agent"}
 
 
 def test_cwd_inside_subdir_resolves_relative_rm(bash, world):

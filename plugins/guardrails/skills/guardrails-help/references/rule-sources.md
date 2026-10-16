@@ -21,6 +21,8 @@ changing the rule behind it.
 | `tool_input` fields: Bash `command`; Write `file_path`, `content`; Edit `file_path`, `old_string`, `new_string`; Read `file_path`; Grep `pattern`, `path`, `glob`. File paths arrive absolute with `~` expanded | https://code.claude.com/docs/en/hooks#pretooluse-input |
 | `!` shell mode runs a command "without going through Claude", and PreToolUse "runs only when Claude calls a tool" | https://code.claude.com/docs/en/interactive-mode and the hooks page |
 | `@file` references insert contents without a tool call, so no Read hook fires; `CLAUDE_CODE_DISABLE_FILE_MENTIONS=1` (2.1.299 or later) routes them through Read | https://code.claude.com/docs/en/hooks |
+| Inside a subagent, hook input carries `agent_id` and `agent_type`. For a plugin subagent `agent_type` is the plugin-scoped id (`core:reviewer`); the bare frontmatter name (`reviewer`) never appears. Confirmed on a live run: a Bash call from the reviewer arrived with `"agent_type": "core:reviewer"`; the main session sends no `agent_type` | https://code.claude.com/docs/en/hooks (SubagentStart section) |
+| Plugin agents ignore `hooks` and `permissionMode` in their frontmatter | https://code.claude.com/docs/en/plugins/components#agents |
 | A PowerShell tool exists on Windows; matchers for shell commands should include it there | https://code.claude.com/docs/en/hooks |
 
 ## Credential formats

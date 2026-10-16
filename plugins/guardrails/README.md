@@ -16,6 +16,11 @@ creation, privileged containers and Docker socket mounts, recursive deletes of `
 directory or the repository root, credentials written into files, and secret files read into the
 conversation.
 
+Agents that must only read (`core:reviewer`, `security:security-auditor`) are held to it by the
+`read-only-agent` rule: file-writing tools are refused and Bash is limited to read-only commands,
+because a plugin agent cannot carry its own permission mode. The agent list is one constant,
+`READ_ONLY_AGENTS`, in `hooks/guardrails.py`.
+
 It parses commands the way a shell does (quotes, `&&`, pipes, `sh -c`, heredocs, `$(...)`), so
 `echo "git push --force"` passes and `FOO=1 sudo bash -c 'git push -f origin main'` does not.
 
