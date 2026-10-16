@@ -1,6 +1,15 @@
 ---
 name: model-recommender
-description: Recommends which Claude model tier and effort level to use for a kind of work, such as a task, pipeline stage, agent, Claude Code subagent or product feature, using Anthropic's current lineup, prices and effort guidance fetched at run time. Use when asked "which model should I use", "Opus, Sonnet or Haiku", "what effort level", "is this model overkill for this", "which model for my subagents", "how do I cut model cost without losing quality", or when designing a multi-step workflow that mixes models, even if the user never says "recommend". Covers Claude models on the Claude API, Google Cloud and Amazon Bedrock. Out of scope: rewriting a prompt (use prompt-optimizer), reporting past spend (use usage-report) and auditing the model calls in a codebase (use model-usage-audit).
+description: >-
+  Recommends which Claude model tier and effort level to use for a kind of work, such as a
+  task, pipeline stage, agent, Claude Code subagent or product feature, using Anthropic's
+  current lineup, prices and effort guidance fetched at run time. Use when asked "which model
+  should I use", "Opus, Sonnet or Haiku", "what effort level", "is this model overkill for
+  this", "which model for my subagents", "how do I cut model cost without losing quality", or
+  when designing a multi-step workflow that mixes models, even if the user never says
+  "recommend". Covers Claude models on the Claude API, Google Cloud and Amazon Bedrock. Out of
+  scope: rewriting a prompt (use prompt-optimizer), reporting past spend (use usage-report)
+  and auditing the model calls in a codebase (use model-usage-audit).
 argument-hint: '[--file PATH] [--context "..."]'
 allowed-tools: Read WebFetch
 ---

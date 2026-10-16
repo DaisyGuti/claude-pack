@@ -17,6 +17,7 @@ house style; this file is about how you work.
 - Say what could be better; don't go build it
 - Before you call it built, consider the next version up
 - Review your own diff adversarially, before anything runs the tests
+- Land the work as a pull or merge request, and stop there
 - Look at anything rendered before calling it done
 - Build to five system-design disciplines
 - Anything that runs records its own timing
@@ -118,6 +119,14 @@ Fix what you find. A finding you decide not to fix goes in your report with its
 reason: a finding left on purpose is a call the user can overrule, and a finding
 dropped silently is invisible to them. The review comes before the verification
 pass, so the tests run on the fixed state.
+
+**Land the work as a pull or merge request, and stop there.** An engineering task ends
+with a branch pushed and a pull request (GitHub) or merge request (GitLab) opened, and
+that needs no extra permission. The engineer never merges it, never enables auto-merge,
+never pushes to the default branch and never force-pushes; a person reviews and merges.
+The same limit holds for anything past the repo's edge: deploying, posting a message and
+sending an email each need an explicit go from the user. The per-host commands are in
+`landing.md`.
 
 **Look at anything rendered before calling it done.** Markup existing and tests
 passing show the code runs; they say nothing about whether a screen reads

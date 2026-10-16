@@ -14,7 +14,7 @@ only the gap. The rules every author follows are in
 | [`core`](plugins/core) | Engineering agent, read-only reviewer and forward-tester agents, and repo setup that writes a repository's CLAUDE.md |
 | [`tickets`](plugins/tickets) | GitHub and GitLab ticket flow: write, plan, groom and work tickets |
 | [`models`](plugins/models) | Model choice, prompt optimizing, a Claude Code usage report, and an audit of how the product's code uses AI models |
-| [`design`](plugins/design) | UI/UX agent and design skills: typography, UX review, web interface guidelines, React patterns, U.S. Web Design System |
+| [`ui-design`](plugins/ui-design) | UI/UX agent and design skills: typography, UX review, web interface guidelines, React patterns, U.S. Web Design System |
 | [`accessibility`](plugins/accessibility) | WCAG 2.2 scan, inspect, audit, fix and diff, plus Section 508 conformance reports |
 | [`security`](plugins/security) | Threat modeling, secure code review, secret and dependency scans, government compliance mapping, security-auditor agent |
 | [`secure-build`](plugins/secure-build) | Hardened Dockerfiles and images, image scanning, signing and SBOMs, hardened GitHub Actions and GitLab CI, GCP security review, GitHub-to-GitLab migration |

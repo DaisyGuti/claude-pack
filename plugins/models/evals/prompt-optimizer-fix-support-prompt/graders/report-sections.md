@@ -1,5 +1,6 @@
 ---
 type: regex
-pattern: '(?s)Final version.*How to run it'
+pattern: 'Final version.*How to run it'
+flags: s
 target: last_message
 ---

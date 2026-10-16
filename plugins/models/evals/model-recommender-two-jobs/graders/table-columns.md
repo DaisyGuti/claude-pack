@@ -1,5 +1,6 @@
 ---
 type: regex
-pattern: '(?is)Unit.*Effort.*Move up if'
+pattern: 'Unit.*Effort.*Move up if'
+flags: is
 target: last_message
 ---

@@ -1,4 +1,4 @@
-"""Structural checks for the design plugin's skills: size limits and links that resolve."""
+"""Structural checks for the ui-design plugin's skills: size limits and links that resolve."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-PLUGIN = Path(__file__).resolve().parents[2] / "plugins/design"
+PLUGIN = Path(__file__).resolve().parents[2] / "plugins/ui-design"
 SKILLS = sorted(p.parent for p in PLUGIN.glob("skills/*/SKILL.md"))
 # Skill text may point at its bundled files by variable or by relative markdown link.
 VARIABLE_PATH = re.compile(r"\$\{CLAUDE_SKILL_DIR\}/([\w./-]+)")

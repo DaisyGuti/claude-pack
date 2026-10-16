@@ -1,4 +1,4 @@
-# design
+# ui-design
 
 A UI/UX agent and the design skills a team building a government web product uses.
 
@@ -10,6 +10,7 @@ A UI/UX agent and the design skills a team building a government web product use
 | `web-design-guidelines` | Reviews UI source code against Vercel's Web Interface Guidelines, fetched fresh each time. |
 | `composition-patterns` | Vercel's React composition rules (compound components, state in providers, explicit variants). |
 | `react-best-practices` | Vercel's React and Next.js performance rules, ranked by impact. |
+| `react-native-skills` | Vercel's React Native and Expo rules: list performance, animation, navigation, UI patterns, state and monorepo setup. |
 
 ## Install these alongside
 
@@ -33,13 +34,9 @@ same author's `bencium-innovative-ux-designer` (it invents a new visual identity
 Accessibility testing of a running page lives in the `accessibility` plugin of this marketplace,
 which names the AccessLint install.
 
-React Native rules (`vercel-react-native-skills`) are not included. Vercel publishes them in
-`vercel-labs/agent-skills`, which has no Claude Code marketplace; add them with the skills CLI if
-the team builds a mobile app, after reading what `npx skills add` will fetch.
-
 ## Third-party material
 
 | Skill | Upstream | License | Notice |
 |---|---|---|---|
-| `web-design-guidelines`, `composition-patterns`, `react-best-practices` | [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) at 063bee9 | MIT | `LICENSE.txt` in each skill folder |
+| `web-design-guidelines`, `composition-patterns`, `react-best-practices`, `react-native-skills` | [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) at 063bee9 | MIT | `LICENSE.txt` in each skill folder |
 | `ux-review` (parts of two reference files) | [phazurlabs/sumi](https://github.com/phazurlabs/sumi) | Apache-2.0 | `skills/ux-review/LICENSE.txt` |

@@ -131,7 +131,7 @@ After each write, run its read check and show the result before offering the nex
 | Mirror, URL changes, remotes, cutover, rollback, archive | references/cutover-and-rollback.md |
 | Exact drafted commands and the step protocol | references/execute-commands.md |
 | Source URLs, fetch dates, what was and was not verified | references/sources.md |
-| Starting point for dependency updates | templates/renovate.json |
+| Starting point for dependency updates | ../ci-harden/templates/renovate.json |
 
 Read only the files the current step needs.
 

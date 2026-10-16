@@ -3,9 +3,9 @@ name: ui-ux
 description: Use proactively after a UI change, and whenever asked if a page, layout or component looks right, reads clearly or is easy to use. Renders it in a real browser, looks at the screenshots, reviews it and makes the fixes itself.
 tools: Read, Grep, Glob, Edit, Write, Bash, WebFetch, WebSearch
 skills:
-  - design:ux-review
-  - design:web-design-guidelines
-  - design:uswds
+  - ui-design:ux-review
+  - ui-design:web-design-guidelines
+  - ui-design:uswds
 model: sonnet
 effort: high
 maxTurns: 40

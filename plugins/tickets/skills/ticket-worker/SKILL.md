@@ -1,6 +1,11 @@
 ---
 name: ticket-worker
-description: Works one specific GitHub or GitLab issue from plan to an open pull or merge request, in its own git worktree, on the Claude model its ticket label calls for, and moves the board card. Merging the review closes the issue. Use for "work issue 42 in my-app", "build ticket 42", "take #42 to a PR", even when the user names no repo. For the whole Ready queue use work-tickets.
+description: >-
+  Works one specific GitHub or GitLab issue from plan to an open pull or merge request, in its
+  own git worktree, on the Claude model its ticket label calls for, and moves the board card.
+  Merging the review closes the issue. Use for "work issue 42 in my-app", "build ticket 42",
+  "take #42 to a PR", even when the user names no repo. For the whole Ready queue use
+  work-tickets.
 argument-hint: "<issue number> [--repo NAME] [--model haiku|sonnet|opus]"
 disable-model-invocation: true
 allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/registry.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve_model.py *)

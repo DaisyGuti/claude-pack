@@ -11,7 +11,9 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT = Path(__file__).resolve().parents[2] / "plugins/design/skills/uswds/scripts/uswds_check.py"
+SCRIPT = (
+    Path(__file__).resolve().parents[2] / "plugins/ui-design/skills/uswds/scripts/uswds_check.py"
+)
 SPEC = importlib.util.spec_from_file_location("uswds_check", SCRIPT)
 assert SPEC and SPEC.loader
 uswds_check = importlib.util.module_from_spec(SPEC)

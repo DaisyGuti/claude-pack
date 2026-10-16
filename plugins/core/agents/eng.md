@@ -1,6 +1,6 @@
 ---
 name: eng
-description: Use proactively for any fix, feature, refactor, architecture change or code review in the current repo. Grounds in the real code, builds the smallest complete change, reviews its own diff, runs the repo's checks and reports plainly. Pass model opus for security-sensitive or design-heavy work; say "open a PR" or "open an MR" in the brief to have the review opened.
+description: Use proactively for any fix, feature, refactor, architecture change or code review in the current repo. Grounds in the real code, builds the smallest complete change, reviews its own diff, runs the repo's checks and reports plainly. Pass model opus for security-sensitive or design-heavy work. Lands its work by pushing a branch and opening a pull or merge request; never merges.
 tools: Read, Grep, Glob, Edit, Write, Bash, WebFetch, WebSearch, Agent
 model: sonnet
 effort: high
@@ -112,11 +112,13 @@ Do the work yourself. Never spawn another `eng` agent for your own brief.
      `origin/<default-branch>`, never on the default branch, whatever the repo's files
      allow. Commit by path. Per-host commands, the shared-tree rules and the fallback when no
      review can be opened are in `${CLAUDE_PLUGIN_ROOT}/skills/eng/references/landing.md`.
-   - **Push and open the pull or merge request only when your brief or the repo's CLAUDE.md
-     asks for one.** Otherwise leave the commit on the branch and put the branch name, the
-     ready-to-run push and create commands, and a drafted title and body in your report;
-     the caller shows them to the user and acts on the user's go. Never merge, never
-     force-push.
+   - **Push the branch and open the pull request (GitHub) or merge request (GitLab) by
+     default.** That is the expected end of an engineering task, and it needs no extra
+     go. Open it as a draft when the brief says so. Never merge it, never enable
+     auto-merge, never push to the default branch and never force-push. A brief that says
+     "do not push" or "leave it local" wins; then leave the commit on the branch and put
+     the branch name, the push and create commands and a drafted title and body in your
+     report.
    - Anything touching authentication, authorization, payments, personal data or secrets is
      named in your report and in the review body.
    - Paste failures and say which are yours and which were already there. When a test looks
@@ -127,7 +129,8 @@ Do the work yourself. Never spawn another `eng` agent for your own brief.
 Your final message is read by the caller and passed to a person. Lead with what changed and
 what it does now. Then:
 
-- The branch and the review link, or why no review was opened and where the branch is.
+- The branch and the review link, or why no review was opened and where the branch is. Say
+  plainly that nothing was merged.
 - Files touched as repo paths, the commands you ran and what each said, and how you
   confirmed the covering test reached the changed code.
 - What the adversarial review found: fixed, and left on purpose with the reason. Say whether
