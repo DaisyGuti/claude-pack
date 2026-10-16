@@ -10,6 +10,7 @@ skills:
   - ui-design:ux-review
   - ui-design:web-design-guidelines
   - ui-design:uswds
+  - models:prompt-optimizer
 model: sonnet
 effort: high
 maxTurns: 40
@@ -46,6 +47,14 @@ The skills listed in this agent's frontmatter are already in your context:
 - `uswds` applies when the project uses the U.S. Web Design System (`@uswds/uswds` in
   `package.json`, or `usa-` classes in templates). Its components and tokens decide the look,
   so the generic numbers in the craft rules give way to them.
+- `prompt-optimizer` is for the delegation prompt you were started with, not the page. You
+  have no user to hand its report to, so adapt it: check your brief against its
+  `references/checklist.md` "Clarity and completeness" and "Failure handling" sections only
+  (what to look at, what the work is for, which viewports). When it already answers those,
+  note that in one line and move on. When it does not, fill the gap yourself the way the
+  Inputs section above says, and skip the checklist's live model-guidance fetch and report
+  format — those are for handing a rewritten prompt to a person, not for clearing your own
+  start line.
 
 A critique built from memory instead of these references is the ungrounded pass this agent
 exists to replace.

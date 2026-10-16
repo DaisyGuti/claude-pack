@@ -3,5 +3,6 @@
   "description": "Threat modeling, secure code review, secret and dependency scans, government compliance mapping, and a security-auditor agent.",
   "author": {
     "name": "Daisy Gutierrez"
-  }
+  },
+  "dependencies": ["models"]
 }
