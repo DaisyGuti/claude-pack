@@ -1,0 +1,519 @@
+{
+  "report": {
+    "company": "Example Co",
+    "product": "Example Permit Portal 2.3",
+    "report_date": "October 2026",
+    "description": "A web application where residents apply for and track permits.",
+    "contact": "accessibility@example.com",
+    "notes": "Evaluated the public application flow and the account area. Draft example with invented results.",
+    "evaluation_methods": "Automated scan of sampled pages, then keyboard and screen-reader testing of the main flows by a QA engineer.",
+    "vpat_version": "2.5Rev",
+    "legal_disclaimer": "",
+    "product_has_hardware": false
+  },
+  "wcag_version": "2.0",
+  "sessions": [
+    {
+      "id": "scan-1",
+      "method": "automated",
+      "by": "tool",
+      "tool": "Rule-engine scan",
+      "date": "2026-10-12",
+      "scope": "12 sampled pages and states",
+      "ref": "reports/scan-2026-10-12.md"
+    },
+    {
+      "id": "kbd-1",
+      "method": "keyboard",
+      "by": "human",
+      "tester": "QA engineer, keyboard only",
+      "date": "2026-10-13",
+      "scope": "apply, pay and track flows",
+      "ref": "reports/keyboard-2026-10-13.md"
+    },
+    {
+      "id": "sr-1",
+      "method": "screen-reader",
+      "by": "human",
+      "tester": "QA engineer, NVDA with Firefox",
+      "date": "2026-10-14",
+      "scope": "apply and pay flows",
+      "ref": "reports/nvda-2026-10-14.md"
+    },
+    {
+      "id": "rev-1",
+      "method": "content",
+      "by": "human",
+      "tester": "Accessibility specialist reviewing content",
+      "date": "2026-10-14",
+      "scope": "all sampled pages and states",
+      "ref": "reports/content-review-2026-10-14.md"
+    }
+  ],
+  "rows": {
+    "1.1.1": {
+      "status": "Partially Supports",
+      "remarks": "Informational images have text alternatives. Three icon-only buttons on the payment page have no accessible name.",
+      "evidence": [
+        {
+          "session": "scan-1",
+          "result": "fail",
+          "detail": "3 buttons without names on /pay"
+        },
+        {
+          "session": "sr-1",
+          "result": "pass",
+          "detail": "Other images announced with equivalent text"
+        }
+      ]
+    },
+    "1.2.1": {
+      "status": "Supports",
+      "remarks": "The product has no prerecorded audio-only or video-only content, so there is nothing the criterion applies to.",
+      "evidence": [
+        {
+          "session": "rev-1",
+          "result": "pass",
+          "detail": "No audio-only or video-only content found in the sampled pages and states"
+        }
+      ]
+    },
+    "1.2.2": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "1.2.3": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "1.3.1": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "1.3.2": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "1.3.3": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "1.4.1": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "1.4.2": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "2.1.1": {
+      "status": "Supports",
+      "remarks": "All functions in the sampled flows work from the keyboard.",
+      "evidence": [
+        {
+          "session": "kbd-1",
+          "result": "pass",
+          "detail": "Apply, pay and track flows completed without a mouse"
+        }
+      ]
+    },
+    "2.1.2": {
+      "status": "Supports",
+      "remarks": "",
+      "evidence": [
+        {
+          "session": "kbd-1",
+          "result": "pass",
+          "detail": "No traps found, including in the payment dialog"
+        }
+      ]
+    },
+    "2.2.1": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "2.2.2": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "2.3.1": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "2.4.1": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "2.4.2": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "2.4.3": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "2.4.4": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "3.1.1": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "3.2.1": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "3.2.2": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "3.3.1": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "3.3.2": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "4.1.2": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "1.2.4": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "1.2.5": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "1.4.3": {
+      "status": "Does Not Support",
+      "remarks": "Secondary text on the dashboard uses #8a8f98 on white (3.2:1), and the same gray is used for form hints across the product.",
+      "evidence": [
+        {
+          "session": "scan-1",
+          "result": "fail",
+          "detail": "Contrast failures on 9 of 12 sampled pages"
+        }
+      ]
+    },
+    "1.4.4": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "1.4.5": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "2.4.5": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "2.4.6": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "2.4.7": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "3.1.2": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "3.2.3": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "3.2.4": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "3.3.3": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "3.3.4": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "302.1": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "302.2": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "302.3": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "302.4": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "302.5": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "302.6": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "302.7": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "302.8": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "302.9": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "502.2.1": {
+      "status": "Not Applicable",
+      "remarks": "Web-only product. The VPAT instructions state that 502 and 503 do not apply to a web-only application.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "502.2.2": {
+      "status": "Not Applicable",
+      "remarks": "Web-only product. The VPAT instructions state that 502 and 503 do not apply to a web-only application.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "502.3.1": {
+      "status": "Not Applicable",
+      "remarks": "Web-only product. The VPAT instructions state that 502 and 503 do not apply to a web-only application.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "502.3.2": {
+      "status": "Not Applicable",
+      "remarks": "Web-only product. The VPAT instructions state that 502 and 503 do not apply to a web-only application.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "502.3.3": {
+      "status": "Not Applicable",
+      "remarks": "Web-only product. The VPAT instructions state that 502 and 503 do not apply to a web-only application.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "502.3.4": {
+      "status": "Not Applicable",
+      "remarks": "Web-only product. The VPAT instructions state that 502 and 503 do not apply to a web-only application.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "502.3.5": {
+      "status": "Not Applicable",
+      "remarks": "Web-only product. The VPAT instructions state that 502 and 503 do not apply to a web-only application.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "502.3.6": {
+      "status": "Not Applicable",
+      "remarks": "Web-only product. The VPAT instructions state that 502 and 503 do not apply to a web-only application.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "502.3.7": {
+      "status": "Not Applicable",
+      "remarks": "Web-only product. The VPAT instructions state that 502 and 503 do not apply to a web-only application.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "502.3.8": {
+      "status": "Not Applicable",
+      "remarks": "Web-only product. The VPAT instructions state that 502 and 503 do not apply to a web-only application.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "502.3.9": {
+      "status": "Not Applicable",
+      "remarks": "Web-only product. The VPAT instructions state that 502 and 503 do not apply to a web-only application.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "502.3.10": {
+      "status": "Not Applicable",
+      "remarks": "Web-only product. The VPAT instructions state that 502 and 503 do not apply to a web-only application.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "502.3.11": {
+      "status": "Not Applicable",
+      "remarks": "Web-only product. The VPAT instructions state that 502 and 503 do not apply to a web-only application.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "502.3.12": {
+      "status": "Not Applicable",
+      "remarks": "Web-only product. The VPAT instructions state that 502 and 503 do not apply to a web-only application.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "502.3.13": {
+      "status": "Not Applicable",
+      "remarks": "Web-only product. The VPAT instructions state that 502 and 503 do not apply to a web-only application.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "502.3.14": {
+      "status": "Not Applicable",
+      "remarks": "Web-only product. The VPAT instructions state that 502 and 503 do not apply to a web-only application.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "502.4": {
+      "status": "Not Applicable",
+      "remarks": "Web-only product. The VPAT instructions state that 502 and 503 do not apply to a web-only application.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "503.2": {
+      "status": "Not Applicable",
+      "remarks": "Web-only product. The VPAT instructions state that 502 and 503 do not apply to a web-only application.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "503.3": {
+      "status": "Not Applicable",
+      "remarks": "Web-only product. The VPAT instructions state that 502 and 503 do not apply to a web-only application.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "503.4.1": {
+      "status": "Not Applicable",
+      "remarks": "Web-only product. The VPAT instructions state that 502 and 503 do not apply to a web-only application.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "503.4.2": {
+      "status": "Not Applicable",
+      "remarks": "Web-only product. The VPAT instructions state that 502 and 503 do not apply to a web-only application.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "504.2.1": {
+      "status": "Not Applicable",
+      "remarks": "The product is not an authoring tool.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "504.2.2": {
+      "status": "Not Applicable",
+      "remarks": "The product is not an authoring tool.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "504.3": {
+      "status": "Not Applicable",
+      "remarks": "The product is not an authoring tool.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "504.4": {
+      "status": "Not Applicable",
+      "remarks": "The product is not an authoring tool.",
+      "evidence": [],
+      "prefilled": true
+    },
+    "602.2": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "602.4": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "603.2": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    },
+    "603.3": {
+      "status": "Not Evaluated",
+      "remarks": "",
+      "evidence": []
+    }
+  },
+  "issues": [
+    {
+      "id": "A11Y-1",
+      "summary": "Icon-only buttons on the payment page have no accessible name",
+      "criteria": [
+        "1.1.1",
+        "4.1.2"
+      ],
+      "severity": "Major Accessibility Issue",
+      "area": "Payment page: the card, save and remove buttons",
+      "impacted_users": [
+        "Without Vision"
+      ],
+      "workaround": "Pay by phone through the support line."
+    },
+    {
+      "id": "A11Y-2",
+      "summary": "Secondary text fails contrast across the product",
+      "criteria": [
+        "1.4.3"
+      ],
+      "severity": "Minor Accessibility Issue",
+      "area": "Dashboard and form hints on every page",
+      "impacted_users": [
+        "With Limited Vision"
+      ],
+      "workaround": "Browser zoom and high-contrast mode make the text readable."
+    }
+  ]
+}
