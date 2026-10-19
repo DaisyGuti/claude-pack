@@ -27,8 +27,9 @@ them).
 
 1. Read the registry (`registry.py show`). **auth-check** must pass, or stop and say so.
 2. Resolve the board per `registry-rules.md` ("Resolving a project board argument").
-3. **capture-board** gives `tracker_ids`, `missing_lanes`, `missing_priorities` and
-   `has_priority`. Stop and print the raw output when the ready lane is missing. A
+3. **capture-board** gives `tracker_ids`, `missing_lanes`, `missing_priorities`,
+   `has_priority` and, on GitHub, `priority_mode`. Stop and print the raw output when the
+   ready lane is missing. A
    missing backlog or done lane means the moves to it are skipped and listed under
    Needs Attention. A missing priority value, or no Priority field, is handled in
    step 3.
@@ -115,18 +116,18 @@ and by the ticket's repo brief: work on the critical path the brief describes is
 P1 candidate. When the call is close, say in the summary which brief section or
 reason decided it. The role names come from the registry.
 
-- **GitHub with a Priority field.** The field and a label named exactly like the
-  field's option are kept in step, and the field wins.
+- **GitHub in field mode** (**capture-board**'s `priority_mode`). The field and a label
+  named exactly like the field's option are kept in step, and the field wins.
   - Field set: the label is added if missing (**ensure-label** with color `ededed` and
     description `Priority: <name>`, then **add-label**), and any other priority label
     is removed (**remove-label**).
   - Field empty, exactly one priority label: **set-priority** from that label.
   - Neither, or several labels and no field: judge it, set both, and note the
     reasoning.
-- **GitLab, or GitHub with no Priority field.** The priority is one label, so the ticket
-  must carry exactly one priority label. None: judge it. Several: judge it, keep one,
-  and note the reasoning. **set-priority** on GitLab already swaps the others out; on a
-  GitHub board with no field, use **ensure-label**, **add-label** and **remove-label**.
+- **GitLab, or GitHub in label mode** (no Priority field, or one with no options). The
+  priority is one label, so the ticket must carry exactly one priority label. None: judge
+  it. Several: judge it, keep one, and note the reasoning. **set-priority** swaps the
+  others out on both trackers.
 - A priority value in `missing_priorities` is skipped, with one warning for the run.
 
 ## 4. Triage the lanes

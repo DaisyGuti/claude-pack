@@ -47,8 +47,10 @@ improvise a command for one. When the installed `gh` rejects a flag, run
 - `tracker_ids` is the object **capture-board** returns. It is stored in the state
   file's `project.tracker_ids` and read only by this file's commands.
 - `item_ref` is a board item's node id (`PVTI_...`).
-- A **review** is a pull request. A lane value is a Status option name; a priority
-  value is a Priority option name. Both are compared exactly, case-sensitively.
+- A **review** is a pull request. A lane value is a Status option name. A priority
+  value is a Priority option name on a board in **field mode**, and a label name on a
+  board in **label mode** (see **capture-board**). All are compared exactly,
+  case-sensitively.
 - A host other than github.com: export `GH_HOST=<host>` for the whole run. Every
   command below then talks to that host.
 - Long text goes in a file passed with `--body-file`, so quoting never mangles it.
@@ -69,8 +71,8 @@ A non-zero exit means not signed in. The token needs the `repo` and `project` sc
 Contract: resolves the board, lane and priority ids from the registry's Board, Lanes
 and Priority values. Returns `tracker_ids`, `missing_lanes` (lane roles whose value is
 not on the board), `missing_priorities` (priority roles whose value is not on the
-board) and `has_priority` (the board has a Priority field). The caller decides which
-missing value halts a run.
+board), `priority_mode` (`field` or `label`) and `has_priority` (the board can carry a
+priority). The caller decides which missing value halts a run.
 
 ```bash
 gh project view <N> --owner <O> --format json --jq .id
@@ -85,14 +87,22 @@ map of option name to option id. `tracker_ids` is:
 {
   "project_id": "PVT_...",
   "status_field_id": "PVTSSF_...", "status_options": { "<option name>": "<id>" },
+  "priority_mode": "field",
   "priority_field_id": "PVTSSF_...", "priority_options": { "<option name>": "<id>" }
 }
 ```
 
-`priority_field_id` is null and `has_priority` false when the board has no Priority
-field. A registry lane or priority value that is not a key of the matching options map
-goes in `missing_lanes` / `missing_priorities`. Print the raw output when the caller
-halts on a missing value.
+`priority_mode` is returned on its own and also stored inside `tracker_ids`, so every
+later command reads the mode from the state file. It is `field` when the board has a
+Priority field with at least one option:
+a priority is that field's option, and a registry priority value that is not a key of
+`priority_options` goes in `missing_priorities`. Otherwise (no Priority field, or one
+with no options) `priority_mode` is `label`: a priority is a label on the issue named
+exactly like the registry's priority value (`P1`), `priority_field_id` is null,
+`priority_options` is empty and `missing_priorities` is empty, because **set-priority**
+creates a missing label in the issue's repo when it first sets it. `has_priority` is
+true in both modes. A registry lane value that is not a key of `status_options` goes in
+`missing_lanes`. Print the raw output when the caller halts on a missing value.
 
 ## list-items
 
@@ -100,15 +110,23 @@ Contract: every board item, optionally only those in one lane, as
 `{item_ref, number, repo, type, title, lane, priority, labels, assignees}`. `repo` is the
 Remote form (`owner/repo`). `type` is `issue`, `review` or `other` (a draft item).
 `lane` and `priority` are registry values, or null when unset. `assignees` is a list of logins, empty when unassigned. `number` is null for a
-draft item.
+draft item. In field mode `priority` is the Priority field's value, null when the field is
+empty. In label mode it is the highest-ranked registry priority value the item carries as
+a label.
 
 ```bash
-gh project item-list <N> --owner <O> --format json --limit 1000 --jq '.items[] | {
+gh project item-list <N> --owner <O> --format json --limit 1000 --jq '["<every priority value, in rank order>"] as $prios | .items[] | (.labels // []) as $labels | {
   item_ref: .id, number: .content.number, repo: .content.repository,
   type: (if .content.type == "Issue" then "issue" elif .content.type == "PullRequest" then "review" else "other" end),
-  title: .title, lane: .status, priority: .priority, labels: (.labels // []),
-  assignees: (.assignees // [])}'
+  title: .title, lane: .status,
+  priority: (.priority // ([$prios[] | select(. as $p | any($labels[]; . == $p))] | .[0])),
+  labels: $labels, assignees: (.assignees // [])}'
 ```
+
+The first array depends on `tracker_ids.priority_mode`. In label mode, write the
+registry's priority values into it, highest rank first, as JSON strings
+(`["P0","P1","P2","P3"]`). In field mode, write `[]`, so labels never stand in for an
+empty field: daily-grooming has to see that field as empty to fill it.
 
 Use 1000: the list comes back oldest first, so a lower cap hides the newest items.
 Keep only items whose `lane` equals the requested lane value when one was asked for.
@@ -192,14 +210,32 @@ A value is also missing when it is not a key of `status_options`.
 
 ## set-priority
 
-Contract: sets one issue's board item to the priority named by a priority role. Same
-skip rule as **set-lane** for a value in `missing_priorities`.
+Contract: sets one issue's priority to the value named by a priority role, leaving it
+with exactly that one priority. Same skip rule as **set-lane** for a value in
+`missing_priorities`.
+
+The branch follows `tracker_ids.priority_mode`.
+
+Field mode:
 
 ```bash
 gh project item-edit --project-id <tracker_ids.project_id> --id <item_ref> \
   --field-id <tracker_ids.priority_field_id> \
   --single-select-option-id <tracker_ids.priority_options[priority value]>
 ```
+
+Label mode: run **ensure-label** for the value (color `ededed`, description
+`Priority: <value>`), take the issue's labels from **read-issue**, then add the value and
+remove every other registry priority value the issue carries, in one edit:
+
+```bash
+gh issue edit <n> --repo <remote> --add-label "<priority value>" \
+  --remove-label "<the other priority values the issue carries, comma separated>"
+```
+
+Leave out `--remove-label` when the issue carries no other priority value. Confirm with
+**read-issue** that the old priority label is gone, the new one is on, and every other
+label is untouched.
 
 ## add-label
 
