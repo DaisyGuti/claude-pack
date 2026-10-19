@@ -62,7 +62,10 @@ The model label maps to a Claude tier: `fast` runs on Haiku, `workhorse` on Sonn
 
 ## Companions
 
-The official `code-review` and `pr-review-toolkit` plugins review the diff a worker opens. The
+Before it commits, each worker has the read-only `core:reviewer` agent (from this pack's `core`
+plugin, a dependency) review its diff, fixes what holds up and summarizes the review in the pull
+or merge request. The official `code-review` and `pr-review-toolkit` plugins can still review
+the diff a worker opens. The
 official `github` and `gitlab` plugins add MCP access to the hosts and are optional here.
 `references/platform-notes.md` lists the Claude Code behavior this plugin relies on and a
 starting list of commands worth allowing.

@@ -3,5 +3,6 @@
   "description": "GitHub and GitLab ticket flow: write, plan, groom and work tickets.",
   "author": {
     "name": "Daisy Gutierrez"
-  }
+  },
+  "dependencies": ["core"]
 }

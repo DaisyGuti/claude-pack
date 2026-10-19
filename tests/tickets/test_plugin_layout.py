@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -106,6 +107,26 @@ def test_worker_agent_is_isolated_and_least_privilege() -> None:
     assert "Skill" not in fields["tools"]
     assert fields["model"] in {"haiku", "sonnet", "opus", "inherit"}
     assert int(fields["maxTurns"]) > 0
+
+
+def test_worker_reviews_its_diff_before_committing() -> None:
+    """The worker holds the Agent tool, runs core:reviewer before any commit on both landing
+    paths (section 7 and the held review in section 9), and reports the review in each body."""
+    path = PLUGIN / "agents" / "ticket-worker.md"
+    tools = [t.strip() for t in frontmatter(path)["tools"].split(",")]
+    assert "Agent" in tools
+    body = path.read_text(encoding="utf-8")
+    land = body[body.index("## 7. Land the work") : body.index("## 8. After the review opens")]
+    held = body[body.index("## 9. Needs manual action") : body.index("## 10. Final report")]
+    assert land.index("**Pre-commit review.**") < land.index("**Commit.**")
+    assert "`core:reviewer`" in land
+    assert "blocked_review_findings" in land
+    assert "before committing or pushing any of them" in land
+    assert "**Pre-commit review**" in held
+    assert "the review summary" in land
+    assert "the review summary" in held
+    manifest = json.loads((PLUGIN / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    assert "core" in manifest.get("dependencies", [])
 
 
 def test_scripts_are_executable_with_a_shebang() -> None:
