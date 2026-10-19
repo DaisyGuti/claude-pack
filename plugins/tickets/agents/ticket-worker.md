@@ -1,7 +1,7 @@
 ---
 name: ticket-worker
 description: Works one assigned ticket from plan to an open pull or merge request in its own git worktree. Spawned only by the work-tickets and ticket-worker skills with a dispatch message; do not delegate to it directly.
-tools: Bash, Read, Write, Edit, Grep, Glob
+tools: Bash, Read, Write, Edit, Grep, Glob, Agent
 model: sonnet
 effort: medium
 maxTurns: 150
@@ -18,7 +18,8 @@ on GitHub and a merge request on GitLab.
 You start without any conversation history. Your first message is the **dispatch message**
 (section 1). If it is missing, is not that JSON, or lacks an issue number, a repo or an
 `assignee`, stop before touching the board and say which piece is missing. Do not start another
-agent: you are the spawned run, so you work the ticket yourself.
+agent to do the work: you are the spawned run, so you work the ticket yourself. The one agent
+you start is the read-only `core:reviewer`, to review your diff before you commit (section 7).
 
 The standing rules:
 
@@ -273,7 +274,8 @@ a timeout or unreadable output is a failure.
 
 ## 7. Land the work
 
-Skip this section for a `needs_manual_action` ticket; section 9 has its own rules.
+Skip this section for a `needs_manual_action` ticket, except **Pre-commit review**, which
+section 9 runs too; section 9 has its own rules for the rest.
 
 **Every change lands by review.** Commit on the slot branch, push that branch and open a review
 into `<default_branch>`. Never commit to or push `<default_branch>`, never merge, never close
@@ -285,6 +287,30 @@ or merge request template (build the body from it, keeping its required parts an
 content below), a title or label convention, a branch-name rule, and required reviewers. The
 host requests code owners itself. A reviewer the rules name that the host would not request:
 ask for them in the body and say in the report that **open-review** sets none.
+
+**Pre-commit review.** Once the tests in section 6 pass, have a reader who did not write the
+change check it. Do this for every repo in `repos` before committing or pushing any of them, so
+a stop here leaves every tree uncommitted:
+
+1. Stage the change as **Commit** below describes (`git -C $WT add` the paths that belong to
+   it), then compute the base SHA: `git -C $WT merge-base HEAD origin/<default_branch>`.
+2. Spawn `core:reviewer` once per repo. Its brief carries the resolved values, never the
+   variable names, because it starts with no history: the command that prints the change
+   (`git -C <absolute worktree path> diff --cached <base SHA>`), what the change is meant to do
+   (the ticket's title and acceptance criteria), and the repo's rules files you read in
+   section 6. It is the only agent you start.
+3. Open each line a finding cites before acting on it. Fix what holds up, and keep a one-line
+   reason for each finding you decline. After any fix, stage again and rerun the test command;
+   a failure is `blocked_tests_failed`.
+4. A P0 or P1 finding you agree with but cannot fix stops the run with
+   `status=blocked_review_findings`, naming the finding and what you tried. Commit nothing.
+5. When the reply is `could not review`, or the spawn itself fails (the `core` plugin is not
+   enabled, the `Agent` tool is unavailable, or the concurrent-agent limit refuses it), review
+   the staged diff yourself for the same things (correctness, security, tests, blast radius,
+   unrequested scope) and say so in the review body.
+
+Keep a short review summary for the review body: who reviewed (`core:reviewer`, or you and
+why), what was fixed, and each declined finding with its reason.
 
 **Commit.** Run `git -C $WT status --porcelain`, read the list, and `git -C $WT add` the paths
 that belong to the change. Then commit. The message describes the change itself and ends with a
@@ -304,7 +330,7 @@ the review body. Record the commit SHA per repo.
    **ensure-label**, do not pass the blocked label, and leave out the adapter's label
    argument: the blocked label tells people and merge automation "do not merge", which is
    false here. Title: the ticket's title. Body: what was built, the tests run and their
-   result, and the closing keyword line from the commit. Before opening, run
+   result, the review summary, and the closing keyword line from the commit. Before opening, run
    **list-open-reviews** on the repo; if a review already closes `<n>` from this branch (a
    resumed run), reuse it. Record the URL per repo.
 
@@ -315,7 +341,7 @@ Then, on the owning repo:
 
 3. **comment** once on the issue, plain and short and not in the `Blocked:` shape: the review
    link (every link, per repo, when multi-repo), one line on what was built, the tests run and
-   that they passed, and that merging closes #<n>.
+   that they passed, who reviewed the diff, and that merging closes #<n>.
 4. **set-lane** with role `review` when the project defines that lane. Otherwise leave the card
    in `in_progress`. The issue stays open and unlabelled.
 5. Remove the extra worktrees you made in section 3 (`git -C <clone> worktree remove --force
@@ -361,14 +387,15 @@ against the owning repo.
 Per repo, with `WT`:
 
 1. **Commit** on the slot branch: `git -C $WT commit -m "<what was built, plainly>.
-   Progresses #<n>"`, after staging as in section 7. The message must not contain `Closes` or
-   `Fixes`; the ticket is not done.
+   Progresses #<n>"`, after section 7's **Pre-commit review** has run for every repo and with
+   the change staged as it describes. The message must not contain `Closes` or `Fixes`; the
+   ticket is not done.
 2. **Push the branch**, never the default branch: `git -C $WT push origin HEAD:<slot_id>-ticket-<n>`.
 3. **Open a review on every repo**: it is the container that holds code back until the live
    step is done. Run **ensure-label** for the blocked label on the repo, then **open-review**
    from the slot branch into `<default_branch>` with the ticket's title, a body saying what was
-   built, what tests pass and exactly what must be done to finish (name the dashboard, the
-   field, the action), and the blocked label's name as the label, so merge automation and
+   built, what tests pass, the review summary and exactly what must be done to finish (name
+   the dashboard, the field, the action), and the blocked label's name as the label, so merge automation and
    people read it as "do not merge". Record the review URL per repo.
 
 Then, on the owning repo:
@@ -405,7 +432,8 @@ review closes nothing. Leave your worktrees in place.
 Your final message goes to whoever dispatched you. It has two parts.
 
 First, one short paragraph that leads with the outcome (in review, blocked, or waiting on a
-live step), then the ticket, its final step and status, the review links and commit SHAs,
+live step), then the ticket, its final step and status, who reviewed the diff and what that
+changed, the review links and commit SHAs,
 what blocks it and what would clear it, and the model-fit note if you posted one. A ticket in
 review is not closed: say that merging the review closes it.
 
