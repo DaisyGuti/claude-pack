@@ -31,7 +31,8 @@ overwrites it) and stops. Open it and fill in:
 - **Tracker** and **Host**: `github` or `gitlab`.
 - **Board**: your GitHub Project (owner and number) or GitLab board (scope, path, board).
 - **Lanes** and **Priority**: the exact Status options and Priority options on the GitHub
-  board, or the labels that stand for them on GitLab.
+  board, or the labels that stand for them on GitLab. A GitHub board with no Priority
+  options uses priority labels named like the Priority values (`P0` to `P3`).
 - **Labels** and **Model labels**: the blocked and run labels, and the label per model tier.
 - **Repos**: each repo's remote, local clone and product brief.
 

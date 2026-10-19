@@ -149,7 +149,8 @@ At the start of every run, so a renamed lane or an edited registry takes effect:
 1. **current-user** gives the login this run works for. If it cannot be read, halt: "Cannot
    tell who is signed in to the tracker CLI."
 2. **capture-board** with the registry's board, lanes and priorities gives `tracker_ids`,
-   `missing_lanes`, `missing_priorities` and `has_priority`. Without priority support the run
+   `missing_lanes`, `missing_priorities`, `has_priority` and, on GitHub, `priority_mode`
+   (also stored in `tracker_ids`). Without priority support the run
    is fine unless `--priority` was passed; then halt: "Priority filter requested but board
    <board key> has no priority support."
 3. From `registry.py show`, take `lanes`, `priorities`, `labels` and `model_labels`. The ready

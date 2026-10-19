@@ -70,7 +70,10 @@ moves the card. Every other lane is required.
 ## Priority
 
 Each priority as the tracker shows it: on GitHub a Priority option name, on GitLab a
-label. Row order is rank, highest first. `--priority P1` names a role.
+label. A GitHub board with no Priority field, or one with no options, carries priority
+as a label instead: the GitHub value below is then the label's name (`P1`), and the
+skills read and set that label. Row order is rank, highest first. `--priority P1` names
+a role.
 
 | Role | GitHub (Priority option) | GitLab (label) | Meaning |
 | --- | --- | --- | --- |
