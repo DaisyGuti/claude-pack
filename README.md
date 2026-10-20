@@ -36,9 +36,9 @@ GitHub and GitLab are both supported wherever a tracker, pull request or CI is i
 ## Every skill and agent
 
 A skill runs as `/plugin:skill`. An agent is called by name, as `@agent-plugin:name`, or Claude
-hands work to it on its own. Skills marked **you run it** have model invocation switched off:
-Claude never starts them by itself, because they change a tracker, send a message or move a
-repository.
+hands work to it on its own. Claude also starts a skill when you ask for its job in chat, so you
+do not need to type the command. Skills that change a tracker, send a message or move a repository
+carry their own dry-run or confirmation step.
 
 ### core
 
@@ -54,11 +54,11 @@ repository.
 
 | Invoke | What it does |
 | --- | --- |
-| `/tickets:write-ticket` (you run it) | Checks the premise against the repo, then files a ticket in the shape the workers need, with priority, model and run labels |
-| `/tickets:plan-ticket` (you run it) | Writes a short build plan on the next Ready ticket and sets its model and run labels |
-| `/tickets:daily-grooming` (you run it) | Tidies the board so Ready means safe to start. Try `--dry-run` first |
-| `/tickets:work-tickets` (you run it) | Works your Ready tickets in parallel, each in its own worktree on the model its label names, ending with a pull or merge request per ticket |
-| `/tickets:ticket-worker` (you run it) | Works one issue from plan to an open pull or merge request |
+| `/tickets:write-ticket` | Checks the premise against the repo, then files a ticket in the shape the workers need, with priority, model and run labels |
+| `/tickets:plan-ticket` | Writes a short build plan on the next Ready ticket and sets its model and run labels |
+| `/tickets:daily-grooming` | Tidies the board so Ready means safe to start. Try `--dry-run` first |
+| `/tickets:work-tickets` | Works your Ready tickets in parallel, each in its own worktree on the model its label names, ending with a pull or merge request per ticket |
+| `/tickets:ticket-worker` | Works one issue from plan to an open pull or merge request |
 | `@agent-tickets:ticket-worker` | The worker the two skills above start. Do not call it directly |
 
 ### models
@@ -105,7 +105,7 @@ repository.
 | `/secure-build:image-supply-chain` | Scans an image, writes SBOMs, signs with cosign and verifies signatures |
 | `/secure-build:ci-harden` | Audits and hardens GitHub Actions and GitLab CI, with reference pipelines that push to Artifact Registry using Workload Identity Federation |
 | `/secure-build:gcp-review` | A read-only security review of Google Cloud projects. Reports evidence, gaps and drafted fixes |
-| `/secure-build:gitlab-migration` (you run it) | Plans a GitHub-to-GitLab move and carries it out one confirmed step at a time |
+| `/secure-build:gitlab-migration` | Plans a GitHub-to-GitLab move and carries it out one confirmed step at a time |
 
 ### guardrails
 
@@ -120,7 +120,7 @@ repository.
 | --- | --- |
 | `/team-comms:slack-catchup` | Summarizes Slack channels, threads and DMs into decisions, asks, blockers and FYIs. Read-only |
 | `/team-comms:slack-draft` | Drafts a Slack message or reply for a goal. Never posts |
-| `/team-comms:slack-send` (you run it) | Posts or saves a message you already approved, after one last confirmation |
+| `/team-comms:slack-send` | Posts or saves a message you already approved, after one last confirmation |
 | `/team-comms:status-update` | A standup or weekly update from your commits, pull requests and tickets |
 | `/team-comms:design-doc` | A design doc with a required security and compliance section |
 | `/team-comms:adr` | A numbered architecture decision record in MADR format |
@@ -380,8 +380,8 @@ The short version:
   Build only the gap.
 - **No personal names, secrets or machine paths.** Everything here reaches every teammate.
 - **Compliance skills produce evidence and gaps.** They never declare a system compliant.
-- **Anything that posts, sends, pushes, merges or deploys drafts first**, and its skill is
-  marked manual-only.
+- **Anything that posts, sends, pushes, merges or deploys drafts first** and acts only on the
+  user's go, or runs `--dry-run` first where the skill offers it.
 
 ### Gates before a merge
 
@@ -410,8 +410,9 @@ claude plugin eval plugins/<name>/evals/<case> --max-cost-usd 1
 
 Things that trip people up:
 
-- A manual-only skill is typed as `/plugin:skill`, and a typed command makes no Skill tool call.
-  Grade its trace with a `regex` grader (`target: trace`) instead of a `tool_used: Skill` grader.
+- A typed `/plugin:skill` command makes no Skill tool call. A case that types the command
+  grades the trace with a `regex` grader (`target: trace`); a natural-language case keeps the
+  `tool_used: Skill` grader.
 - Quote an eval `description:` that holds a colon. Write long text as a folded block (`>-`),
   because a plain value is cut at a space followed by `#`.
 - Regex graders reject inline flags like `(?i)`. Use the `flags:` field.

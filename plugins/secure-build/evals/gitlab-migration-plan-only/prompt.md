@@ -2,16 +2,14 @@
 name: gitlab-migration-plan-only
 description: >-
   A plan request must produce a written plan, an importer carry-over and gap list, and a cutover
-  checklist with rollback, and must make no write calls. The migration skill sets
-  disable-model-invocation, so Claude never calls it through the Skill tool and a
-  tool_used grader on Skill cannot fire. The graders check behaviour instead: the final
-  message content and the absence of write commands. Run with --allow-tools Bash to make the
-  no-write grader meaningful; without it Bash is removed from the session.
+  checklist with rollback, and must make no write calls. Claude must load the migration skill
+  for it. Run with --allow-tools Bash to make the no-write grader meaningful; without it Bash
+  is removed from the session.
 tags: [gitlab-migration, plan, side-effects]
 runs: 1
 max_turns: 12
 timeout_seconds: 420
-allowed_tools: [Read, Glob, Grep]
+allowed_tools: [Skill, Read, Glob, Grep]
 expected_outcome: >-
   A plan that lists what GitLab's importer carries over and drops, the Actions translation,
   Workload Identity trust changes, CODEOWNERS and Dependabot replacements, and a cutover

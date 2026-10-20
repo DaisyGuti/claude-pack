@@ -1,4 +1,4 @@
-"""Layout checks for the tickets plugin: links resolve, manual-only skills, evals exist."""
+"""Layout checks for the tickets plugin: links resolve, chat-invocable skills, evals exist."""
 
 from __future__ import annotations
 
@@ -11,8 +11,6 @@ import pytest
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "tickets"
 SKILLS = sorted(p.parent.name for p in (PLUGIN / "skills").glob("*/SKILL.md"))
 EXPECTED_SKILLS = ["daily-grooming", "plan-ticket", "ticket-worker", "work-tickets", "write-ticket"]
-# Skills that change the tracker or open a review; each must be started by the user.
-MANUAL_ONLY = EXPECTED_SKILLS
 
 
 def frontmatter(path: Path) -> dict[str, str]:
@@ -27,10 +25,11 @@ def test_the_five_skills_exist() -> None:
     assert SKILLS == EXPECTED_SKILLS
 
 
-@pytest.mark.parametrize("skill", MANUAL_ONLY)
-def test_tracker_changing_skills_are_manual_only(skill: str) -> None:
+@pytest.mark.parametrize("skill", EXPECTED_SKILLS)
+def test_skills_can_be_run_from_chat(skill: str) -> None:
+    """The team works from chat, so no skill sets disable-model-invocation."""
     fields = frontmatter(PLUGIN / "skills" / skill / "SKILL.md")
-    assert fields["disable-model-invocation"] == "true"
+    assert "disable-model-invocation" not in fields
 
 
 @pytest.mark.parametrize("skill", EXPECTED_SKILLS)

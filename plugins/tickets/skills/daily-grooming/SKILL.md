@@ -2,7 +2,6 @@
 name: daily-grooming
 description: Tidies the whole ticket board so that Ready means safe to dispatch. Settles closed and merged work to Done, flags duplicates, syncs priorities, promotes tickets to Ready, and plans and labels each Ready ticket (plan, priority, model, run), for every person's tickets on a GitHub Project or GitLab board. Use for "groom the board", "clean up my backlog", "get Ready in shape", "settle the finished tickets", even when the user names no lane or label. Try --dry-run first.
 argument-hint: "[--dry-run] [--project N --owner OWNER] [--repo NAME] [--context FILE]"
-disable-model-invocation: true
 allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/registry.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve_model.py *)
 ---
 

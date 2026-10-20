@@ -1,7 +1,7 @@
 ---
 max_turns: 6
 allowed_tools: [Skill, Read, Glob, Grep]
-tags: [no-trigger]
+tags: [trigger]
 ---
 
-Plan my next ticket.
+Work my ready tickets.

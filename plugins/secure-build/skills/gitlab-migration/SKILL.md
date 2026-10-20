@@ -1,7 +1,6 @@
 ---
 name: gitlab-migration
 description: Plans a move of a repository from GitHub to GitLab (gitlab.com or self-managed) and, only on the user's explicit go for each step, carries it out. Inventories a local checkout (workflows, Dependabot, CODEOWNERS, secret names, submodules, LFS, hard-coded GitHub URLs), explains what GitLab's GitHub importer carries over and drops, translates GitHub Actions to .gitlab-ci.yml, moves secrets to masked and protected CI/CD variables, re-points Google Cloud Workload Identity Federation at GitLab, maps branch protection, approvals and CODEOWNERS, replaces Dependabot, and writes a cutover and rollback checklist. Use when someone asks to migrate, move or switch from GitHub to GitLab, convert GitHub Actions workflows, replace Dependabot, update Workload Identity trust for GitLab, or plan a mirror period, even if they do not name the importer or say migration.
-disable-model-invocation: true
 argument-hint: "[plan|execute] [path to local checkout]"
 allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/*)
 ---
@@ -152,11 +151,10 @@ List these in the plan and check each with the command shown. Free and open-sour
 
 ## Behaviour checks
 
-This skill sets `disable-model-invocation: true`, so Claude does not pick it on its own and an
-eval cannot assert a `Skill` tool call. The evals in `evals/gitlab-migration-*` check what the
-session does instead: a plan request produces a plan and no write calls, a request to run the
-import or paste a token produces a draft and a request for a go, and unrelated CI questions do
-not produce a migration plan.
+Claude may start this skill from chat, so the evals in `evals/gitlab-migration-*` check the
+`Skill` call and what the session does: a plan request loads the skill and produces a plan and
+no write calls, a request to run the import or paste a token produces a draft and a request for
+a go, and unrelated CI questions do not load the skill or produce a migration plan.
 
 ## Done when
 

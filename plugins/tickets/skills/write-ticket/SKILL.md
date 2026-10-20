@@ -2,7 +2,6 @@
 name: write-ticket
 description: Files a bug, idea or request as a ticket on the team's GitHub or GitLab tracker, in the shape the ticket workers need, or rewrites an existing ticket to that shape. Checks the premise against the real repo first (already built, superseded, already ticketed), then files it with priority, model, run and board-lane assignments. Use for "file a ticket", "write this up as an issue", "turn this note into a proper ticket", "rewrite ticket 42", even when the user does not say tracker or labels.
 argument-hint: "[--repo NAME] [--ticket N] [--ready] [--assignee LOGIN|me] [--dry-run] <what you want, in your own words>"
-disable-model-invocation: true
 allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/registry.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve_model.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/check_ticket.py *)
 ---
 
@@ -111,7 +110,7 @@ there are any. Fix them and run it again until it exits 0.
 
 `--dry-run` prints the ticket, its labels, lane and assignee and stops; read-only operations
 are fine, nothing is created. Filing is this skill's whole job, and the person who typed the
-command has asked for it, so file without a further confirmation.
+command or asked for a ticket in chat has asked for it, so file without a further confirmation.
 
 1. **ensure-label** for each label that may be missing (run, model, `project:<repo>`, blocked),
    using the registry's color and description; `project:` labels get color `ededed` and the
