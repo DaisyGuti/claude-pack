@@ -12,7 +12,8 @@ request in parallel, each on the Claude model its label calls for.
 | `/tickets:work-tickets` | Works your Ready tickets in parallel waves with `tickets:ticket-worker` agents |
 | `/tickets:ticket-worker` | Works one named issue from plan to an open review |
 
-Every command changes the tracker or opens a review, so none of them runs unless you type it.
+Every command changes the tracker or opens a review, so none of them runs unless you type it,
+except `write-ticket`: Claude also runs it when you ask in chat to file or rewrite a ticket.
 
 ## What you need
 

@@ -12,7 +12,9 @@ PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "tickets"
 SKILLS = sorted(p.parent.name for p in (PLUGIN / "skills").glob("*/SKILL.md"))
 EXPECTED_SKILLS = ["daily-grooming", "plan-ticket", "ticket-worker", "work-tickets", "write-ticket"]
 # Skills that change the tracker or open a review; each must be started by the user.
-MANUAL_ONLY = EXPECTED_SKILLS
+# write-ticket is the exception: filing is its whole job, so Claude may run it from chat.
+MODEL_INVOCABLE = ["write-ticket"]
+MANUAL_ONLY = [s for s in EXPECTED_SKILLS if s not in MODEL_INVOCABLE]
 
 
 def frontmatter(path: Path) -> dict[str, str]:
@@ -31,6 +33,12 @@ def test_the_five_skills_exist() -> None:
 def test_tracker_changing_skills_are_manual_only(skill: str) -> None:
     fields = frontmatter(PLUGIN / "skills" / skill / "SKILL.md")
     assert fields["disable-model-invocation"] == "true"
+
+
+@pytest.mark.parametrize("skill", MODEL_INVOCABLE)
+def test_write_ticket_can_be_run_from_chat(skill: str) -> None:
+    fields = frontmatter(PLUGIN / "skills" / skill / "SKILL.md")
+    assert fields["disable-model-invocation"] == "false"
 
 
 @pytest.mark.parametrize("skill", EXPECTED_SKILLS)
