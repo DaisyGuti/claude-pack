@@ -2,7 +2,6 @@
 name: work-tickets
 description: Works the user's Ready tickets from a GitHub Project or GitLab board in parallel waves. Starts one ticket-worker agent per ticket, each on the Claude model its ticket label calls for (Haiku, Sonnet or Opus), each in its own git worktree, and ends with a pull or merge request open per ticket. Use for "work my ready tickets", "run my queue", "work the P1s", or a pasted board URL, even when the user names no lane. For one issue use ticket-worker.
 argument-hint: "[--dry-run] [--priority P1] [--max-parallel N] [--limit N] [--repo NAME] [--project N --owner OWNER] [--clear-skipped]"
-disable-model-invocation: true
 allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/registry.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve_model.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/ticket_state.py *)
 ---
 

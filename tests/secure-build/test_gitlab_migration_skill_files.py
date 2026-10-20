@@ -96,9 +96,9 @@ def test_frontmatter_fields_and_name():
     assert "claude" not in front["name"] and "anthropic" not in front["name"]
 
 
-def test_side_effect_skill_is_user_invoked_only():
+def test_skill_can_be_started_from_chat():
     front, _ = _split_frontmatter(SKILL_MD)
-    assert front["disable-model-invocation"] == "true"
+    assert "disable-model-invocation" not in front
 
 
 def test_allowed_tools_preapproves_only_the_bundled_scripts():
@@ -134,7 +134,7 @@ def test_skill_md_has_plan_and_execute_sections():
     body = SKILL_MD.read_text()
     assert "## PLAN mode" in body and "## EXECUTE mode" in body
     assert "Second confirmation" in body
-    assert "disable-model-invocation" in body, "explains why evals have no Skill grader"
+    assert "Behaviour checks" in body
 
 
 def test_skill_md_links_every_reference_and_each_exists():
@@ -284,14 +284,16 @@ def test_prompts_do_not_name_the_skill():
             assert word not in body, (case.name, word)
 
 
-def test_no_skill_trigger_grader_because_skill_is_user_invoked_only():
-    for grader in EVALS.glob("gitlab-migration-*/graders/*.md"):
-        front, _ = _split_frontmatter(grader)
-        assert not (front.get("type") == "tool_used" and front.get("tool") == "Skill"), grader
-    descriptions = " ".join(
-        _split_frontmatter(c / "prompt.md")[0]["description"] for c in _eval_cases()
+def test_skill_has_a_trigger_grader_and_near_miss_graders():
+    skill_graders = [
+        _split_frontmatter(g)[0]
+        for g in EVALS.glob("gitlab-migration-*/graders/*.md")
+        if _split_frontmatter(g)[0].get("tool") == "Skill"
+    ]
+    assert any(f.get("min") == "1" for f in skill_graders), "needs a should-trigger case"
+    assert any(f.get("min") == "0" and f.get("max") == "0" for f in skill_graders), (
+        "needs a near-miss"
     )
-    assert "disable-model-invocation" in descriptions
 
 
 def test_every_grader_is_well_formed_and_regexes_compile():
@@ -308,7 +310,10 @@ def test_every_grader_is_well_formed_and_regexes_compile():
             re.compile(front["pattern"], flags)
         if front["type"] == "tool_used":
             re.compile(front["input_match"])
-            assert front["min"] == "0" and front["max"] == "0"
+            if front["tool"] == "Skill":
+                assert front["min"] in {"0", "1"}
+            else:
+                assert front["min"] == "0" and front["max"] == "0"
 
 
 WRITE_SAMPLES_BLOCKED = [

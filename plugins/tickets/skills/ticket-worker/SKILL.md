@@ -7,7 +7,6 @@ description: >-
   "take #42 to a PR", even when the user names no repo. For the whole Ready queue use
   work-tickets.
 argument-hint: "<issue number> [--repo NAME] [--model haiku|sonnet|opus]"
-disable-model-invocation: true
 allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/registry.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve_model.py *)
 ---
 

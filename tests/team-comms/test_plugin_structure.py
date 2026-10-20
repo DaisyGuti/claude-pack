@@ -34,8 +34,6 @@ SKILL_LINE_LIMIT = 500  # authoring guide G25
 TOC_THRESHOLD = 100  # reference files longer than this need a table of contents (G28)
 WRITE_TOOLS = ("slack_send_message", "slack_schedule_message", "slack_add_reaction")
 MIN_EVALS_PER_SKILL = 3
-# Skills the model cannot invoke have no should-trigger eval.
-USER_ONLY = {"slack-send"}
 
 
 def frontmatter(path: Path) -> dict[str, str]:
@@ -131,7 +129,7 @@ def test_references_sit_one_level_deep() -> None:
 
 def test_posting_lives_only_in_slack_send() -> None:
     send = frontmatter(PLUGIN / "skills" / "slack-send" / "SKILL.md")
-    assert send["disable-model-invocation"] == "true"
+    assert "disable-model-invocation" not in send
     for skill in SKILLS:
         if skill == "slack-send":
             continue
@@ -187,9 +185,8 @@ def test_each_skill_has_a_trigger_case_and_a_near_miss(skill: str) -> None:
     names_skill = [t for t in texts if "tool: Skill" in t and f'{skill}"' in t]
     near_miss = [t for t in names_skill if "min: 0" in t and "max: 0" in t and "arm: both" in t]
     assert near_miss, f"{skill} needs a near-miss case (min 0, max 0, arm both)"
-    if skill not in USER_ONLY:
-        trigger = [t for t in names_skill if "min: 0" not in t]
-        assert trigger, f"{skill} needs a should-trigger case with a Skill tool_used grader"
+    trigger = [t for t in names_skill if "min: 0" not in t]
+    assert trigger, f"{skill} needs a should-trigger case with a Skill tool_used grader"
 
 
 def test_prose_follows_the_writing_rules(load_script) -> None:

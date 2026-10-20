@@ -1,14 +1,13 @@
 ---
 name: slack-send
-description: Posts, schedules, or saves as a Slack draft a message the user has already approved, through a connected Slack MCP server, after one final confirmation showing the destination and exact text. The user runs it with /team-comms:slack-send after slack-draft or status-update produced the text. Claude does not run it on its own.
+description: Posts, schedules, or saves as a Slack draft a message the user has already approved, through a connected Slack MCP server, after one final confirmation showing the destination and exact text. Use it when the user approves text from slack-draft or status-update, or gives final text and says to post, schedule or save it, even without naming the skill. Never use it on a draft the user has not approved.
 argument-hint: "[approved text, or leave empty to use the last draft]"
-disable-model-invocation: true
 ---
 
 # Slack send
 
-This is the only skill in the plugin that writes to Slack. It runs because the user typed
-`/team-comms:slack-send`. It still asks once more before anything leaves the machine, and it
+This is the only skill in the plugin that writes to Slack. It runs when the user asks to post,
+schedule or save approved text, or types `/team-comms:slack-send`. It still asks once more before anything leaves the machine, and it
 sends exactly the text shown, with no edits after the confirmation.
 
 ## 1. Get the text

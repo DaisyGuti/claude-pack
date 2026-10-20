@@ -2,7 +2,6 @@
 name: plan-ticket
 description: Plans one ticket before anyone works it, the user's own next ticket or a teammate's. Picks the next Ready ticket (or the numbered one), posts a build plan of about 200 words on it (files to touch, pattern to reuse, how to tell it is done) and sets its model and run labels. Use for "plan my next ticket", "plan ticket 73", "write the plan for the top of my queue", even when the user does not name labels.
 argument-hint: "[--all] [--ticket N] [--repo NAME] [--dry-run] [--project N --owner OWNER] [--context FILE]"
-disable-model-invocation: true
 allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/registry.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve_model.py *)
 ---
 

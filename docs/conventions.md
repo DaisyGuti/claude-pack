@@ -56,8 +56,10 @@ is the platform fact and this file is the house choice built on it.
     are never frozen in the file (G41).
 13. **Draft first for anything with a side effect.** A skill that posts, sends, pushes,
     merges or deploys drafts the action, shows it, and acts only on the user's explicit go.
-    It sets `disable-model-invocation: true` (G12). `allowed-tools` only pre-approves and
-    does not restrict (G14). One exception is built in: an engineering agent that pushes its
+    The team works from chat, so these skills leave `disable-model-invocation` out and Claude
+    can start them from a request; the draft, `--dry-run` or confirmation step in the skill
+    is the safeguard, not the flag (G12 lists the flag for a skill that must be typed).
+    `allowed-tools` only pre-approves and does not restrict (G14). One exception is built in: an engineering agent that pushes its
     own branch and opens its own pull or merge request has reached the expected end of an
     engineering task, and needs no extra go. It never merges, never enables auto-merge and
     never pushes to the default branch. Merging, deploying, posting a message and sending
