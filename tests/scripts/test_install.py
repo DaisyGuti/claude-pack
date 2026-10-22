@@ -94,6 +94,8 @@ class Env:
             # An empty git config, so the credential-helper check does not read the machine's.
             "GIT_CONFIG_GLOBAL": str(tmp / "gitconfig"),
             "GIT_CONFIG_NOSYSTEM": "1",
+            # git refuses https and ssh, so reaching a remote fails at once instead of dialling out.
+            "GIT_ALLOW_PROTOCOL": "file",
         }
 
     def run(self, *args: str) -> subprocess.CompletedProcess[str]:
@@ -107,17 +109,25 @@ class Env:
         )
 
     def run_from_clone(
-        self, tmp: Path, origin: str, *args: str
+        self, tmp: Path, origin: str, *args: str, nested_in: Path | None = None
     ) -> subprocess.CompletedProcess[str]:
-        """Run a copy of install.sh from a git clone with this origin and no --source."""
-        clone = tmp / "clone"
-        (clone / ".claude-plugin").mkdir(parents=True)
-        shutil.copy(INSTALL, clone / "install.sh")
-        shutil.copy(ROOT / ".claude-plugin/marketplace.json", clone / ".claude-plugin")
-        for git_args in (["init", "-q"], ["remote", "add", "origin", origin]):
-            subprocess.run(["git", "-C", str(clone), *git_args], check=True, env=self.env)
+        """Run a copy of install.sh with no --source, from a git clone with this origin.
+
+        With `nested_in`, the copy is unpacked inside a repository with that origin and is not a
+        clone itself, like a zip download dropped into another project.
+        """
+        outer = nested_in or tmp / "clone"
+        outer.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["git", "-C", str(outer), "init", "-q"], check=True, env=self.env)
+        subprocess.run(
+            ["git", "-C", str(outer), "remote", "add", "origin", origin], check=True, env=self.env
+        )
+        pack = outer / "tools" / "pack" if nested_in else outer
+        (pack / ".claude-plugin").mkdir(parents=True)
+        shutil.copy(INSTALL, pack / "install.sh")
+        shutil.copy(ROOT / ".claude-plugin/marketplace.json", pack / ".claude-plugin")
         return subprocess.run(
-            [str(clone / "install.sh"), "--dry-run", "--only", "core", *args],
+            [str(pack / "install.sh"), "--dry-run", "--only", "core", *args],
             capture_output=True,
             text=True,
             env=self.env,
@@ -330,6 +340,88 @@ def test_an_unreachable_gitlab_source_gets_glab_advice_not_gh(env: Env) -> None:
     assert f"credential.https://{GITLAB_HOST}.helper '!glab auth git-credential'" in result.stdout
     assert "gh auth setup-git" not in result.stdout
     assert "not done: git has no credential helper for " + GITLAB_HOST in result.stdout
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "https://User@GitHub.com/Someone/claude-pack.git",
+        "ssh://git@ssh.github.com:443/Someone/claude-pack.git",
+        "https://github.com/Someone/claude-pack",
+    ],
+)
+def test_every_spelling_of_a_github_origin_keeps_the_github_name(
+    env: Env, tmp_path: Path, origin: str
+) -> None:
+    result = env.run_from_clone(tmp_path, origin)
+    assert "adding marketplace claude-pack from DaisyGuti/claude-pack" in result.stdout
+
+
+def test_an_https_gitlab_origin_without_dot_git_is_read_as_a_git_url(
+    env: Env, tmp_path: Path
+) -> None:
+    result = env.run_from_clone(tmp_path, f"https://{GITLAB_HOST}/group/claude-pack/")
+    assert f"from https://{GITLAB_HOST}/group/claude-pack.git\n" in result.stdout
+
+
+def test_a_pack_unpacked_inside_another_repository_ignores_that_repository(
+    env: Env, tmp_path: Path
+) -> None:
+    outer_origin = f"https://{GITLAB_HOST}/team/infra.git"
+    result = env.run_from_clone(tmp_path, outer_origin, nested_in=tmp_path / "infra")
+    assert "adding marketplace claude-pack from DaisyGuti/claude-pack" in result.stdout
+    assert "team/infra" not in result.stdout
+
+
+def test_a_port_in_the_source_is_kept_for_the_credential_helper(env: Env) -> None:
+    result = subprocess.run(
+        [
+            str(INSTALL),
+            "--dry-run",
+            "--only",
+            "core",
+            "--source",
+            f"https://{GITLAB_HOST}:8443/group/claude-pack.git",
+        ],
+        capture_output=True,
+        text=True,
+        env=env.env,
+        check=False,
+    )
+    assert f"credential.https://{GITLAB_HOST}:8443.helper" in result.stdout
+    assert f"glab auth login --hostname {GITLAB_HOST}\n" in result.stdout
+
+
+def test_glab_as_the_helper_for_the_source_host_is_recognized(env: Env, tmp_path: Path) -> None:
+    gitconfig = tmp_path / "gitconfig"
+    gitconfig.write_text(
+        f'[credential "https://{GITLAB_HOST}"]\n\thelper = !glab auth git-credential\n'
+    )
+    result = subprocess.run(
+        [
+            str(INSTALL),
+            "--dry-run",
+            "--only",
+            "core",
+            "--source",
+            f"https://{GITLAB_HOST}/group/claude-pack.git",
+        ],
+        capture_output=True,
+        text=True,
+        env=env.env,
+        check=False,
+    )
+    assert f"ok: git uses glab as its credential helper for {GITLAB_HOST}" in result.stdout
+    # a GitHub-only helper does not count for a GitLab host
+    gitconfig.write_text('[credential "https://github.com"]\n\thelper = !gh auth git-credential\n')
+    result = subprocess.run(
+        [str(INSTALL), "--dry-run", "--only", "core", "--source", f"https://{GITLAB_HOST}/g/r.git"],
+        capture_output=True,
+        text=True,
+        env=env.env,
+        check=False,
+    )
+    assert f"git has no credential helper for {GITLAB_HOST}" in result.stdout
 
 
 def test_bad_scope_and_unknown_flag_fail(env: Env) -> None:

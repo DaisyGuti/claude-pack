@@ -178,52 +178,74 @@ ledger_drop() { # ledger_drop KIND FIELD...
 # Prerequisites
 # ---------------------------------------------------------------------------------------------
 
+# url_authority URL : the host (and port, when written) of a git URL, lower-cased and without any
+# user:token@ part; empty for a local path or file:// URL. An owner/repo name is on github.com.
+url_authority() {
+  local u="${1%%#*}" authority
+  case "$u" in
+    /* | ./* | ../* | "~"* | file://*) return 0 ;;
+    *://*)
+      authority="${u#*://}"
+      authority="${authority%%/*}"
+      authority="${authority##*@}"
+      ;;
+    *@*:*)
+      authority="${u#*@}"
+      authority="${authority%%:*}"
+      ;;
+    *) authority="github.com" ;;
+  esac
+  printf '%s\n' "$authority" | tr '[:upper:]' '[:lower:]'
+}
+
 # default_source : where this checkout came from, when that is a git host other than GitHub.
 # A teammate who cloned the pack from GitLab must install from that host, not from the GitHub
 # copy this script falls back to. GitHub clones keep the owner/repo name, which lets Claude Code
 # pick SSH or HTTPS itself.
 default_source() {
-  local url
-  url="$(git -C "$PACK" remote get-url origin 2>/dev/null || true)"
-  case "$url" in
-    https://github.com/* | http://github.com/* | git@github.com:* | ssh://git@github.com/*) ;;
-    https://* | http://*)
-      # A token in the remote (https://user:token@host/...) must never reach Claude's settings.
-      printf '%s\n' "$url" | sed -E 's#^(https?://)[^/@]*@#\1#'
-      return 0
-      ;;
-    git@*:* | ssh://*)
-      printf '%s\n' "$url"
-      return 0
-      ;;
-  esac
+  local url top authority
+  # An unpacked copy inside some other repository must not adopt that repository's remote.
+  top="$(git -C "$PACK" rev-parse --show-toplevel 2>/dev/null || true)"
+  if [ "$top" = "$PACK" ]; then
+    url="$(git -C "$PACK" remote get-url origin 2>/dev/null || true)"
+    authority="$(url_authority "$url")"
+    case "${authority%%:*}" in
+      "" | github.com | ssh.github.com | www.github.com) ;;
+      *)
+        case "$url" in
+          https://* | http://*)
+            # A token in the remote (https://user:token@host/...) must never reach Claude's
+            # settings. Claude Code reads an https URL as a git repository by its .git ending.
+            url="$(printf '%s\n' "$url" | sed -E 's#^(https?://)[^/@]*@#\1#; s#/+$##')"
+            case "$url" in *.git) ;; *) url="$url.git" ;; esac
+            printf '%s\n' "$url"
+            return 0
+            ;;
+          git://* | ssh://* | *@*:*)
+            printf '%s\n' "$url"
+            return 0
+            ;;
+        esac
+        ;;
+    esac
+  fi
   printf '%s\n' "$DEFAULT_SOURCE"
 }
 
-# source_host : the git host SOURCE lives on; empty for a local path. An owner/repo name is GitHub.
+# source_host : the git host SOURCE lives on, without a port; empty for a local path.
 source_host() {
-  local base="${SOURCE%%#*}" authority
-  case "$base" in
-    /* | ./* | ../* | "~"*) return 0 ;;
-    http://* | https://* | ssh://*)
-      authority="${base#*://}"
-      authority="${authority%%/*}"
-      authority="${authority#*@}"
-      printf '%s\n' "${authority%%:*}"
-      ;;
-    git@*:*)
-      base="${base#git@}"
-      printf '%s\n' "${base%%:*}"
-      ;;
-    *) printf 'github.com\n' ;;
-  esac
+  local authority
+  authority="$(url_authority "$SOURCE")"
+  printf '%s\n' "${authority%%:*}"
 }
 
-# source_uses_https : true unless SOURCE is a local path or an SSH remote, where no
-# credential helper is involved.
+# source_uses_https : true only for an https or owner/repo source; a local path, file://,
+# git:// or SSH remote involves no credential helper.
 source_uses_https() {
   case "${SOURCE%%#*}" in
-    /* | ./* | ../* | "~"* | git@* | ssh://*) return 1 ;;
+    /* | ./* | ../* | "~"* | file://* | git://* | ssh://*) return 1 ;;
+    *://*) return 0 ;;
+    *@*:*) return 1 ;;
     *) return 0 ;;
   esac
 }
@@ -243,7 +265,7 @@ reach_source() {
   ref="HEAD"
   case "$SOURCE" in *"#"*) ref="${SOURCE#*#}" ;; esac
   case "$base" in
-    http://* | https://* | git@* | ssh://*) candidates="$base" ;;
+    *://* | *@*:*) candidates="$base" ;;
     *) candidates="https://github.com/$base.git git@github.com:$base.git" ;;
   esac
   for url in $candidates; do
@@ -268,13 +290,14 @@ $(git config --get-all credential.helper 2>/dev/null || true)"
   esac
 }
 
-gitlab_credential_hint() { # gitlab_credential_hint HOST : the one-line fix for a missing helper
-  printf "Run: glab auth login --hostname %s, then: git config --global --add credential.https://%s.helper '!glab auth git-credential'" "$1" "$1"
+gitlab_credential_hint() { # gitlab_credential_hint HOST AUTHORITY : the one-line fix for a missing helper
+  printf "Run: glab auth login --hostname %s, then: git config --global --add credential.https://%s.helper '!glab auth git-credential'" "$1" "$2"
 }
 
 check_prerequisites() { # check_prerequisites : exits on a missing hard requirement
-  local missing=0 cv py_ok helper host
+  local missing=0 cv py_ok helper host authority
   host="$(source_host)"
+  authority="$(url_authority "$SOURCE")"
   say "Prerequisites"
   if command -v git >/dev/null 2>&1; then
     say "  ok: git $(git --version | awk '{print $3}')"
@@ -322,16 +345,16 @@ check_prerequisites() { # check_prerequisites : exits on a missing hard requirem
     say "  not found: glab (the GitLab command line, https://gitlab.com/gitlab-org/cli). The ticket and merge request skills use it on GitLab."
   fi
   if source_uses_https; then
-    helper="$(credential_helper_state "$host")"
+    helper="$(credential_helper_state "$authority")"
     case "$helper" in
       gh) say "  ok: git uses gh as its GitHub credential helper (gh auth setup-git is done)" ;;
-      glab) say "  ok: git uses glab as its credential helper for $host" ;;
+      glab) say "  ok: git uses glab as its credential helper for $authority" ;;
       other) say "  ok: git has a credential helper configured (needed to clone a private marketplace)" ;;
       none)
         if [ "$host" = "github.com" ]; then
           say "  not done: git has no credential helper. Run: gh auth setup-git"
         else
-          say "  not done: git has no credential helper for $host. $(gitlab_credential_hint "$host")"
+          say "  not done: git has no credential helper for $authority. $(gitlab_credential_hint "$host" "$authority")"
         fi
         ;;
     esac
@@ -353,8 +376,8 @@ check_prerequisites() { # check_prerequisites : exits on a missing hard requirem
         say "    You also need collaborator access to the repository."
       else
         say "    On GitLab, run: glab auth login --hostname $host"
-        say "    then: git config --global --add credential.https://$host.helper '!glab auth git-credential'"
-        say "    (or use any credential helper that holds a token for $host, or load an SSH key into ssh-agent)."
+        say "    then: git config --global --add credential.https://$authority.helper '!glab auth git-credential'"
+        say "    (or use any credential helper that holds a token for $authority, or load an SSH key into ssh-agent)."
         say "    You also need read access (Reporter or higher) to the project."
       fi
       if [ "$MODE" = "check" ]; then problem "the marketplace source is not reachable"; fi
