@@ -146,10 +146,15 @@ with the git credentials already on your machine and never asks for a password, 
 
    `gh auth setup-git` is the step people miss. It makes plain `git clone` work for private repos,
    which is how Claude Code reads this marketplace. An SSH key loaded in `ssh-agent` also works.
+
+   If the pack lives on GitLab, sign in there instead (see [Moving to GitLab](#moving-to-gitlab),
+   step 3).
 3. **Install the pack.** Pick one route.
 
    **Route A: the installer script.** It checks your setup, adds the marketplace, installs
-   every plugin, and keeps a record so it can undo exactly what it did.
+   every plugin, and keeps a record so it can undo exactly what it did. It installs from the
+   place you cloned it: a clone from GitLab (or any host other than GitHub) installs from that
+   host, so there is nothing to pass.
 
    ```sh
    git clone https://github.com/DaisyGuti/claude-pack.git
@@ -303,6 +308,8 @@ install them for you.
    ```
 
    They accept the emailed invitation, then follow [Install on a new machine](#install-on-a-new-machine).
+   On GitLab, add them as a project member with the Reporter role or higher (**Manage**, then
+   **Members**); Guest cannot read the code of a private project.
 2. **Or turn the pack on for a whole repository.** Put this in that repository's
    `.claude/settings.json` and commit it:
 
@@ -349,15 +356,28 @@ that touches a tracker, pull request or pipeline already supports `gh` and `glab
    ```sh
    ./install.sh --source https://gitlab.example.com/group/claude-pack.git
    ```
-3. Credentials work the same way: a git credential helper with a token, or an SSH key in
-   `ssh-agent`. Claude Code has no GitLab-specific token setting and never prompts.
+3. Credentials work the same way as on GitHub: a git credential helper that already holds a
+   token, or an SSH key in `ssh-agent`. Claude Code has no GitLab token setting and never
+   prompts, so a credential git would have to ask for fails. The GitLab equivalent of
+   `gh auth login && gh auth setup-git` is:
+
+   ```sh
+   glab auth login --hostname gitlab.example.com
+   git config --global --add credential.https://gitlab.example.com.helper '!glab auth git-credential'
+   ```
+
+   Use your own host in place of `gitlab.example.com`. Newer `glab` releases can set the helper
+   during login with `--setup-git-credential-helper`; run `glab auth login --help` to see
+   whether yours does. `./install.sh --check` reports whether git can read the marketplace
+   without a prompt and prints these two commands when it cannot.
 4. A repo's `.claude/settings.json` uses the `git` source instead:
 
    ```json
    { "source": { "source": "git", "url": "https://gitlab.example.com/group/claude-pack.git" } }
    ```
-5. To switch an existing install, run `./install.sh --uninstall`, then `./install.sh --source <the GitLab URL>`.
-   `install.sh` refuses to reuse the `claude-pack` name from a different source on purpose.
+5. To switch an existing install, run `./install.sh --uninstall`, then run `./install.sh` from a
+   clone of the GitLab project (or pass `--source <the GitLab URL>`). `install.sh` refuses to
+   reuse the `claude-pack` name from a different source on purpose.
 
 ## Your own preferences file (optional)
 
@@ -426,5 +446,5 @@ A skill adapted from another project keeps that project's license text in its ow
 gets a row in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Read every bundled file of an
 outside skill before it lands.
 
-Branch, open a pull request, and merge once the gates pass. The integrator rebases before
-merging.
+Branch, open a pull request (a merge request on GitLab), and merge once the gates pass. The
+integrator rebases before merging.
