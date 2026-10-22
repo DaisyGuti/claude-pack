@@ -128,6 +128,28 @@ def test_worker_reviews_its_diff_before_committing() -> None:
     assert "core" in manifest.get("dependencies", [])
 
 
+def test_work_tickets_runs_a_rolling_pool_and_says_so_everywhere() -> None:
+    """The skill and its procedure agree on the pool size, and no file still says waves."""
+    skill = (PLUGIN / "skills" / "work-tickets" / "SKILL.md").read_text(encoding="utf-8")
+    procedure = (PLUGIN / "skills" / "work-tickets" / "references" / "orchestrator.md").read_text(
+        encoding="utf-8"
+    )
+    default = re.compile(r"max-parallel`? \(5 by default\)|\*\*max-parallel:\*\* 5")
+    assert default.search(skill), "SKILL.md must state the default pool size of 5"
+    assert default.search(procedure), "orchestrator.md must state the default pool size of 5"
+    assert "run_in_background: true" in procedure
+    stale = [
+        str(path.relative_to(PLUGIN))
+        for path in (
+            PLUGIN / "README.md",
+            PLUGIN / "skills" / "work-tickets" / "SKILL.md",
+            PLUGIN / "skills" / "work-tickets" / "references" / "orchestrator.md",
+        )
+        if re.search(r"\bwaves?\b", path.read_text(encoding="utf-8"), re.I)
+    ]
+    assert not stale, f"still describes waves: {stale}"
+
+
 def test_scripts_are_executable_with_a_shebang() -> None:
     for script in (PLUGIN / "scripts").glob("*.py"):
         assert script.stat().st_mode & 0o111, f"{script.name} is not executable"

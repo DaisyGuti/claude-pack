@@ -4,7 +4,7 @@ description: Works one assigned ticket from plan to an open pull or merge reques
 tools: Bash, Read, Write, Edit, Grep, Glob, Agent
 model: sonnet
 effort: medium
-maxTurns: 150
+maxTurns: 300
 isolation: worktree
 ---
 

@@ -9,7 +9,7 @@ request in parallel, each on the Claude model its label calls for.
 | `/tickets:write-ticket` | Files a bug or idea as a ticket in the shape workers need, after checking it is not already built, superseded or ticketed. Sets priority, model, run label and lane |
 | `/tickets:plan-ticket` | Posts a plan of about 200 words on one ticket and sets its model and run labels |
 | `/tickets:daily-grooming` | Tidies the whole board: settles finished work to Done, flags duplicates, syncs priorities, promotes to Ready, plans what is unplanned |
-| `/tickets:work-tickets` | Works your Ready tickets in parallel waves with `tickets:ticket-worker` agents |
+| `/tickets:work-tickets` | Works your Ready tickets with a rolling pool of parallel `tickets:ticket-worker` agents |
 | `/tickets:ticket-worker` | Works one named issue from plan to an open review |
 
 Every command changes the tracker or opens a review. You can type one, or ask in chat ("file a

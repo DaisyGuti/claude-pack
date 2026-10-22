@@ -81,7 +81,10 @@ copy them exactly. In section 4's first bullet use the audience from the repo's 
   version. Every specific is one you read. For a fact you do not have, write
   `- [ ] TBD: <the question>` and say so in the report.
 - Split the ticket when the acceptance list runs past about seven bullets or the work spans
-  more than two repos.
+  more than two repos. Split it too when one ticket would change the database schema, the API
+  and the console together: a worker has a fixed turn budget and tickets of that size have
+  run out of it with nothing committed. Cut by layer, one ticket each, and chain them with
+  `Depends on:` lines.
 
 Then run `<scripts>/check_ticket.py <the file>`. It prints the problems (a placeholder left in,
 edited boilerplate, a missing `Depends on:` line, too many acceptance bullets) and exits 1 when

@@ -1,9 +1,9 @@
 # Ready-ticket orchestrator
 
 Process the **Ready** tickets of a project board, on GitHub or GitLab, that are assigned to
-the person running this command, by starting `tickets:ticket-worker` subagents in parallel
-waves. The tracker, board, lane names, labels and repos come from the registry, which is the
-only place any of them is written down. `<scripts>` and `<data>` are the two paths printed at
+the person running this command, by starting `tickets:ticket-worker` subagents from a rolling
+pool of parallel workers. The tracker, board, lane names, labels and repos come from the
+registry, which is the only place any of them is written down. `<scripts>` and `<data>` are the two paths printed at
 the top of SKILL.md, which also links `registry-rules.md`, `ticket-labels.md`,
 `model-selection.md` and `agents/ticket-worker.md` by absolute path.
 
@@ -36,7 +36,7 @@ before Phase 1 and run each operation as written there; never improvise a comman
 /tickets:work-tickets --dry-run                # the queue and nothing else
 /tickets:work-tickets --priority P1            # only P1 tickets
 /tickets:work-tickets --project 2 --owner me   # a different board (a pasted board URL works too)
-/tickets:work-tickets --max-parallel 5         # wider waves
+/tickets:work-tickets --max-parallel 8         # a bigger pool
 ```
 
 No arguments are needed, and you never ask the user for a project number or a repo list.
@@ -45,7 +45,7 @@ Defaults, applied when the flag is absent:
 - **tracker, host, board:** the registry's Tracker and Board sections
 - **repos:** every repo in the registry's table; keep no list here
 - **priority:** no filter; any priority, and none, is eligible
-- **max-parallel:** 3. **limit:** 30
+- **max-parallel:** 5, the number of workers kept running at once. **limit:** 30
 
 Overrides:
 
@@ -81,8 +81,9 @@ through.
 `run_solo`), exactly one.
 
 - run-worker: a worker can finish it end to end, and it is self-contained. That is what makes
-  it safe in a parallel wave. It keeps the label even when its last step is a live action no
-  worker can take; the worker builds the rest and stops at `needs_manual_action`.
+  it safe to run beside the others in the pool. It keeps the label even when its last step is
+  a live action no worker can take; the worker builds the rest and stops at
+  `needs_manual_action`.
 - run-solo: nothing to build at all. Skipped, never dispatched.
 - Neither: not dispatched, `reason="no run label: ticket has not been groomed"`.
 
@@ -108,8 +109,8 @@ run-worker label means self-contained), so there is no pairwise conflict check h
   closed issues to done. A ticket that ends in `needs_manual_action` pushes its own branch and
   opens a review carrying the registry's blocked label on every repo, so nobody merges it
   before the live step.
-- **Blocker isolation.** A blocked ticket halts only its own slot; the rest of the wave
-  finishes and the next wave dispatches.
+- **Blocker isolation.** A blocked ticket halts only its own slot; the rest of the pool
+  keeps running and the freed slot takes the next ticket.
 - **Preflight**, before the first slot is created: **auth-check** passes, `<data>` is
   writable, the current folder is inside a git repository (workers get a throwaway worktree of
   it; when it is not, stop and tell the user to start Claude Code inside one of the registry's
@@ -172,9 +173,9 @@ Apply the defaults above. On `--clear-skipped`, run `ticket_state.py clear-skipp
 ### 2. Resume unfinished slots
 
 A non-empty `active` list in the record is a run that did not finish cleanly. Treat those
-slots as the first wave and dispatch each again with the same `slot_id`, after resolving its
-model again (step 4). The worker finds its branch on the remote and continues from what was
-pushed; work that never reached the remote is redone. This first wave may exceed
+slots as the first workers of the pool and dispatch each again with the same `slot_id`, after
+resolving its model again (step 4). The worker finds its branch on the remote and continues from what was
+pushed; work that never reached the remote is redone. This first batch may exceed
 `--max-parallel`; log a warning.
 
 ### 3. Fetch and filter the queue
@@ -246,39 +247,43 @@ Not dispatched:
   #64 "title": no run label: ticket has not been groomed
 ```
 
-### 7. Wave dispatch loop
+### 7. Dispatch loop (a rolling pool)
 
-While the queue or the record's `active` list is non-empty:
+Keep `--max-parallel` workers running until the queue is empty. Never wait for the rest of the
+pool before starting the next ticket: a worker that returns frees a slot, and the next ticket
+takes it at once. The pool starts full, so a queue of five or more starts `--max-parallel`
+workers together.
 
-**7a. Assign slots.** On the first wave of a run that found unfinished slots (step 2), the wave
-is those slots; go to 7b. Otherwise take up to `--max-parallel` tickets from the front of the
-queue and, for each, get `ticket_state.py next-slot` (assign the whole wave's ids up front,
-calling `begin` right after each so the next call sees it) and `begin` the slot with its JSON.
-A `begin` refusal (exit 3) means the ticket is already tracked: skip it.
+**7a. Fill the pool.** Take tickets from the front of the queue until `active` holds
+`--max-parallel` slots. Slots resumed in step 2 come first and the pool is topped up behind
+them. For each ticket get `ticket_state.py next-slot` (one id at a time, calling `begin` right
+after each so the next call sees it) and `begin` the slot with its JSON. A `begin` refusal
+(exit 3) means the ticket is already tracked: skip it.
 
-**7b. Dispatch in parallel.** Build one dispatch message per slot as the JSON in section 1 of
-the worker's agent file, `agents/ticket-worker.md`: `mode`
+**7b. Dispatch.** Build one dispatch message per new slot as the JSON in section 1 of the
+worker's agent file, `agents/ticket-worker.md`: `mode`
 `dispatched`, the slot, the ticket and its repos, `item_ref`, `assignee`, `project` (from
 `set-project`: `tracker`, `host`, `board`, `tracker_ids`, `lanes`, `priorities`, `labels`,
 `model_labels`), `repo_map`, `worktree_root`, `files.adapter` and `files.labels` as absolute
 paths, `model` (the resolved model), `validate_plan_first: true` and `context_files` (the
 owning repo's brief, or the `--context` files).
 
-Then, in one message, make one Agent call per slot: `subagent_type` `tickets:ticket-worker`,
+Then, in one message, make one Agent call per new slot: `subagent_type` `tickets:ticket-worker`,
 `model` set to the slot's resolved model, `effort` set to the slot's resolved effort when it
 is not null (this needs Claude Code v2.1.292 or later; on an older version leave it out and
-say so in the report), `run_in_background: false` so every result of the wave returns together,
-and the dispatch message as the prompt. Do not pass `isolation`: the agent file sets it. Wait
-for every worker in the wave before reaping.
+say so in the report), `run_in_background: true` so each result arrives on its own the moment
+its worker finishes, and the dispatch message as the prompt. Do not pass `isolation`: the agent
+file sets it. Do not poll the workers; their completion notices wake you.
 
 - **Concurrent limit.** Claude Code refuses a spawn beyond its concurrent-subagent limit
   (20 by default) with `Concurrent subagent limit reached`. Do not retry in a loop: lower the
-  wave size to what is running and say so in the report.
+  pool size to what is running and say so in the report.
 - **A spawn error** (for example the agent type is not available because the plugin is not
   enabled) puts that slot in `blocked` through `finish` with `status=blocked_spawn_failed` and
   the error text. Never retry it in a loop.
 
-**7c. Reap.** The worker's last line is `RESULT {...}`. For each slot:
+**7c. Reap and refill.** Each time a worker returns, handle that one slot straight away; do
+not wait for the others. The worker's last line is `RESULT {...}`:
 
 - `status` starts with `blocked_`, or equals `needs_decision` or `needs_manual_action`: run
   `finish` with the RESULT JSON. Leave its worktrees (the branch and reviews may still need
@@ -291,9 +296,12 @@ for every worker in the wave before reaping.
   remote, so nothing is lost. The issue stays open until the review merges.
 - No `RESULT` line, or a status that is not one of those: the worker ended without finishing
   (a turn limit or a crash). Leave the slot in `active` so the next run resumes it, log a
-  warning with the worker's last paragraph, and dispatch no further waves this run.
+  warning with the worker's last paragraph, and start no further tickets this run; keep reaping
+  the workers still running.
 
-**7d.** Repeat from 7a until the queue and `active` are empty.
+After reaping, go back to 7a so the freed slot takes the next ticket.
+
+**7d.** The loop ends when the queue and `active` are both empty.
 
 ### 8. Completion
 
