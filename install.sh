@@ -203,7 +203,7 @@ url_authority() {
 # copy this script falls back to. GitHub clones keep the owner/repo name, which lets Claude Code
 # pick SSH or HTTPS itself.
 default_source() {
-  local url top authority
+  local url top authority scheme rest userinfo path
   # An unpacked copy inside some other repository must not adopt that repository's remote.
   top="$(git -C "$PACK" rev-parse --show-toplevel 2>/dev/null || true)"
   if [ "$top" = "$PACK" ]; then
@@ -213,15 +213,34 @@ default_source() {
       "" | github.com | ssh.github.com | www.github.com) ;;
       *)
         case "$url" in
-          https://* | http://*)
-            # A token in the remote (https://user:token@host/...) must never reach Claude's
-            # settings. Claude Code reads an https URL as a git repository by its .git ending.
-            url="$(printf '%s\n' "$url" | sed -E 's#^(https?://)[^/@]*@#\1#; s#/+$##')"
-            case "$url" in *.git) ;; *) url="$url.git" ;; esac
+          https://* | http://* | ssh://* | git://*)
+            # A token in the remote (https://user:token@host/... or ?private_token=...) must never
+            # reach Claude's settings, so rebuild the URL from scheme, host and path. Split at the
+            # last @ as url_authority does: a password may itself contain an @.
+            scheme="${url%%://*}"
+            rest="${url#*://}"
+            rest="${rest%%[?#]*}"
+            authority="${rest%%/*}"
+            path="${rest#"$authority"}"
+            case "$authority" in
+              *@*)
+                userinfo="${authority%@*}"
+                authority="${authority##*@}"
+                # SSH needs its user name (git@) but never a password.
+                if [ "$scheme" = ssh ]; then authority="${userinfo%%:*}@$authority"; fi
+                ;;
+            esac
+            url="$scheme://$authority$path"
+            if [ "$scheme" = https ] || [ "$scheme" = http ]; then
+              # Claude Code reads an https URL as a git repository by its .git ending.
+              while [ "${url%/}" != "$url" ]; do url="${url%/}"; done
+              case "$url" in *.git) ;; *) url="$url.git" ;; esac
+            fi
             printf '%s\n' "$url"
             return 0
             ;;
-          git://* | ssh://* | *@*:*)
+          *@*:*)
+            # scp-style user@host:path has no password field.
             printf '%s\n' "$url"
             return 0
             ;;

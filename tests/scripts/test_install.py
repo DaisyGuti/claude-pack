@@ -309,6 +309,33 @@ def test_a_token_in_the_clone_remote_never_reaches_claude(env: Env, tmp_path: Pa
     assert "s3cr3t-token" not in result.stdout + result.stderr
 
 
+@pytest.mark.parametrize(
+    ("origin", "expected"),
+    [
+        # A password holding an @ must not leave its tail behind.
+        (
+            f"https://oauth2:s3cr3t@token@{GITLAB_HOST}/group/claude-pack.git",
+            f"https://{GITLAB_HOST}/group/claude-pack.git",
+        ),
+        (
+            f"https://{GITLAB_HOST}/group/claude-pack.git?private_token=s3cr3t-token",
+            f"https://{GITLAB_HOST}/group/claude-pack.git",
+        ),
+        (
+            f"ssh://git:s3cr3t-token@{GITLAB_HOST}:2222/group/claude-pack.git",
+            f"ssh://git@{GITLAB_HOST}:2222/group/claude-pack.git",
+        ),
+    ],
+)
+def test_every_shape_of_secret_in_the_clone_remote_is_dropped(
+    env: Env, tmp_path: Path, origin: str, expected: str
+) -> None:
+    result = env.run_from_clone(tmp_path, origin)
+    assert f"from {expected}" in result.stdout
+    assert "s3cr3t" not in result.stdout + result.stderr
+    assert "token@" not in result.stdout + result.stderr
+
+
 def test_an_ssh_clone_from_gitlab_is_used_as_written(env: Env, tmp_path: Path) -> None:
     result = env.run_from_clone(tmp_path, f"git@{GITLAB_HOST}:group/claude-pack.git")
     assert f"from git@{GITLAB_HOST}:group/claude-pack.git" in result.stdout
