@@ -154,6 +154,16 @@ def test_work_tickets_runs_a_rolling_pool_and_says_so_everywhere() -> None:
     assert not stale, f"still describes waves: {stale}"
 
 
+def test_planning_runs_on_opus_whatever_the_session_model() -> None:
+    """A plan steers a cheaper worker, so every planning step names the opus alias."""
+    for skill in ("plan-ticket", "write-ticket"):
+        assert frontmatter(PLUGIN / "skills" / skill / "SKILL.md").get("model") == "opus", skill
+    grooming = " ".join((PLUGIN / "skills" / "daily-grooming" / "SKILL.md").read_text().split())
+    assert "Plan each ticket in its own subagent started with `model: opus`" in grooming
+    selection = (PLUGIN / "references" / "model-selection.md").read_text()
+    assert "## Planning runs on frontier" in selection
+
+
 def test_scripts_are_executable_with_a_shebang() -> None:
     for script in (PLUGIN / "scripts").glob("*.py"):
         assert script.stat().st_mode & 0o111, f"{script.name} is not executable"

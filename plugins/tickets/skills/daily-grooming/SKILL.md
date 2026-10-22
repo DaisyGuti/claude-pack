@@ -46,11 +46,11 @@ Paths used below (read them as `<scripts>` and `<data>`):
    ticket dispatchable; print the summary.
 4. Planning follows
    [plan-one-ticket.md](${CLAUDE_PLUGIN_ROOT}/references/plan-one-ticket.md), the same
-   procedure `/tickets:plan-ticket` uses, in parallel subagents when there are more than a few.
-   Priority, run, model and blocked labels mean what
-   [ticket-labels.md](${CLAUDE_PLUGIN_ROOT}/references/ticket-labels.md) says. Planning
-   subagents take their model from
-   [model-selection.md](${CLAUDE_PLUGIN_ROOT}/references/model-selection.md).
+   procedure `/tickets:plan-ticket` uses. Plan each ticket in its own subagent started with
+   `model: opus`, in parallel when there are several, so planning runs on Opus whatever the
+   session's model ([model-selection.md](${CLAUDE_PLUGIN_ROOT}/references/model-selection.md),
+   "Planning runs on frontier"). Priority, run, model and blocked labels mean what
+   [ticket-labels.md](${CLAUDE_PLUGIN_ROOT}/references/ticket-labels.md) says.
 
 ## The standing rules
 

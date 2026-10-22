@@ -35,6 +35,15 @@ aliases always point at the newest model of that family, so nothing here carries
 version. Exit 3 means the ticket has no model label, 4 means labels for different tiers
 conflict, 5 means a `model:` label maps to no tier.
 
+## Planning runs on frontier
+
+A plan and its model label decide what a cheaper worker builds, so a wrong plan costs a whole
+worker run, while a plan of about 200 words costs little on any tier. Planning therefore runs
+on `opus` whatever the session's model: `plan-ticket` and `write-ticket` set `model: opus` in
+their frontmatter, and `daily-grooming` starts each planning subagent with `model: opus`. The
+rest of a grooming run (settling, label sync, lane moves) stays on the session's model. Name
+the alias, never a dated model, so planning moves to each new Opus release on its own.
+
 ## Passing the model and effort at spawn
 
 When a skill starts a `tickets:ticket-worker`, the Agent call sets `model` to the printed

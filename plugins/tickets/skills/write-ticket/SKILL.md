@@ -3,6 +3,7 @@ name: write-ticket
 description: Files a bug, idea or request as a ticket on the team's GitHub or GitLab tracker, in the shape the ticket workers need, or rewrites an existing ticket to that shape. Checks the premise against the real repo first (already built, superseded, already ticketed), then files it with priority, model, run and board-lane assignments. Use for "file a ticket", "write this up as an issue", "turn this note into a proper ticket", "rewrite ticket 42", even when the user does not say tracker or labels.
 argument-hint: "[--repo NAME] [--ticket N] [--ready] [--assignee LOGIN|me] [--dry-run] <what you want, in your own words>"
 allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/registry.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve_model.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/check_ticket.py *)
+model: opus
 ---
 
 # Write ticket

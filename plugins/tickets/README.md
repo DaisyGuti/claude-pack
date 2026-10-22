@@ -62,6 +62,10 @@ The model label maps to a Claude tier: `fast` runs on Haiku, `workhorse` on Sonn
 `frontier` on Opus. `work-tickets` passes the model when it starts each worker. An
 `effort:<level>` label on a ticket sets the worker's reasoning effort.
 
+Planning always runs on Opus, whatever your session's model: `plan-ticket`, `write-ticket` and
+the planning step of `daily-grooming`. A plan steers a cheaper worker, so a wrong one costs more
+than the planning does.
+
 ## Companions
 
 Before it commits, each worker has the read-only `core:reviewer` agent (from this pack's `core`
