@@ -119,7 +119,9 @@ run-worker label means self-contained), so there is no pairwise conflict check h
   and tell the user what failed.
 - **One run per board and login at a time.** `ticket_state.py` takes an exclusive lock around
   each write, so a second run waits for it rather than corrupting the record, but two runs
-  would still queue the same Ready tickets until a worker moves its card out of Ready.
+  would still queue the same Ready tickets until a worker moves its card out of Ready. Do not
+  start a second run while workers from the first are still going: step 2 would treat their
+  slots as unfinished and dispatch them again.
 - **Orchestrate; never implement.** You never edit a ticket's code. Workers return a paragraph
   and one `RESULT` line; the run record holds the detail, so do not ask for logs.
 
@@ -174,8 +176,8 @@ Apply the defaults above. On `--clear-skipped`, run `ticket_state.py clear-skipp
 
 A non-empty `active` list in the record is a run that did not finish cleanly. Treat those
 slots as the first workers of the pool and dispatch each again with the same `slot_id`, after
-resolving its model again (step 4). The worker finds its branch on the remote and continues from what was
-pushed; work that never reached the remote is redone. This first batch may exceed
+resolving its model again (step 4). The worker finds its branch on the remote and continues
+from what was pushed; work that never reached the remote is redone. This first batch may exceed
 `--max-parallel`; log a warning.
 
 ### 3. Fetch and filter the queue
@@ -251,16 +253,20 @@ Not dispatched:
 
 Keep `--max-parallel` workers running until the queue is empty. Never wait for the rest of the
 pool before starting the next ticket: a worker that returns frees a slot, and the next ticket
-takes it at once. The pool starts full, so a queue of five or more starts `--max-parallel`
-workers together.
+takes it at once. The pool starts full, so a queue at least as long as `--max-parallel`
+starts that many workers together.
 
-**7a. Fill the pool.** Take tickets from the front of the queue until `active` holds
-`--max-parallel` slots. Slots resumed in step 2 come first and the pool is topped up behind
+Keep your own count of **running** workers: those you dispatched in this run that have not
+returned. The pool size is measured against that count, not against `active`, because a slot
+whose worker ended without a `RESULT` stays in `active` with nothing running.
+
+**7a. Fill the pool.** Take tickets from the front of the queue until the running count
+reaches `--max-parallel`. Slots resumed in step 2 come first and the pool is topped up behind
 them. For each ticket get `ticket_state.py next-slot` (one id at a time, calling `begin` right
 after each so the next call sees it) and `begin` the slot with its JSON. A `begin` refusal
 (exit 3) means the ticket is already tracked: skip it.
 
-**7b. Dispatch.** Build one dispatch message per new slot as the JSON in section 1 of the
+**7b. Dispatch.** Build one dispatch message per slot just begun or resumed as the JSON in section 1 of the
 worker's agent file, `agents/ticket-worker.md`: `mode`
 `dispatched`, the slot, the ticket and its repos, `item_ref`, `assignee`, `project` (from
 `set-project`: `tracker`, `host`, `board`, `tracker_ids`, `lanes`, `priorities`, `labels`,
@@ -268,16 +274,20 @@ worker's agent file, `agents/ticket-worker.md`: `mode`
 paths, `model` (the resolved model), `validate_plan_first: true` and `context_files` (the
 owning repo's brief, or the `--context` files).
 
-Then, in one message, make one Agent call per new slot: `subagent_type` `tickets:ticket-worker`,
+Then, in one message, make one Agent call per slot just begun or resumed: `subagent_type` `tickets:ticket-worker`,
 `model` set to the slot's resolved model, `effort` set to the slot's resolved effort when it
 is not null (this needs Claude Code v2.1.292 or later; on an older version leave it out and
 say so in the report), `run_in_background: true` so each result arrives on its own the moment
 its worker finishes, and the dispatch message as the prompt. Do not pass `isolation`: the agent
-file sets it. Do not poll the workers; their completion notices wake you.
+file sets it. Do not poll the workers; their completion notices wake you. After dispatching,
+end your turn only to wait for those notices, and print nothing from step 8 until every
+dispatched worker has returned: ending the run earlier abandons the workers still going.
 
 - **Concurrent limit.** Claude Code refuses a spawn beyond its concurrent-subagent limit
-  (20 by default) with `Concurrent subagent limit reached`. Do not retry in a loop: lower the
-  pool size to what is running and say so in the report.
+  (20 by default) with `Concurrent subagent limit reached`. Do not retry in a loop. The slot
+  you had begun for that spawn has no worker: run `finish` on it with
+  `status=blocked_spawn_failed` and the error text, lower the pool size to what is running,
+  and say so in the report.
 - **A spawn error** (for example the agent type is not available because the plugin is not
   enabled) puts that slot in `blocked` through `finish` with `status=blocked_spawn_failed` and
   the error text. Never retry it in a loop.
@@ -296,12 +306,13 @@ not wait for the others. The worker's last line is `RESULT {...}`:
   remote, so nothing is lost. The issue stays open until the review merges.
 - No `RESULT` line, or a status that is not one of those: the worker ended without finishing
   (a turn limit or a crash). Leave the slot in `active` so the next run resumes it, log a
-  warning with the worker's last paragraph, and start no further tickets this run; keep reaping
-  the workers still running.
+  warning with the worker's last paragraph, and start no further tickets this run (a halt);
+  keep reaping the workers still running.
 
 After reaping, go back to 7a so the freed slot takes the next ticket.
 
-**7d.** The loop ends when the queue and `active` are both empty.
+**7d.** The loop ends when no worker is still running and either the queue is empty or a halt
+stopped new tickets. Slots a halt left in `active` go in the report as "Unfinished".
 
 ### 8. Completion
 

@@ -138,6 +138,10 @@ def test_work_tickets_runs_a_rolling_pool_and_says_so_everywhere() -> None:
     assert default.search(skill), "SKILL.md must state the default pool size of 5"
     assert default.search(procedure), "orchestrator.md must state the default pool size of 5"
     assert "run_in_background: true" in procedure
+    # With background workers the loop must end on "nothing running", not on an empty record:
+    # a worker that ends without a RESULT line stays in `active` for the next run.
+    assert "no worker is still running" in procedure
+    assert "until every\ndispatched worker has returned" in procedure
     stale = [
         str(path.relative_to(PLUGIN))
         for path in (
