@@ -45,12 +45,16 @@ file writes them.
 
 ## 2. Hold it instead, when there is nothing sound to plan
 
-Do not write a plan, and hold the ticket, in two cases:
+Do not write a plan, and hold the ticket, in three cases:
 
 - **A dependency is still open** (step 1.5): kind `dependency`, naming each open issue.
 - **The ticket is too vague to plan.** A section would need more than a paragraph, or you
   cannot state what done looks like. Expanding the plan is the wrong response: use kind
   `decision`, and list the missing facts as questions, each with your recommended answer.
+- **The ticket is too big for one worker.** It would change the database schema, the API and
+  the console together. A worker has a fixed turn budget, and tickets of that size have run
+  out of it with nothing committed. Use kind `decision`: recommend cutting it by layer, one
+  ticket each chained with `Depends on:` lines, and name what each piece covers.
 
 Holding follows [ticket-labels.md](ticket-labels.md), "Blocked": **ensure-label** and
 **add-label** for the registry's blocked label, then **comment** in the `Blocked:` shape.
