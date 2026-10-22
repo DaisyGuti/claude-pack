@@ -81,17 +81,43 @@ class Env:
         fake = bin_dir / "claude"
         fake.write_text(FAKE_CLAUDE)
         fake.chmod(0o755)
+        # Stand-ins for the tracker CLIs, so a run never reaches the network or a real sign-in.
+        for tool in ("gh", "glab"):
+            stub = bin_dir / tool
+            stub.write_text("#!/bin/sh\nexit 0\n")
+            stub.chmod(0o755)
         self.env = {
             **os.environ,
             "PATH": f"{bin_dir}:{os.environ['PATH']}",
             "CLAUDE_CONFIG_DIR": str(self.config),
             "FAKE_CLAUDE_STATE": str(self.state),
+            # An empty git config, so the credential-helper check does not read the machine's.
+            "GIT_CONFIG_GLOBAL": str(tmp / "gitconfig"),
+            "GIT_CONFIG_NOSYSTEM": "1",
         }
 
     def run(self, *args: str) -> subprocess.CompletedProcess[str]:
         # The ROOT directory is also a valid local marketplace source: it holds marketplace.json.
         return subprocess.run(
             [str(INSTALL), "--source", str(ROOT), *args],
+            capture_output=True,
+            text=True,
+            env=self.env,
+            check=False,
+        )
+
+    def run_from_clone(
+        self, tmp: Path, origin: str, *args: str
+    ) -> subprocess.CompletedProcess[str]:
+        """Run a copy of install.sh from a git clone with this origin and no --source."""
+        clone = tmp / "clone"
+        (clone / ".claude-plugin").mkdir(parents=True)
+        shutil.copy(INSTALL, clone / "install.sh")
+        shutil.copy(ROOT / ".claude-plugin/marketplace.json", clone / ".claude-plugin")
+        for git_args in (["init", "-q"], ["remote", "add", "origin", origin]):
+            subprocess.run(["git", "-C", str(clone), *git_args], check=True, env=self.env)
+        return subprocess.run(
+            [str(clone / "install.sh"), "--dry-run", "--only", "core", *args],
             capture_output=True,
             text=True,
             env=self.env,
@@ -252,6 +278,58 @@ def test_other_source_for_the_same_marketplace_is_refused(env: Env, tmp_path: Pa
     )
     assert result.returncode == 1
     assert "refused: marketplace 'claude-pack' is already configured" in result.stdout
+
+
+# `.invalid` never resolves (RFC 2606), so no test reaches a real network host.
+GITLAB_HOST = "gitlab.example.invalid"
+
+
+def test_a_clone_from_gitlab_installs_from_that_gitlab(env: Env, tmp_path: Path) -> None:
+    result = env.run_from_clone(tmp_path, f"https://{GITLAB_HOST}/group/claude-pack.git")
+    assert f"adding marketplace claude-pack from https://{GITLAB_HOST}/group/claude-pack.git" in (
+        result.stdout
+    )
+    assert "DaisyGuti/claude-pack" not in result.stdout
+
+
+def test_a_token_in_the_clone_remote_never_reaches_claude(env: Env, tmp_path: Path) -> None:
+    origin = f"https://oauth2:s3cr3t-token@{GITLAB_HOST}/group/claude-pack.git"
+    result = env.run_from_clone(tmp_path, origin)
+    assert f"from https://{GITLAB_HOST}/group/claude-pack.git" in result.stdout
+    assert "s3cr3t-token" not in result.stdout + result.stderr
+
+
+def test_an_ssh_clone_from_gitlab_is_used_as_written(env: Env, tmp_path: Path) -> None:
+    result = env.run_from_clone(tmp_path, f"git@{GITLAB_HOST}:group/claude-pack.git")
+    assert f"from git@{GITLAB_HOST}:group/claude-pack.git" in result.stdout
+    assert "git has no credential helper" not in result.stdout  # SSH needs no helper
+    assert f"load a key for {GITLAB_HOST} into ssh-agent" in result.stdout
+
+
+def test_a_clone_from_github_keeps_the_github_name(env: Env, tmp_path: Path) -> None:
+    result = env.run_from_clone(tmp_path, "git@github.com:Someone/claude-pack.git")
+    assert "adding marketplace claude-pack from DaisyGuti/claude-pack" in result.stdout
+
+
+def test_an_unreachable_gitlab_source_gets_glab_advice_not_gh(env: Env) -> None:
+    result = subprocess.run(
+        [
+            str(INSTALL),
+            "--dry-run",
+            "--only",
+            "core",
+            "--source",
+            f"https://{GITLAB_HOST}/group/claude-pack.git",
+        ],
+        capture_output=True,
+        text=True,
+        env=env.env,
+        check=False,
+    )
+    assert f"glab auth login --hostname {GITLAB_HOST}" in result.stdout
+    assert f"credential.https://{GITLAB_HOST}.helper '!glab auth git-credential'" in result.stdout
+    assert "gh auth setup-git" not in result.stdout
+    assert "not done: git has no credential helper for " + GITLAB_HOST in result.stdout
 
 
 def test_bad_scope_and_unknown_flag_fail(env: Env) -> None:
