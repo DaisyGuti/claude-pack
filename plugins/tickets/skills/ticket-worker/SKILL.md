@@ -54,12 +54,16 @@ Paths used below (read them as `<scripts>` and `<data>`):
    request. The worker gets a throwaway worktree of the repo Claude Code was started in, so a
    current folder outside any git repository stops here: tell the user to start Claude Code
    inside one of the registry's clones.
-2. Run **auth-check**, **current-user**, **capture-board**, then **list-items** and match the
-   item on `(number, repo)`; keep its `item_ref`. An issue that is not on the board skips every
+2. Run **auth-check** and **current-user**. If the registry sets `works_for` and it differs
+   from the signed-in login (case-insensitively), stop: "Signed in as <login>, but this
+   registry works only for <works_for>." Then run **capture-board** and **list-items** and
+   match the item on `(number, repo)`; keep its `item_ref`. An issue that is not on the board skips every
    board move: say so in the report.
 3. **read-issue**. If it is assigned to someone else, or to nobody, stop before anything else:
-   change nothing on the ticket, say who it is assigned to (or that it is unassigned), and offer
-   to assign it to the current user with **assign**. Run **assign** only when the user says to.
+   change nothing on the ticket and say who it is assigned to (or that it is unassigned). For
+   an unassigned ticket, offer to assign it to the current user with **assign**, and run
+   **assign** only when the user says to. Never offer to take a ticket assigned to someone
+   else; that person reassigns it.
    A closed issue or one carrying the blocked label also stops here, with that fact.
 
 ## 3. Choose the model

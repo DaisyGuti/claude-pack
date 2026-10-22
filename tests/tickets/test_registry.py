@@ -129,6 +129,13 @@ def test_parse_reads_board_labels_models_and_repos(filled_registry: Path) -> Non
     assert "lane_meaning" in reg
 
 
+def test_works_for_is_optional_and_read_from_the_tracker_section(filled_registry: Path) -> None:
+    text = (filled_registry / "registry.md").read_text(encoding="utf-8")
+    assert registry.parse(text)["works_for"] == ""
+    pinned = text.replace("- Host: `github.com`", "- Host: `github.com`\n- Works for: `DaisyGuti`")
+    assert registry.parse(pinned)["works_for"] == "DaisyGuti"
+
+
 def test_tilde_in_a_clone_path_expands_against_home(tmp_path: Path) -> None:
     text = (PLUGIN / "registry.example.md").read_text(encoding="utf-8")
     reg = registry.parse(text, home=tmp_path)
