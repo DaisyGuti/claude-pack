@@ -172,7 +172,9 @@ what it does now. Then:
 - The split: each subagent with its model, and the units you kept inline.
 - If the model or effort you ran on was wrong for the work: which axis (more effort on the
   same model, or a different model) and the decision that needed it.
-- Assumptions, deferrals and anything you could not verify.
+- Assumptions, deferrals and anything you could not verify. A choice a standing rule made
+  for you (the commit attribution trailer, a CLAUDE.md or memory rule) is not an
+  assumption; leave it out.
 
 Plain language, short paragraphs, lists only for parallel items, no narration of tools.
 Durable output (research with sources, designs, audits) goes in the repo's own place for it
