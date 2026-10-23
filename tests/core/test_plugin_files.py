@@ -82,6 +82,18 @@ def test_gates_run_at_the_repos_full_parallelism():
     assert "**Run at the repo's full parallelism.**" in worker
 
 
+def test_new_environment_variables_land_in_the_example_file():
+    # A change added 29 variables a developer could not discover; the rule is generic.
+    standards = (PLUGIN / "skills" / "eng" / "references" / "engineering-standards.md").read_text(
+        encoding="utf-8"
+    )
+    title = "Every new environment variable lands in the repo's example env file"
+    assert f"- {title}" in standards
+    assert f"**{title}.**" in standards
+    worker = (PLUGIN.parent / "tickets" / "agents" / "ticket-worker.md").read_text(encoding="utf-8")
+    assert "committed example env file" in worker
+
+
 @pytest.mark.parametrize("path", SKILLS, ids=lambda p: p.parent.name)
 def test_skill_frontmatter_and_size(path):
     fm = frontmatter(path)
