@@ -1,0 +1,52 @@
+# The gates from the README's "Gates before a merge", run on every pull request and on main.
+# The job name `check` is the required status check in the main ruleset; renaming it means
+# updating that ruleset too. .gitlab-ci.yml runs the same steps on GitLab.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.12.23"
+          python-version: "3.12"
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      # scripts/validate.py runs `claude plugin validate`, which needs no login.
+      - name: Install Claude Code
+        run: npm install --global @anthropic-ai/claude-code@2.1.302
+
+      - name: Validate the marketplace and every plugin
+        run: uv run python scripts/validate.py
+
+      - name: Ruff
+        run: |
+          uv run ruff check
+          uv run ruff format --check
+
+      - name: Shellcheck every shell script
+        run: git ls-files -z '*.sh' | xargs -0 uvx --from shellcheck-py==0.11.0.1 shellcheck -x
+
+      - name: Tests
+        run: uv run pytest -q

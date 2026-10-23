@@ -410,8 +410,12 @@ uv run python scripts/validate.py <plugin>   # marketplace, plugin, skills, agen
 uv run pytest tests/<plugin>
 uv run ruff check
 uv run ruff format --check
-shellcheck -x install.sh                     # only when you change install.sh
+git ls-files -z '*.sh' | xargs -0 shellcheck -x   # every shell script
 ```
+
+CI runs all of these over the whole pack on every pull request and on `main`
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml), or
+[`.gitlab-ci.yml`](.gitlab-ci.yml) on GitLab). Its `check` job must pass before a merge.
 
 `claude plugin validate --strict` cannot pass here, because `version` is left out on purpose so
 updates follow the git commit. `scripts/validate.py` allows that one warning and fails on every
