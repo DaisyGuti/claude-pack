@@ -126,7 +126,9 @@ start line.
    - Fix what you find before step 9, so the checks run on the fixed state.
 9. **Verify, then land.**
    - Run the repo's full gates (lint, types, tests, build) once, on exactly what you will
-     commit. Read real exit codes; never pipe a test runner through `tail` or `grep` and
+     commit, together and at the repo's full parallelism. The standards file says how to
+     find that for this repo, and the report gives each gate's wall time. Read real exit
+     codes; never pipe a test runner through `tail` or `grep` and
      call the result a pass.
    - Confirm the test meant to cover the change reaches the changed code. For a fix, watch
      it fail without the change, by running it on the parent commit in a throwaway

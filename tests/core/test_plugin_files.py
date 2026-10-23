@@ -68,6 +68,20 @@ def test_eng_guards_its_own_turn_budget():
     assert int(frontmatter(PLUGIN / "agents" / "forward-tester.md")["maxTurns"]) >= 60
 
 
+def test_gates_run_at_the_repos_full_parallelism():
+    # An eng run capped a 16-worker suite at 4; the rule is generic, never repo-specific.
+    standards = (PLUGIN / "skills" / "eng" / "references" / "engineering-standards.md").read_text(
+        encoding="utf-8"
+    )
+    assert "- Run tests and gates at the repo's full parallelism" in standards
+    assert "**Run tests and gates at the repo's full parallelism.**" in standards
+    assert "Never lower the worker count without a stated reason" in standards
+    eng = (PLUGIN / "agents" / "eng.md").read_text(encoding="utf-8")
+    assert "at the repo's full parallelism" in eng
+    worker = (PLUGIN.parent / "tickets" / "agents" / "ticket-worker.md").read_text(encoding="utf-8")
+    assert "**Run at the repo's full parallelism.**" in worker
+
+
 @pytest.mark.parametrize("path", SKILLS, ids=lambda p: p.parent.name)
 def test_skill_frontmatter_and_size(path):
     fm = frontmatter(path)

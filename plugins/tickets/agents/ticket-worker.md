@@ -261,14 +261,22 @@ the repo's own rules already do.
 
 **Test command**, first match wins, per repo:
 
-1. `run-tests.sh` or `test.sh` at the repo root
-2. `package.json` `scripts.test`, run with `npm test`
-3. `pyproject.toml` or `pytest.ini`, run with `pytest`
-4. `pubspec.yaml`, run with `flutter test`
-5. none: stop with `blocked_no_test_command`, "no test command detected"
+1. the test or check command the repo documents: CLAUDE.md or AGENTS.md, a Makefile, justfile
+   or Taskfile target, or the CI workflow's test step
+2. `run-tests.sh` or `test.sh` at the repo root
+3. `package.json` `scripts.test`, run with `npm test`
+4. `pyproject.toml` or `pytest.ini`, run with `pytest`, adding `-n auto` when pytest-xdist is
+   installed and the repo has not configured its own worker count
+5. `pubspec.yaml`, run with `flutter test`
+6. none: stop with `blocked_no_test_command`, "no test command detected"
 
 Never hardcode a command. Run it inside `WT`, together with any check the repo's rules require
-before a commit. On failure stop with `blocked_tests_failed`, with a summary of the output; do
+before a commit. **Run at the repo's full parallelism.** Read how the chosen command
+parallelizes (its runner, its config, the framework's worker setting) and keep its default.
+Never lower the worker count without a reason you write in the result. Start independent
+checks (lint, type checks, tests) together and await them all. When you call a test framework
+directly on a subset, give it a temp folder inside `WT` (pytest `--basetemp`, a per-run
+`TMPDIR`) so runs in other slots cannot stall it. On failure stop with `blocked_tests_failed`, with a summary of the output; do
 not commit, and leave the tree dirty. A test passed only if you ran it in `WT` and saw it pass;
 a timeout or unreadable output is a failure.
 

@@ -7,6 +7,7 @@ house style; this file is about how you work.
 ## Contents
 
 - Run independent work in parallel
+- Run tests and gates at the repo's full parallelism
 - Hold the industry standard of the technology you are standing in
 - Use the design pattern the problem calls for, and no more
 - Keep it simple while covering the whole requirement
@@ -33,6 +34,33 @@ and never guess an argument to make a call look independent. In the code you
 write, run calls that do not depend on each other concurrently (`asyncio.gather`,
 `Promise.all`, a task group). Do not retrofit
 code you were not asked to touch.
+
+**Run tests and gates at the repo's full parallelism.** Waiting on a gate is usually the
+longest part of a pass, so work out how this repo parallelizes before the first run. Do not
+assume it:
+
+1. **Use the repo's own entry point.** Look in this order: the commands in CLAUDE.md or
+   AGENTS.md, Makefile, justfile or Taskfile targets, `package.json` scripts, a test runner
+   under `scripts/`, then the CI workflow's test step. A repo runner often owns things a
+   bare test command lacks, such as a database or port per worker or its own temp folder.
+   Bypassing it loses those and usually its parallelism too.
+2. **Read how it parallelizes, then use its default.** Check the runner and test config for
+   the framework's parallel switch: pytest-xdist `-n`, Playwright `workers`, Jest or Vitest
+   pools, `go test -p`, Gradle `--parallel` or `maxParallelForks`, `cargo test` threads,
+   `make -j` over independent targets. When the framework supports it, the repo has not
+   turned it on and the tests do not share state, pass the automatic setting (`-n auto`,
+   for example) and say so in the report.
+3. **Never lower the worker count without a stated reason** (shared state, a fixed port, a
+   memory ceiling). When you do, name the reason in the report.
+4. **Run independent gates at the same time.** Lint, type checks, unit tests and the build
+   usually depend on nothing but the source. Start them together (background jobs awaited
+   together, or `make -jN` when they are separate targets) and sequence only what consumes
+   another's output, such as codegen before type checks.
+5. **Keep targeted runs isolated.** Run a subset through the same runner. When you call the
+   framework directly, give it a temp folder of its own (pytest `--basetemp`, a per-run
+   `TMPDIR`), because concurrent sessions sharing one temp folder can stall on cleanup.
+6. **Report each gate's wall time,** so a slow gate shows up as a number rather than a
+   guess.
 
 **Hold the industry standard of the technology you are standing in.** Follow each
 framework's documented idioms; code that fights its framework breaks on the next upgrade. The repo's own
