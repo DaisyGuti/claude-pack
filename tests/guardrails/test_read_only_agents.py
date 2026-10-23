@@ -362,7 +362,10 @@ def ro(g, world, tmp_path):
     """ro(agent, command) -> rule ids; the temp folder sits beside the repo, not inside it."""
     temp = tmp_path / "temp"
     temp.mkdir()
-    env = {**world["env"], "TMPDIR": str(temp)}
+    # On Linux tmp_path sits under /tmp, which read-only agents may write to, so the world's
+    # fake home would count as temp space. A real home is never there; the hook only reads
+    # HOME as a path, so point it somewhere outside every temp root.
+    env = {**world["env"], "TMPDIR": str(temp), "HOME": "/nonexistent/home"}
 
     def _ro(agent, command, tool="Bash", **tool_input):
         payload = {
