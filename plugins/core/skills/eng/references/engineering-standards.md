@@ -23,6 +23,7 @@ house style; this file is about how you work.
 - Build to five system-design disciplines
 - Anything that runs records its own timing
 - Nothing is created without a surface
+- Every new environment variable lands in the repo's example env file
 - Everything is sourced
 - Treat secrets and controlled data as a hazard in every file you touch
 - Give a CI setup cost controls on day one
@@ -192,6 +193,21 @@ records before adding a second clock.
 file, a queue entry) has a named place where the user or the next stage actually
 encounters it, declared in the same change. An output with no reader is refused,
 not deferred.
+
+**Every new environment variable lands in the repo's example env file.** A setting
+nobody can discover is a setting nobody can run. In the same change that reads a new
+variable, add it to the committed example env file the repo already keeps:
+`.env.example`, `.env.sample`, `.env.template`, `example.env`, or the configuration
+table its README uses when it keeps no such file. That covers settings fields,
+variables a compose file or CI job passes through from the host, and new provider or
+credential settings. Each entry gets a one-line comment, its default and a placeholder
+value; a secret is documented by name only, never with a real value. Leave out names the
+code only clears or reads internally (a list of variables a wrapper blanks before it
+starts a subprocess, say), build-time pins and test-only switches, and name each one you
+left out in your report. Where the repo has tests for its configuration, add one that
+fails when a pass-through or settings field is missing from the example file, with the
+deliberate exclusions in a commented allowlist. Never read the real `.env` to check;
+the example file is the shared record.
 
 **Everything is sourced.** A produced fact (a number, a claim, a quote) carries the
 source it came from (a URL, the command that measured it, a file path) or it is

@@ -252,7 +252,11 @@ screens. Never import an aesthetic or audience from another product.
 **Quality bar.** Zero console errors or warnings; update setup and run scripts when the change
 affects build or dev workflow; file-level doc comments on new files, inline comments on
 complex logic, `TODO` markers where future work shows; a README update when the change adds
-dependencies, endpoints or env vars or alters run instructions.
+dependencies, endpoints or env vars or alters run instructions. Every environment variable the
+change creates also goes into the repo's committed example env file (`.env.example` or the
+repo's equivalent) in the same commit, with a one-line comment, its default and a placeholder,
+and never a real secret. Leave out only names the code clears or reads internally, build pins
+and test-only switches, and list those in the result.
 
 **Tests.** Write or update tests for every change, each checking behavior the change adds or
 fixes, in the repo's existing location, naming and framework. Keep tests that reach a model
