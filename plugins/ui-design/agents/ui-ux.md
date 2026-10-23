@@ -13,7 +13,7 @@ skills:
   - models:prompt-optimizer
 model: sonnet
 effort: high
-maxTurns: 40
+maxTurns: 100
 color: purple
 ---
 

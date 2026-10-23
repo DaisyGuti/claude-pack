@@ -8,7 +8,7 @@ description: >-
 tools: Read, Grep, Glob, Bash
 model: sonnet
 effort: high
-maxTurns: 40
+maxTurns: 80
 skills:
   - security-scan
   - models:prompt-optimizer
