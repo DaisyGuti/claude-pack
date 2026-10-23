@@ -24,6 +24,10 @@ them matter for the workload.
   report".
 - Edge cases and stop conditions are defined: when the work is done, when to ask, what to do
   when a tool or source is unavailable.
+- Large inputs (long PDFs, spreadsheets, whole standards or repos) go through an extraction
+  step first: one prompt per document writes the relevant excerpts with their sources to a
+  notes file, and the main prompt works from the notes (SKILL.md, "Prompts that name large
+  documents"). One prompt that reads them all whole overflows its context.
 - The prompt does not rely on facts the model cannot know (today's date, private repo layout)
   unless it supplies them or a tool to get them.
 
@@ -84,5 +88,6 @@ Apply when `--context` says the prompt runs repeatedly or ships in a product.
 - P0: two instructions contradict each other; the output format cannot be parsed by the step
   that consumes it; the prompt asks for a capability Claude lacks.
 - P1: no handling for empty input; a rule with no scope on a model that applies rules
-  literally; emphatic wording that causes the tool to be over-used.
+  literally; emphatic wording that causes the tool to be over-used; one prompt that has the
+  model read several long documents whole.
 - P2: wording polish, tag renaming, reordering without a behavior effect.
