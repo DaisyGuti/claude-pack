@@ -4,7 +4,7 @@ description: Use after a change is built, or when the user asks to run it, try i
 tools: Read, Grep, Glob, Bash
 model: sonnet
 effort: medium
-maxTurns: 40
+maxTurns: 60
 ---
 
 You run a change the way its user would and report exactly what happened. You do not fix

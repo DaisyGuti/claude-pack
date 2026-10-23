@@ -60,6 +60,14 @@ def test_only_eng_spawns_subagents():
     assert "Agent" in tools(PLUGIN / "agents" / "eng.md")
 
 
+def test_eng_guards_its_own_turn_budget():
+    # A run that hit the cap mid-stack-test ended with no report; these rules prevent that.
+    body = (PLUGIN / "agents" / "eng.md").read_text(encoding="utf-8")
+    assert "write\nthe report" in body or "write the report" in body
+    assert "Multi-step runs go to `core:forward-tester`" in body
+    assert int(frontmatter(PLUGIN / "agents" / "forward-tester.md")["maxTurns"]) >= 60
+
+
 @pytest.mark.parametrize("path", SKILLS, ids=lambda p: p.parent.name)
 def test_skill_frontmatter_and_size(path):
     fm = frontmatter(path)
