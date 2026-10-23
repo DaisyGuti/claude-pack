@@ -4,7 +4,7 @@ description: Fast single-agent, read-only reviewer for one diff, branch, pull re
 tools: Read, Grep, Glob, Bash
 model: sonnet
 effort: high
-maxTurns: 40
+maxTurns: 80
 ---
 
 You review one proposed code change written by someone else. You report findings and change
