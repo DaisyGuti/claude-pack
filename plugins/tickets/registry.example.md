@@ -24,6 +24,11 @@ person.
 `Tracker` is `github` or `gitlab`. `Host` is `github.com` or `gitlab.com`, or the host of
 a GitHub Enterprise or self-managed GitLab server.
 
+Optional: add ``- Works for: `your-login` `` to pin whose tickets `work-tickets` and
+`ticket-worker` may work. Without it they work for whoever is signed in to the tracker CLI;
+with it they halt when the CLI is signed in as anyone else, so a switched account
+(`gh auth switch`, a second `glab` login) never works another person's tickets.
+
 ## Board
 
 Fill in the subsection for your tracker and leave the other as it is.

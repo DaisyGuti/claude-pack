@@ -152,6 +152,7 @@ def parse(text: str, home: Path | None = None) -> dict[str, Any]:
     return {
         "tracker": tracker,
         "host": tracker_vals.get("host", ""),
+        "works_for": tracker_vals.get("works for", ""),
         "board": board,
         "lanes": lanes,
         "lane_meaning": lane_meaning,

@@ -150,7 +150,10 @@ A worker's `RESULT` line goes to `finish --json` as it is (it already carries `s
 At the start of every run, so a renamed lane or an edited registry takes effect:
 
 1. **current-user** gives the login this run works for. If it cannot be read, halt: "Cannot
-   tell who is signed in to the tracker CLI."
+   tell who is signed in to the tracker CLI." If `registry.py show` has a non-empty
+   `works_for` and it differs from that login (compared case-insensitively), halt: "Signed in
+   to the tracker CLI as <login>, but this registry works only for <works_for>. Switch
+   accounts (`gh auth switch` or `glab auth login`) and run again."
 2. **capture-board** with the registry's board, lanes and priorities gives `tracker_ids`,
    `missing_lanes`, `missing_priorities`, `has_priority` and, on GitHub, `priority_mode`
    (also stored in `tracker_ids`). Without priority support the run

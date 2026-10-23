@@ -45,6 +45,8 @@ Paths used below and in the procedure (read them as `<scripts>` and `<data>`):
 - Only Ready tickets assigned to whoever is signed in to the tracker CLI are worked.
   Unassigned tickets and tickets assigned to others are counted in the report and never
   touched. There is no flag for someone else's tickets; that takes signing in as them.
+  When the registry's Tracker section sets `Works for`, a run signed in as any other login
+  halts before reading the board.
 - A Ready ticket carrying the registry's blocked label is held: never dispatched, never
   touched, and listed in the dry run and the report with the kind from its latest `Blocked:`
   comment.
