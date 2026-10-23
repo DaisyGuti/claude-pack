@@ -27,6 +27,11 @@ run the prompt). With no `--file`, the text after the flags is the prompt.
 ## Steps
 
 1. **Classify the input.**
+   - Files, folders and links the prompt names (PDFs, spreadsheets, repos, web or Notion
+     pages) are inputs for the model that will run it. Do not open, fetch or read them
+     yourself, since a long standard or spreadsheet overflows the context. Read only `--file`
+     and the guidance pages in step 2. When the prompt names large documents, keep every one
+     and write a chain (see "Prompts that name large documents").
    - Valid prompt (instructions aimed at a language model): continue.
    - Empty: ask the user to paste the prompt or pass `--file`, and stop.
    - Not a prompt (data, a bare question, a spec): say what it looks like and ask whether to
@@ -98,11 +103,32 @@ Use a subagent only for independent work of real size; do the small steps direct
 Give each unit its own model and effort; an unset model inherits the session's, which is
 usually the most expensive. Mark a serial prompt plainly as "Serial: every step feeds the next".
 
+## Prompts that name large documents
+
+A prompt that asks one session to read several long PDFs, spreadsheets, standards or pages
+runs out of context before it does the work. Rewrite it as a chain of prompts:
+
+1. **One extraction prompt per document**, all in parallel. Each one carries the task and the
+   criteria for what counts as relevant (the sections, controls, process steps or columns
+   the user named), and tells the model to search or read page ranges rather than read the
+   whole file. It writes a notes file, such as `notes/<document>.md`. Each entry there is a
+   verbatim excerpt with its source: document title, path or link, and page, section,
+   control ID, or sheet and row. It records "nothing relevant" when that is the result, and
+   lists any parts it could not read.
+2. **The main prompt**, after every extraction. It reads the notes files in place of the
+   documents, cites the sources recorded there, and opens a source document only to check
+   one citation.
+
+Keep the user's original steps and approvals in the main prompt. Small inputs (a README, one
+short page) can stay in the main prompt instead of getting their own extraction.
+
 ## Report format
 
 Output these sections in order, with no preamble. Write "None" for an empty section.
 
 1. **Final version**: the optimized prompt in one block, ready to copy. No commentary inside.
+   For a chain, one block per prompt in run order, each headed with its stage, what it reads
+   and the file it writes.
 2. **How to run it**: the model and effort with a one-clause reason, then the parallel plan as
    a table (stage, unit, model, effort, depends on), or "Serial".
 3. **Iterations**: one line per round, then "Total rounds: N".
