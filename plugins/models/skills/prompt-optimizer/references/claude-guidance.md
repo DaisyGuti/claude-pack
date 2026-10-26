@@ -95,5 +95,7 @@ These come from the hub page's general-principles section and apply to the promp
 - Prompting best practices (hub): https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices
 - Effort: https://platform.claude.com/docs/en/build-with-claude/effort
 - Models overview: https://platform.claude.com/docs/en/models/overview
+- Claude Code tools reference ("Read tool behavior" covers PDFs, page ranges and the poppler
+  requirement): https://code.claude.com/docs/en/tools-reference
 - Techniques above were read from the hub page on 2026-10-16; the per-model pages are read at
   run time and are not summarized here, because they change with each release.

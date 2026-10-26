@@ -28,6 +28,11 @@ them matter for the workload.
   step first: one prompt per document writes the relevant excerpts with their sources to a
   notes file, and the main prompt works from the notes (SKILL.md, "Prompts that name large
   documents"). One prompt that reads them all whole overflows its context.
+- A chain runs from one paste: the main prompt holds the extraction prompts and its
+  `<execution>` block starts them. Each extraction first records what its input actually is,
+  has a fallback when a tool is missing, and stops to ask instead of guessing. A source the
+  task needs but the user did not supply gets its own extraction when it is public, and a
+  question to the user when it is not.
 - The prompt does not rely on facts the model cannot know (today's date, private repo layout)
   unless it supplies them or a tool to get them.
 
@@ -89,5 +94,7 @@ Apply when `--context` says the prompt runs repeatedly or ships in a product.
   that consumes it; the prompt asks for a capability Claude lacks.
 - P1: no handling for empty input; a rule with no scope on a model that applies rules
   literally; emphatic wording that causes the tool to be over-used; one prompt that has the
-  model read several long documents whole.
+  model read several long documents whole; a chain the user has to start by hand; an
+  extraction that assumes what an unopened input holds; a public source the task needs left
+  as an open question.
 - P2: wording polish, tag renaming, reordering without a behavior effect.
