@@ -106,7 +106,7 @@ usually the most expensive. Mark a serial prompt plainly as "Serial: every step 
 ## Prompts that name large documents
 
 A prompt that asks one session to read several long PDFs, spreadsheets, standards or pages
-runs out of context before it does the work. Rewrite it as a chain of prompts:
+runs out of context before it does the work. Rewrite it as a chain that runs from one paste:
 
 1. **One extraction prompt per document**, all in parallel. Each one carries the task and the
    criteria for what counts as relevant (the sections, controls, process steps or columns
@@ -115,9 +115,43 @@ runs out of context before it does the work. Rewrite it as a chain of prompts:
    verbatim excerpt with its source: document title, path or link, and page, section,
    control ID, or sheet and row. It records "nothing relevant" when that is the result, and
    lists any parts it could not read.
-2. **The main prompt**, after every extraction. It reads the notes files in place of the
-   documents, cites the sources recorded there, and opens a source document only to check
-   one citation.
+   - You have not opened the input, so the prompt must not depend on a guess about it: a pull
+     request can hold design documents rather than code, and a spreadsheet can lack the
+     columns you expect. The extraction first records what the input is (its type, layout and
+     size), then pulls what is relevant from what is actually there.
+   - Do not tie an extraction to a tool that may be missing on the runner's machine. Have it
+     try one route on a single page range first, move to the next route when that fails, and
+     stop and name what to install when none works. In Claude Code, the Read tool reads a long
+     PDF by page range only when poppler is installed (tools reference in
+     [references/claude-guidance.md](references/claude-guidance.md)), and `pdftotext` comes
+     from poppler too.
+2. **One extraction prompt per source the task needs but the user did not supply**, such as
+   CNSSI 1253, FIPS 199 and NIST SP 800-60 for a DoD categorization review. Do not leave these
+   as open questions. When the publisher posts the document openly, the extraction downloads
+   it from the publisher's site and records the URL and version it used. When you know a
+   needed source is not public (an internal wiki, a login-only portal), ask the user for a
+   copy before you write the final version. When a download fails at run time, the extraction
+   stops and asks the user for a copy rather than citing the document from memory.
+3. **The main prompt**, which holds the extraction prompts and runs the chain. Its
+   `<execution>` block (see "Parallel plan") starts one subagent per extraction prompt, gives
+   it that prompt word for word with its own model and effort, and waits until every notes
+   file is written. The main prompt then reads the notes files in place of the documents,
+   cites the sources recorded there, and opens a source document only to check one citation.
+
+```text
+<extraction name="process-instruction">
+...the extraction prompt for one document...
+</extraction>
+<extraction name="control-catalog">
+...
+</extraction>
+<execution>
+Stage 1, in parallel: one subagent per <extraction> above, given its text word for word;
+process-instruction and control-catalog on model sonnet, effort medium.
+Stage 2, after every notes file exists: the review below, in this session.
+</execution>
+...the review, the approval step and anything that follows it...
+```
 
 Keep the user's original steps and approvals in the main prompt. Small inputs (a README, one
 short page) can stay in the main prompt instead of getting their own extraction.
@@ -127,8 +161,8 @@ short page) can stay in the main prompt instead of getting their own extraction.
 Output these sections in order, with no preamble. Write "None" for an empty section.
 
 1. **Final version**: the optimized prompt in one block, ready to copy. No commentary inside.
-   For a chain, one block per prompt in run order, each headed with its stage, what it reads
-   and the file it writes.
+   A chain is one block too: the main prompt with its extraction prompts inside it, so one
+   paste runs everything.
 2. **How to run it**: the model and effort with a one-clause reason, then the parallel plan as
    a table (stage, unit, model, effort, depends on), or "Serial".
 3. **Iterations**: one line per round, then "Total rounds: N".
