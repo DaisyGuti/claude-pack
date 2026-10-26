@@ -279,6 +279,24 @@ def test_uninstall_without_a_record_says_so(env: Env) -> None:
     assert "nothing to remove" in result.stdout
 
 
+def test_uninstall_dry_run_changes_nothing(env: Env) -> None:
+    env.run("--only", "core", "--with-preferences")
+    ledger = env.config / ".claude-pack-installed"
+    before = ledger.read_text()
+    result = env.run("--uninstall", "--dry-run")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert ledger.read_text() == before
+    assert env.plugins() == {"core@claude-pack"}
+    assert (env.config / "CLAUDE.md").exists()
+    assert "would run: claude plugin uninstall core@claude-pack" in result.stdout
+    assert f"would remove: {env.config / 'CLAUDE.md'}" in result.stdout
+    assert "would remove 3 item(s)" in result.stdout
+    # The record survived, so the real run still finds everything it installed.
+    assert env.run("--uninstall").returncode == 0
+    assert env.plugins() == set() and env.marketplaces() == set()
+    assert not ledger.exists()
+
+
 def test_other_source_for_the_same_marketplace_is_refused(env: Env, tmp_path: Path) -> None:
     env.run("--only", "core")
     other = tmp_path / "other"

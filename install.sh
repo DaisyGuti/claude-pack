@@ -165,6 +165,7 @@ ledger_has() { # ledger_has KIND FIELD...
 }
 
 ledger_drop() { # ledger_drop KIND FIELD...
+  if [ "$DRY_RUN" = "yes" ]; then return 0; fi
   [ -f "$LEDGER" ] || return 0
   local line="$1" f tmp
   shift
@@ -695,8 +696,12 @@ uninstall_all() {
   while IFS="$TAB" read -r kind a b; do
     [ "$kind" = "preferences" ] || continue
     if [ -f "$a" ] && cmp -s "$PACK/preferences/CLAUDE.md" "$a"; then
-      [ "$DRY_RUN" = "yes" ] || rm "$a"
-      say "removed: $a"
+      if [ "$DRY_RUN" = "yes" ]; then
+        say "  would remove: $a"
+      else
+        rm "$a"
+        say "removed: $a"
+      fi
       ledger_drop preferences "$a"
       removed=$((removed + 1))
     else
@@ -719,7 +724,11 @@ uninstall_all() {
       failures=$((failures + 1))
     fi
   done <"$LEDGER"
-  say "removed $removed item(s)"
+  if [ "$DRY_RUN" = "yes" ]; then
+    say "would remove $removed item(s)"
+  else
+    say "removed $removed item(s)"
+  fi
   if [ "$failures" -gt 0 ]; then return 1; fi
 }
 
