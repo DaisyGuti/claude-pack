@@ -188,6 +188,11 @@ with the git credentials already on your machine and never asks for a password, 
    ```sh
    claude plugin install core --marketplace DaisyGuti/claude-pack
    ```
+
+   Either way, install poppler if Claude will read long PDFs such as standards and specs:
+   `brew install poppler` on macOS, or `sudo apt-get install poppler-utils` on Debian and
+   Ubuntu. Claude Code reads a PDF longer than 10 pages only with it. The installer script
+   reports when it is missing but does not install it.
 4. **Reload.** Restart Claude Code, or run `/reload-plugins` inside a session. Type `/` and look
    for names like `/core:project-setup`.
 5. **Turn on automatic updates for this marketplace.** They are off by default for any

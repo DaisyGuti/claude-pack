@@ -313,6 +313,16 @@ gitlab_credential_hint() { # gitlab_credential_hint HOST AUTHORITY : the one-lin
   printf "Run: glab auth login --hostname %s, then: git config --global --add credential.https://%s.helper '!glab auth git-credential'" "$1" "$2"
 }
 
+poppler_hint() { # poppler_hint : the command that installs poppler on this machine
+  if command -v brew >/dev/null 2>&1; then
+    printf 'Run: brew install poppler'
+  elif command -v apt-get >/dev/null 2>&1; then
+    printf 'Run: sudo apt-get install poppler-utils'
+  else
+    printf 'Install a poppler build that puts pdftoppm on your PATH.'
+  fi
+}
+
 check_prerequisites() { # check_prerequisites : exits on a missing hard requirement
   local missing=0 cv py_ok helper host authority
   host="$(source_host)"
@@ -362,6 +372,13 @@ check_prerequisites() { # check_prerequisites : exits on a missing hard requirem
     fi
   else
     say "  not found: glab (the GitLab command line, https://gitlab.com/gitlab-org/cli). The ticket and merge request skills use it on GitLab."
+  fi
+  # Claude Code renders a page-range read of a PDF with pdftoppm, so without poppler it cannot
+  # read a PDF longer than 10 pages (the standards and specs the skills work from).
+  if command -v pdftoppm >/dev/null 2>&1; then
+    say "  ok: poppler (pdftoppm), which Claude Code uses to read long PDFs"
+  else
+    say "  not found: poppler (pdftoppm). Claude Code needs it to read a PDF longer than 10 pages. $(poppler_hint)"
   fi
   if source_uses_https; then
     helper="$(credential_helper_state "$authority")"
