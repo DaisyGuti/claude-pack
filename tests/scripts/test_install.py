@@ -76,19 +76,17 @@ class Env:
         self.config = tmp / "config"
         self.config.mkdir()
         self.state = tmp / "state.json"
-        bin_dir = tmp / "bin"
-        bin_dir.mkdir()
-        fake = bin_dir / "claude"
+        self.bin = tmp / "bin"
+        self.bin.mkdir()
+        fake = self.bin / "claude"
         fake.write_text(FAKE_CLAUDE)
         fake.chmod(0o755)
         # Stand-ins for the tracker CLIs, so a run never reaches the network or a real sign-in.
         for tool in ("gh", "glab"):
-            stub = bin_dir / tool
-            stub.write_text("#!/bin/sh\nexit 0\n")
-            stub.chmod(0o755)
+            self.stub(tool)
         self.env = {
             **os.environ,
-            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "PATH": f"{self.bin}:{os.environ['PATH']}",
             "CLAUDE_CONFIG_DIR": str(self.config),
             "FAKE_CLAUDE_STATE": str(self.state),
             # An empty git config, so the credential-helper check does not read the machine's.
@@ -97,6 +95,12 @@ class Env:
             # git refuses https and ssh, so reaching a remote fails at once instead of dialling out.
             "GIT_ALLOW_PROTOCOL": "file",
         }
+
+    def stub(self, tool: str) -> None:
+        """Put a do-nothing stand-in for `tool` first on PATH."""
+        path = self.bin / tool
+        path.write_text("#!/bin/sh\nexit 0\n")
+        path.chmod(0o755)
 
     def run(self, *args: str) -> subprocess.CompletedProcess[str]:
         # The ROOT directory is also a valid local marketplace source: it holds marketplace.json.
@@ -449,6 +453,29 @@ def test_glab_as_the_helper_for_the_source_host_is_recognized(env: Env, tmp_path
         check=False,
     )
     assert f"git has no credential helper for {GITLAB_HOST}" in result.stdout
+
+
+def test_poppler_on_path_is_reported_ok(env: Env) -> None:
+    env.stub("pdftoppm")
+    result = env.run("--dry-run", "--only", "core")
+    assert "ok: poppler (pdftoppm)" in result.stdout
+
+
+@pytest.mark.skipif(shutil.which("pdftoppm") is not None, reason="poppler is installed here")
+def test_missing_poppler_is_reported_with_its_fix_and_installs_nothing(env: Env) -> None:
+    # A stand-in brew decides which fix is printed; the installer must never run it.
+    brew_log = env.bin.parent / "brew.log"
+    (env.bin / "brew").write_text(f'#!/bin/sh\necho "$@" >> "{brew_log}"\n')
+    (env.bin / "brew").chmod(0o755)
+    result = env.run("--only", "core")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert env.plugins() == {"core@claude-pack"}
+    assert "not found: poppler (pdftoppm)" in result.stdout
+    assert "Run: brew install poppler" in result.stdout
+    check = env.run("--check", "--only", "core")
+    assert check.returncode == 0, check.stdout + check.stderr
+    assert "not found: poppler (pdftoppm)" in check.stdout
+    assert not brew_log.exists()
 
 
 def test_bad_scope_and_unknown_flag_fail(env: Env) -> None:
