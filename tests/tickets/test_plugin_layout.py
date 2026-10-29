@@ -128,6 +128,20 @@ def test_worker_reviews_its_diff_before_committing() -> None:
     assert "core" in manifest.get("dependencies", [])
 
 
+def test_ticket_worker_skill_turns_on_auto_fix_for_an_opened_review() -> None:
+    """The session that started the worker turns Auto-fix on, never the worker, and only for a
+    review that is open for merging; the held `needs_manual_action` review is skipped."""
+    skill = (PLUGIN / "skills" / "ticket-worker" / "SKILL.md").read_text(encoding="utf-8")
+    section = skill[skill.index("## 5. Turn on Auto-fix") : skill.index("## 6. Report")]
+    for tool in ("get_status", "bind_pr", "set_monitor"):
+        assert f"mcp__ccd_pr__{tool}" in section
+    assert "`auto_fix` true" in section and "`address_comments` true" in section
+    assert "needs_manual_action" in section
+    assert "Never enable auto-merge" in section
+    assert "Auto-fix is on for each" in skill[skill.index("## 6. Report") :]
+    assert "ccd_pr" not in (PLUGIN / "agents" / "ticket-worker.md").read_text(encoding="utf-8")
+
+
 def test_work_tickets_runs_a_rolling_pool_and_says_so_everywhere() -> None:
     """The skill and its procedure agree on the pool size, and no file still says waves."""
     skill = (PLUGIN / "skills" / "work-tickets" / "SKILL.md").read_text(encoding="utf-8")
