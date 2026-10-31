@@ -299,9 +299,16 @@ def test_cleanup_after_each_ticket_is_in_the_instructions() -> None:
         encoding="utf-8"
     )
     cleanup = procedure[procedure.index("**Cleanup.**") : procedure.index("**7d.**")]
+    cleanup = " ".join(cleanup.split())  # the prose wraps; match its words, not its line breaks
     for needed in ("worktree unlock", "worktree remove", "worktree prune", "never --force"):
         assert needed in cleanup, needed
     assert "another pid" in cleanup
+    # A refused remove puts the lock back with its original reason; a partial one is an orphan.
+    assert 'worktree lock --reason "<original reason>"' in cleanup
+    assert "Worktrees kept" in cleanup and "orphan" in cleanup
+    # The process check fails closed and states its blind spot.
+    assert "any stderr warning" in cleanup and "Any non-zero exit" in cleanup
+    assert "a cwd outside it" in cleanup and "stop what you started" in cleanup
     assert "**Cleanup**" in procedure[procedure.index("**7d.**") :]
     worker = (PLUGIN / "agents" / "ticket-worker.md").read_text(encoding="utf-8")
     final = worker[worker.index("## 10. Final report") :]
@@ -309,6 +316,9 @@ def test_cleanup_after_each_ticket_is_in_the_instructions() -> None:
     assert "FORCE" in final and "shared database server" in final
     notes = (PLUGIN / "references" / "platform-notes.md").read_text(encoding="utf-8")
     assert "about 110 worktrees" in notes
+    flat = " ".join(notes.split())
+    assert 'worktree lock --reason "<reason>"' in flat and "fails closed" in flat
+    assert "from a cwd outside it" in flat and "stop what you started" in flat
 
 
 def test_work_tickets_runs_a_rolling_pool_and_says_so_everywhere() -> None:

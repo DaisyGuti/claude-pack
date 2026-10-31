@@ -47,7 +47,15 @@ to correct; the skills and the worker agent point here instead of restating it.
   on the remote branch and has no process with its working directory inside; then
   `git worktree unlock <path>` (only a lock whose pid is the orchestrating session's own Claude
   Code process, never another session's), `git worktree remove <path>` without `--force`, and
-  `git worktree prune`. The branch keeps the commits.
+  `git worktree prune`. The branch keeps the commits. A remove that refuses after the unlock
+  gets the lock back with its original reason (`git worktree lock --reason "<reason>" <path>`),
+  so Claude Code's sweep cannot take it; one that fails partway (`failed to delete`) has already
+  unregistered the worktree, so the leftover directory is kept and reported, never `rm -rf`'d.
+  The process check (`lsof -d cwd`) fails closed on a non-zero exit or any stderr warning, and it
+  has a blind spot: a process writing into the worktree from a cwd outside it (a file watcher, a
+  Docker bind mount) is not seen, so the worker's own cleanup (stop what you started) is the
+  guard. Not yet proven on Linux: `lsof`'s exit codes and warnings, and whether lock start times
+  pad single-digit days as `ps -o lstart` does.
 - A subagent in a default-location worktree does not load that repo's `CLAUDE.md` at its root,
   so the worker reads `CLAUDE.md`, `AGENTS.md` and `CONTRIBUTING.md` itself (same page).
 - Commands that redirect git into the launch repo's main checkout (`git -C`, `GIT_DIR`, a `cd`
