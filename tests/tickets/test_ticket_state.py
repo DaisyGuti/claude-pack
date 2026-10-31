@@ -87,6 +87,24 @@ def test_begin_then_review_opened_moves_the_slot_to_completed(tmp_path: Path) ->
     assert state["completed"][0]["review_refs"] == {"shop-app": "https://x/pr/1"}  # type: ignore[index]
 
 
+def test_finish_keeps_the_follow_up_refs_a_worker_reports(tmp_path: Path) -> None:
+    """A worker's RESULT carries the follow-up tickets it filed; the record keeps them as sent."""
+    run(tmp_path, "begin", "--json", slot(7))
+    refs = [
+        {
+            "repo": "shop-app",
+            "number": 201,
+            "title": "t",
+            "url": "https://x/i/201",
+            "action": "filed",
+        },
+        {"repo": "shop-app", "number": None, "title": "u", "url": None, "action": "not_filed"},
+    ]
+    finish = json.dumps({"slot_id": "slot-1", "status": "review_opened", "follow_up_refs": refs})
+    assert run(tmp_path, "finish", "--json", finish).returncode == 0
+    assert state_of(tmp_path)["completed"][0]["follow_up_refs"] == refs  # type: ignore[index]
+
+
 @pytest.mark.parametrize(
     "status", ["blocked_tests_failed", "needs_decision", "needs_manual_action"]
 )
