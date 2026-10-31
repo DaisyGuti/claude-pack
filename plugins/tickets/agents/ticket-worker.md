@@ -441,7 +441,8 @@ Then, on the owning repo:
    in `in_progress`. The issue stays open and unlabelled.
 6. Remove the extra worktrees you made in section 3 (`git -C <clone> worktree remove --force
    <path>`, then `git -C <clone> worktree prune`). The branch is on the remote, so nothing is
-   lost. Your own starting worktree stays on disk until Claude Code's cleanup removes it.
+   lost. Your own starting worktree stays on disk; the dispatcher removes it once your result is
+   recorded (section 10).
 
 Report `status=review_opened` and stop.
 
@@ -527,6 +528,19 @@ model-fit note is skipped: nothing was committed with a closing keyword, so merg
 review closes nothing. Leave your worktrees in place.
 
 ## 10. Final report
+
+**Clean up before you return,** whatever the status, so a long run does not pile up leftovers:
+
+- Stop every process you started: dev servers, watchers, compose stacks, background jobs.
+  Close your own database connections.
+- Drop the test databases and temporary data you created, through the repo's own mechanism
+  where it has one (a test runner's cleanup or reclaim command, a documented teardown target),
+  and delete the temporary files you wrote. Never terminate another session's connections,
+  never stop or restart a shared database server, and never use `DROP DATABASE ... FORCE` on a
+  database you did not create. A database you cannot show you created stays.
+- Leave your own worktree alone. The orchestrator removes it once your result is recorded;
+  a worktree with uncommitted files or unpushed commits stays, so push or say what is left.
+- Name anything you could not clean up, and why, in the paragraph of the report.
 
 Your final message goes to whoever dispatched you. Before you write it, check that nothing
 you started is still running. It has three parts.

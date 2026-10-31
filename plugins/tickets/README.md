@@ -57,6 +57,11 @@ Run any command again; it checks the registry and names whatever is still missin
 4. A person reviews and merges. Merging closes the issue; the next `daily-grooming` pass moves
    the card to Done and frees any ticket that waited on it.
 
+Cleanup is part of each ticket: a worker stops what it started and drops its own test databases
+and temporary data before it returns, and `work-tickets` removes the worker's worktree as soon as
+its slot is recorded, when nothing in it is uncommitted or unpushed, then sweeps merged or closed
+reviews' worktrees at the end of the run. A worktree it cannot safely remove is listed in the report.
+
 Whatever a worker leaves behind is filed as a ticket: each review finding
 it does not fix (unless the finding is wrong), each `TODO` left in code, untested path,
 assumption to confirm and pre-existing problem it noticed. Once the review is open it checks

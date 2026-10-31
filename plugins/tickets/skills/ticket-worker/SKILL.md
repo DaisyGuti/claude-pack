@@ -123,6 +123,12 @@ Auto-fix sends the next event itself. [platform-notes.md](${CLAUDE_PLUGIN_ROOT}/
 
 ## 6. Report
 
+**Clean up first.** Once the result is in hand, remove the worker's worktrees as the **Cleanup** paragraph of
+[orchestrator.md](${CLAUDE_PLUGIN_ROOT}/skills/work-tickets/references/orchestrator.md) (step
+7c) describes: only when nothing in them is uncommitted or unpushed, without `--force`. A
+`review_opened` result is the case it covers; keep the worktrees of any other status and say
+where they are. Then:
+
 Relay the worker's report as yours, its Follow-ups list included. Put one line before it saying
 which model ran and why (the label, the user's choice, or the fallback), and one line saying
 Auto-fix is on for each review or why it is not. The worker's last line is a `RESULT` line; read it for the status and
