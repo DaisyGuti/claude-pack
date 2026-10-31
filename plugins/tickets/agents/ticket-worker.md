@@ -81,7 +81,9 @@ labels by role and the model labels by tier. `files.ticket_template` and `files.
 are what section 7 uses to file follow-up tickets. There are no fallback defaults: if any of it
 is missing, stop with `status=blocked_state_incomplete`, `reason="the dispatch message is
 incomplete"`. `ticket_repo` is the owning repo; `repos` lists every repo the ticket touches,
-owning repo first. `model` is informational.
+owning repo first. `model` is informational. `resume_worktrees` is optional: a map from repo
+to the worktree path of an earlier `blocked_sandbox` stop on a locked signing key (section 7);
+section 3 says how a run with it starts.
 
 **Tracker operations.** Every action on the tracker below is a named operation, shown in bold
 (**set-lane**, **comment**, ...). Read `files.adapter` in full before your first step and run
@@ -156,8 +158,13 @@ before any destructive step so a rollback has a reference.
 tree on a fresh start is `status=blocked_dirty_tree`, naming the repo and files. Never
 `git checkout <default_branch>` in a worktree; it may be checked out elsewhere. When there are
 no local commits yet and `origin/<default_branch>` has moved since the worktree was made, run
-`git -C $WT merge --ff-only origin/<default_branch>`. After your first commit, the review
-absorbs a moved default branch when it merges.
+`git -C $WT merge --ff-only origin/<default_branch>`. Past that, the default branch is merged
+in once, when the change is ready (section 6).
+
+**Resuming after a locked signing key.** When the dispatch message has `resume_worktrees`,
+`WT` for each repo in it is that path, which holds the staged change. Skip sections 5 and 6,
+check that `git -C $WT status --porcelain` shows only that change, and continue at section 7's
+**Commit**: the review and the gates already ran.
 
 ## 4. Running, stopping and the board
 
@@ -278,9 +285,12 @@ review.
 **Tests.** Write or update tests for every change, each checking behavior the change adds or
 fixes, in the repo's existing location, naming and framework. Keep tests that reach a model
 provider on the repo's mocks; a live API call in a test can cost money, so add one only where
-the repo's own rules already do.
+the repo's own rules already do. A test you write waits on the condition it needs (a state
+reached, an event seen, fake timers for polling code), never on a fixed sleep. Keep a real
+timeout only as a backstop against a hang, sized well above the normal time, so the test also
+passes on a busy machine.
 
-**Test command**, first match wins, per repo:
+**Gate command**, first match wins, per repo:
 
 1. the test or check command the repo documents: CLAUDE.md or AGENTS.md, a Makefile, justfile
    or Taskfile target, or the CI workflow's test step
@@ -291,15 +301,37 @@ the repo's own rules already do.
 5. `pubspec.yaml`, run with `flutter test`
 6. none: stop with `blocked_no_test_command`, "no test command detected"
 
-Never hardcode a command. Run it inside `WT`, together with any check the repo's rules require
-before a commit. **Run at the repo's full parallelism.** Read how the chosen command
-parallelizes (its runner, its config, the framework's worker setting) and keep its default.
-Never lower the worker count without a reason you write in the result. Start independent
-checks (lint, type checks, tests) together and await them all. When you call a test framework
-directly on a subset, give it a temp folder inside `WT` (pytest `--basetemp`, a per-run
-`TMPDIR`) so runs in other slots cannot stall it. On failure stop with `blocked_tests_failed`, with a summary of the output; do
+Never hardcode a command. While you build, run only the one test or check you are working on.
+
+**Merge the default branch, then run the gates once.** When the change is ready, bring in the
+default branch first, so the gates see the code CI will see:
+`git -C $WT fetch origin <default_branch> && git -C $WT merge --no-edit origin/<default_branch>`.
+Never rebase. When git refuses the merge because your uncommitted files overlap the incoming
+ones, commit the change to the slot branch first (section 7's **Commit**), then merge, and run
+section 7's review before the push, on `git diff <base SHA>`, instead of before the commit. A
+conflict you cannot settle without guessing at someone else's intent is
+`blocked_merge_conflict`, naming the files.
+
+Then run the gates on the merged tree, once, inside `WT`: only the ones the diff touches. That
+is the tests that cover the changed code, the lint and type checks for the languages in the
+diff, and the build when the diff touches build inputs, together with any check the repo's rules
+require before a commit. Do not run the repo's full suite: CI runs it on the review. Never run
+the gates before the merge and again after it; the one run is on the merged tree. Say in the
+review body and the report which gates ran and which were left to CI.
+
+**Run at the repo's full parallelism.** Read how the chosen command parallelizes (its runner,
+its config, the framework's worker setting) and keep its default. Never lower the worker count
+without a reason you write in the result. Start independent checks (lint, type checks, tests)
+together and await them all. When you call a test framework directly on a subset, give it a
+temp folder inside `WT` (pytest `--basetemp`, a per-run `TMPDIR`) so runs in other slots cannot
+stall it. On failure stop with `blocked_tests_failed`, with a summary of the output; do
 not commit, and leave the tree dirty. A test passed only if you ran it in `WT` and saw it pass;
 a timeout or unreadable output is a failure.
+
+**Waiting.** Wait on a process by its PID, or by the completion of the background job you
+started it as. Never loop on `pgrep -f "<text>"`: the pattern matches the loop's own command
+line, so it never ends. Before you hand back, with any status, make sure nothing you started
+is still running: a dev server, a watcher, a background test run. Stop each by its PID.
 
 ## 7. Land the work
 
@@ -317,7 +349,7 @@ content below), a title or label convention, a branch-name rule, and required re
 host requests code owners itself. A reviewer the rules name that the host would not request:
 ask for them in the body and say in the report that **open-review** sets none.
 
-**Pre-commit review.** Once the tests in section 6 pass, have a reader who did not write the
+**Pre-commit review.** Once the gates in section 6 pass, have a reader who did not write the
 change check it. Do this for every repo in `repos` before committing or pushing any of them, so
 a stop here leaves every tree uncommitted:
 
@@ -331,7 +363,8 @@ a stop here leaves every tree uncommitted:
 3. Open each line a finding cites before acting on it. Fix what holds up. A finding that is
    wrong gets a one-line reason in the review summary and no ticket. Every other finding you
    do not fix, declined or deferred, goes on the follow-up list with a one-line reason. After
-   any fix, stage again and rerun the test command; a failure is `blocked_tests_failed`.
+   any fix, stage again and rerun the gates that cover the fixed files, a single run on the
+   merged tree; a failure is `blocked_tests_failed`.
 4. A P0 or P1 finding you agree with but cannot fix stops the run with
    `status=blocked_review_findings`, naming the finding and what you tried. Commit nothing.
 5. When the reply is `could not review`, or the spawn itself fails (the `core` plugin is not
@@ -354,6 +387,14 @@ closing keyword in the syntax the adapter lists under "Closing keywords for a co
 The keyword is what closes the issue when the review merges, so it goes in the commit and in
 the review body. Record the commit SHA per repo.
 
+**A locked signing key.** When a signed commit fails because the key is locked and no terminal
+is available to unlock it, do not wait out retry windows and never turn signing off. Keep the
+change staged in `WT` in every repo, stop with `status=blocked_sandbox` and
+`reason="signing key locked"`, and hold the ticket as section 4 describes, with the line
+`Unblocks when: the signing key is unlocked and the run resumed.` Put each `WT` in
+`worktree_paths` so the orchestrator can resume this run in the same trees once the user has
+unlocked the key (`resume_worktrees`, section 3).
+
 **Review.** Per repo, in `repos` order, after the commit:
 
 1. **Push the branch**: `git -C $WT push origin HEAD:<slot_id>-ticket-<n>`. Never force-push. A
@@ -361,8 +402,8 @@ the review body. Record the commit SHA per repo.
 2. **open-review** from the slot branch into `<default_branch>` with **no label**. Do not run
    **ensure-label**, do not pass the blocked label, and leave out the adapter's label
    argument: the blocked label tells people and merge automation "do not merge", which is
-   false here. Title: the ticket's title. Body: what was built, the tests run and their
-   result, the review summary, and the closing keyword line from the commit. Before opening, run
+   false here. Title: the ticket's title. Body: what was built, the gates run and their
+   result (and the ones left to CI), the review summary, and the closing keyword line from the commit. Before opening, run
    **list-open-reviews** on the repo; if a review already closes `<n>` from this branch (a
    resumed run), reuse it. Record the URL per repo.
 
@@ -443,7 +484,7 @@ Per repo, with `WT`:
 1. **Commit** on the slot branch: `git -C $WT commit -m "<what was built, plainly>.
    Progresses #<n>"`, after section 7's **Pre-commit review** has run for every repo and with
    the change staged as it describes. The message must not contain `Closes` or `Fixes`; the
-   ticket is not done.
+   ticket is not done. A locked signing key stops the run as section 7 describes.
 2. **Push the branch**, never the default branch: `git -C $WT push origin HEAD:<slot_id>-ticket-<n>`.
 3. **Open a review on every repo**: it is the container that holds code back until the live
    step is done. Run **ensure-label** for the blocked label on the repo, then **open-review**
@@ -487,11 +528,12 @@ review closes nothing. Leave your worktrees in place.
 
 ## 10. Final report
 
-Your final message goes to whoever dispatched you. It has three parts.
+Your final message goes to whoever dispatched you. Before you write it, check that nothing
+you started is still running. It has three parts.
 
 First, one short paragraph that leads with the outcome (in review, blocked, or waiting on a
 live step), then the ticket, its final step and status, who reviewed the diff and what that
-changed, the review links and commit SHAs,
+changed, the review links and commit SHAs, the gates that ran and the ones left to CI,
 what blocks it and what would clear it, and the model-fit note if you posted one. A ticket in
 review is not closed: say that merging the review closes it.
 

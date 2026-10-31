@@ -76,7 +76,8 @@ others or to nobody, when `--all` would have found one), and point to
 ## 2. Plan it
 
 Follow `plan-one-ticket.md` for the picked ticket: load a lean context, write one terse plan,
-post it, set the labels (judged per `ticket-labels.md`). It holds the 200-word cap and the list
+post it, set the labels (judged per `ticket-labels.md`) and move a planned ticket with no open
+blocker to the ready lane. It holds the 200-word cap and the list
 of what a plan may not contain. Do not add to either. `--dry-run` means read-only operations
 only: print the pick, the plan and the labels it would set, and change nothing. Carry the
 procedure through to its returned line without stopping to ask; if a fact is missing, plan from
@@ -94,7 +95,8 @@ Then add only what applies:
   tier runs on from `<scripts>/resolve_model.py --tier <tier>`;
 - the ticket is assigned to someone else, or to nobody: `work-tickets` works only Ready tickets
   assigned to its own person, so it will not pick this one up until it is assigned to them;
-- the ticket is not in the ready lane (`--ticket`): `work-tickets` works only that lane;
+- the ticket moved to the ready lane because it is planned and nothing blocks it, or stayed in
+  another lane (in progress, blocked, done) that a worker or a person put it in;
 - the run label is run-solo: `work-tickets` never dispatches it, because it needs a person;
 - the ticket was held instead of planned, and why, and what unblocks it;
 - tickets skipped because their repo did not resolve.

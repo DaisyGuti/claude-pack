@@ -44,11 +44,16 @@ Run any command again; it checks the registry and names whatever is still missin
 
 1. `write-ticket` files it in the backlog (or Ready) with a priority, a run label and a model
    label.
-2. `plan-ticket` or `daily-grooming` posts the plan and moves it to Ready.
+2. `plan-ticket` or `daily-grooming` posts the plan and moves it to Ready. Ready means
+   planned: a ticket is in Ready only with a plan and no open blocker, and a planned, unblocked
+   ticket is never left in the backlog. Grooming reports the Ready lane in groups, at most a
+   pool's worth, of tickets that share no file, flaky-test and CI tickets first and a
+   migration alone.
 3. `work-tickets` (or `ticket-worker` for one issue) starts a worker on the model the label
    names. The worker moves the card to In progress, builds on its own branch in its own
-   worktree, runs the repo's tests, opens a pull or merge request that closes the issue when
-   merged, and moves the card to In review.
+   worktree, merges the default branch into its branch (never a rebase), runs once only the
+   gates its diff touches (CI runs the full suite), opens a pull or merge request that closes
+   the issue when merged, and moves the card to In review.
 4. A person reviews and merges. Merging closes the issue; the next `daily-grooming` pass moves
    the card to Done and frees any ticket that waited on it.
 
@@ -59,6 +64,11 @@ the tracker for an existing ticket (and comments there if it finds one), otherwi
 backlog ticket in the `write-ticket` shape, assigned to the same person, that links the review.
 They are listed under "Follow-ups" in its report and in the `RESULT` line's `follow_up_refs`.
 
+When a commit cannot be signed because the signing key is locked and no terminal can unlock
+it, the worker keeps its change staged and holds the ticket at once (`blocked_sandbox`) without
+turning signing off. `work-tickets` asks you to unlock the key once and then resumes every such
+worker together.
+
 Work that cannot proceed is held with the `blocked` label and a `Blocked: dependency`,
 `decision`, `live action` or `failure` comment that says what clears it. Workers never push to
 the default branch, never merge, and never close an issue.
@@ -66,7 +76,10 @@ the default branch, never merge, and never close an issue.
 ## Model per ticket
 
 The model label maps to a Claude tier: `fast` runs on Haiku, `workhorse` on Sonnet and
-`frontier` on Opus. `work-tickets` passes the model when it starts each worker. An
+`frontier` on Opus. The tier is sized to the scope of the plan: `fast` for a test-only or
+document-only change or one small file, `workhorse` for a normal multi-file change, `frontier`
+for security, authentication or gate logic, cross-cutting design and tricky invariants.
+`work-tickets` passes the model when it starts each worker. An
 `effort:<level>` label on a ticket sets the worker's reasoning effort.
 
 Planning always runs on Opus, whatever your session's model: `plan-ticket`, `write-ticket` and
