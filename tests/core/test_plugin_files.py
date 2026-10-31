@@ -82,6 +82,49 @@ def test_gates_run_at_the_repos_full_parallelism():
     assert "**Run at the repo's full parallelism.**" in worker
 
 
+def _flat(path):
+    """A file's text with every run of whitespace collapsed, so a phrase can wrap across lines."""
+    return " ".join(path.read_text(encoding="utf-8").split())
+
+
+def test_eng_merges_the_base_first_then_runs_only_the_gates_the_diff_touches_once():
+    # A pool of agents on one laptop ran the full suite twice each; CI runs it, so eng does not.
+    eng = _flat(PLUGIN / "agents" / "eng.md")
+    step = eng[eng.index("- Commit the change by path, then merge the base branch") :]
+    step = step[: step.index("- Confirm the test meant to cover the change")]
+    assert "git fetch <remote> <base> && git merge <remote>/<base>" in step
+    assert "never a rebase" in step
+    assert "Run only the gates the diff touches" in step
+    assert "Do not run the repo's full suite locally when CI runs it" in step
+    assert "Never run the gates before the merge and again after it" in step
+    assert step.index("merge the base branch") < step.index("Run only the gates")
+    assert "which gates ran and which were left to CI" in eng[eng.index("## Report") :]
+    standards = _flat(PLUGIN / "skills" / "eng" / "references" / "engineering-standards.md")
+    assert (
+        "- Merge the base branch first, then run only the gates the diff touches, once" in standards
+    )
+    rule = standards[standards.index("**Merge the base branch first") :]
+    rule = rule[: rule.index("**Wait on a condition")]
+    assert "Never rebase a branch someone may have pulled." in rule
+    assert "Do not run the repo's full suite locally when CI runs it" in rule
+    assert "Never run the gates before the merge and again after it." in rule
+    assert "what ran and what was left to CI" in rule
+
+
+def test_eng_waits_on_conditions_and_leaves_nothing_running():
+    eng = _flat(PLUGIN / "agents" / "eng.md")
+    assert "never on a fixed sleep" in eng and "fake timers for polling code" in eng
+    assert 'Never loop on `pgrep -f "<text>"`' in eng
+    assert "nothing you started is still running" in eng
+    standards = _flat(PLUGIN / "skills" / "eng" / "references" / "engineering-standards.md")
+    rule = standards[standards.index("**Wait on a condition") :]
+    rule = rule[: rule.index("**Hold the industry standard")]
+    assert "only as a backstop against a hang" in rule
+    assert "completion of the background job" in rule
+    assert 'A `pgrep -f "<text>"` loop matches its own command line and never ends.' in rule
+    assert "nothing you started is still running" in rule
+
+
 def test_eng_ends_its_report_with_follow_ups_for_every_unfixed_finding_and_gap():
     # Unfixed review findings and known gaps become tickets, not a line in a report.
     eng = (PLUGIN / "agents" / "eng.md").read_text(encoding="utf-8")

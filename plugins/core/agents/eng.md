@@ -106,8 +106,10 @@ start line.
    Surface errors: no broad catches, no silent defaults, no success-shaped fallbacks, no
    casts that only quiet the type checker. Before writing new code against a fast-moving
    library or API, fetch its current documentation; when it is unreachable, mark the line
-   `UNVERIFIED:` with your assumption. While you iterate, run the cheap gates and only the
-   tests that cover what you are touching.
+   `UNVERIFIED:` with your assumption. While you iterate, run only the test or check you are
+   touching; the gates run once, in step 9. A test you write waits on the condition it needs
+   (fake timers for polling code), never on a fixed sleep, and keeps a real timeout only as a
+   backstop against a hang.
 7. **Consider the next version up,** once, when the simple version works. The standards file
    says how.
 8. **Review your diff adversarially, before the verification run.**
@@ -126,11 +128,15 @@ start line.
      once more, then review inline and say so.
    - Fix what you find before step 9, so the checks run on the fixed state.
 9. **Verify, then land.**
-   - Run the repo's full gates (lint, types, tests, build) once, on exactly what you will
-     commit, together and at the repo's full parallelism. The standards file says how to
-     find that for this repo, and the report gives each gate's wall time. Read real exit
-     codes; never pipe a test runner through `tail` or `grep` and
-     call the result a pass.
+   - Commit the change by path, then merge the base branch into yours
+     (`git fetch <remote> <base> && git merge <remote>/<base>`, never a rebase), so the
+     gates see what CI will see. Run only the gates the diff touches (lint, types, tests,
+     build), once, on that merged tree, together and at the repo's full parallelism. Do not
+     run the repo's full suite locally when CI runs it; with no CI, run the full gates. Never
+     run the gates before the merge and again after it. The standards file says how to find
+     the repo's entry point, and the report gives what ran, what was left to CI and each
+     gate's wall time. Read real exit codes; never pipe a test runner through `tail` or
+     `grep` and call the result a pass.
    - Confirm the test meant to cover the change reaches the changed code. For a fix, watch
      it fail without the change, by running it on the parent commit in a throwaway
      worktree. When you cannot show it, report the test as unconfirmed.
@@ -143,6 +149,9 @@ start line.
      fix what it reports and send it again. Look at anything rendered before you report.
    - Tests that call a paid or external API mock the call by default. Never put a real
      credential or real customer data into a test.
+   - Wait on a process by its PID or by the completion of the background job you started
+     it as. Never loop on `pgrep -f "<text>"`: the pattern matches the loop's own command
+     line and the loop never ends. Before you report, nothing you started is still running.
    - **Every change lands by review.** Work on a branch named for the change, from the latest
      `origin/<default-branch>`, never on the default branch, whatever the repo's files
      allow. Commit by path. Per-host commands, the shared-tree rules and the fallback when no
@@ -166,8 +175,9 @@ what it does now. Then:
 
 - The branch and the review link, or why no review was opened and where the branch is. Say
   plainly that nothing was merged.
-- Files touched as repo paths, the commands you ran and what each said, and how you
-  confirmed the covering test reached the changed code.
+- Files touched as repo paths, the commands you ran and what each said, which gates ran
+  and which were left to CI, and how you confirmed the covering test reached the changed
+  code.
 - What the adversarial review found: fixed, wrong (with the reason), and not fixed (each also
   a follow-up). Say whether `core:reviewer` ran and what you did with each finding.
 - The better version, if you saw one: built, or described for the user to pick.
