@@ -291,6 +291,26 @@ def test_ticket_worker_skill_turns_on_auto_fix_for_an_opened_review() -> None:
     assert "ccd_pr" not in (PLUGIN / "agents" / "ticket-worker.md").read_text(encoding="utf-8")
 
 
+def test_cleanup_after_each_ticket_is_in_the_instructions() -> None:
+    """Daisy's rule: worktrees and test data never pile up across a run. The orchestrator
+    removes a worker's worktree as it is reaped (safely, never with --force, unlocking only its
+    own session's lock); the worker stops what it started and drops its own test data."""
+    procedure = (PLUGIN / "skills" / "work-tickets" / "references" / "orchestrator.md").read_text(
+        encoding="utf-8"
+    )
+    cleanup = procedure[procedure.index("**Cleanup.**") : procedure.index("**7d.**")]
+    for needed in ("worktree unlock", "worktree remove", "worktree prune", "never --force"):
+        assert needed in cleanup, needed
+    assert "another pid" in cleanup
+    assert "**Cleanup**" in procedure[procedure.index("**7d.**") :]
+    worker = (PLUGIN / "agents" / "ticket-worker.md").read_text(encoding="utf-8")
+    final = worker[worker.index("## 10. Final report") :]
+    assert "Clean up before you return" in final
+    assert "FORCE" in final and "shared database server" in final
+    notes = (PLUGIN / "references" / "platform-notes.md").read_text(encoding="utf-8")
+    assert "about 110 worktrees" in notes
+
+
 def test_work_tickets_runs_a_rolling_pool_and_says_so_everywhere() -> None:
     """The skill and its procedure agree on the pool size, and no file still says waves."""
     skill = (PLUGIN / "skills" / "work-tickets" / "SKILL.md").read_text(encoding="utf-8")

@@ -36,6 +36,18 @@ to correct; the skills and the worker agent point here instead of restating it.
   worktree the worker makes with `git worktree add` from the registry's clone, under
   `${CLAUDE_PLUGIN_DATA}/worktrees/`. Edits outside the session's folders can prompt for
   approval once.
+- While the session that spawned a worker lives, Claude Code keeps that worktree locked to the
+  session's process (`git worktree list --porcelain` shows `locked claude agent agent-<id>
+  (pid <N> start <time>)`, the time in UTC as `TZ=UTC ps -o lstart= -p <N>` prints it), so a
+  finished worker's worktree is not swept. A subagent's shell runs under that same process. They pile up: at about 110 worktrees
+  new `isolation: worktree` spawns fail with "Could not read the repository git config to
+  neutralize filter drivers". Observed in a long `work-tickets` run, not documented on the
+  page above. The safe cleanup, which `work-tickets` runs as each worker returns: remove a
+  worktree only when it has no uncommitted or untracked files, is on a branch, has every commit
+  on the remote branch and has no process with its working directory inside; then
+  `git worktree unlock <path>` (only a lock whose pid is the orchestrating session's own Claude
+  Code process, never another session's), `git worktree remove <path>` without `--force`, and
+  `git worktree prune`. The branch keeps the commits.
 - A subagent in a default-location worktree does not load that repo's `CLAUDE.md` at its root,
   so the worker reads `CLAUDE.md`, `AGENTS.md` and `CONTRIBUTING.md` itself (same page).
 - Commands that redirect git into the launch repo's main checkout (`git -C`, `GIT_DIR`, a `cd`

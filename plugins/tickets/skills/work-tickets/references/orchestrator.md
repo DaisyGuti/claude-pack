@@ -326,7 +326,8 @@ not wait for the others. The worker's last line is `RESULT {...}`:
 - `status == "review_opened"`: the worker built and tested the ticket and opened a review;
   this is successful work. Run `finish` with the RESULT JSON. The branch is on the
   remote, so nothing is lost. The issue stays open until the review merges. Any
-  `follow_up_refs` ride along in the record; the worker already filed those tickets.
+  `follow_up_refs` ride along in the record; the worker already filed those tickets. Once
+  `finish` has recorded it, clean up that worker's worktrees (**Cleanup**, below).
 - No `RESULT` line, or a status that is not one of those: the worker ended without finishing
   (a turn limit or a crash). Leave the slot in `active` so the next run resumes it, log a
   warning with the worker's last paragraph, and start no further tickets this run (a halt);
@@ -334,8 +335,61 @@ not wait for the others. The worker's last line is `RESULT {...}`:
 
 After reaping, go back to 7a so the freed slot takes the next ticket.
 
+**Cleanup.** A worktree left behind costs nothing until there are a hundred of them: Claude
+Code keeps a finished worker's worktree locked to this session's process for as long as the
+session lives, and past roughly 110 worktrees new `isolation: worktree` spawns fail
+(platform-notes.md, "Worktrees for workers"). So clean up after every worker as it is
+reaped, never only at the end of the run, once its slot is recorded. The review's branch holds
+the commits, so removing the worktree loses nothing. For each path in the RESULT's
+`worktree_paths` (skip one that is already gone), remove it only when every check passes.
+`<path>` is written the way `git worktree list --porcelain` prints it: resolved, with no
+trailing slash (`/private/tmp/...` on macOS, never `/tmp/...`), which is also how `lsof` prints
+directories; `cd <path> && pwd -P` gives that form.
+
+1. `git -C <path> status --porcelain --untracked-files=all` prints nothing.
+2. `git -C <path> symbolic-ref -q HEAD` succeeds: it is on a branch, not detached.
+3. `git -C <path> fetch origin <branch>` succeeds and `git -C <path> merge-base --is-ancestor
+   HEAD FETCH_HEAD` succeeds: every commit is on the remote branch. When the fetch fails with
+   `couldn't find remote ref` (the branch was deleted after its review merged), the check
+   passes only if the review reads `merged` or `closed`; the local branch keeps the commits.
+4. No process has its working directory inside it: `lsof -d cwd -Fn` exits 0 and lists no
+   `n` line equal to `<path>` or starting with `<path>/` (a bare prefix also matches a sibling
+   such as `<path>-2`). A missing `lsof` prints nothing and exits 127: that fails the check.
+
+Then, with `<clone>` the registry clone of that repo:
+
+```bash
+git -C <clone> worktree list --porcelain       # a locked worktree shows "locked claude agent <id> (pid <N> ...)"
+git -C <clone> worktree unlock <path>          # only when it is locked and <N> is this session's Claude Code process
+git -C <clone> worktree remove <path>          # never --force
+git -C <clone> worktree prune
+```
+
+`<N>` is this session's own process when it is an ancestor of your shell (a subagent's shell
+has the same ancestry) and the lock's `start` matches it:
+
+```bash
+p=$$; while [ "$p" -gt 0 ] && [ "$p" != "<N>" ]; do p=$(ps -o ppid= -p "$p" | tr -d ' '); p=${p:-0}; done
+TZ=UTC ps -o lstart= -p <N>                    # the lock's start is UTC; plain ps prints local time
+```
+
+Unlock only when the walk ends on `p` equal to `<N>` and that time equals the lock's `start`
+(compare with runs of spaces squeezed); a mismatch is a dead session's lock on a reused pid.
+Never unlock a worktree whose lock names another pid or has another reason: another session or
+a person holds it. Never pass `--force`: a refusal means one of the checks missed something, so
+keep the worktree and report it. When `remove` fails with `failed to delete`, git has already
+deleted part of the tree and unregistered it; keep the leftover directory, never `rm -rf` it,
+and report it. The local branch stays.
+
+Keep, and list in the report with the failed check, the worktrees of workers still running,
+of every `blocked_*`, `needs_decision` and `needs_manual_action` slot (the branch and review may
+still need them), of a slot with no `RESULT`, and any that fail a check.
+
 **7d.** The loop ends when no worker is still running and either the queue is empty or a halt
-stopped new tickets. Slots a halt left in `active` go in the report as "Unfinished".
+stopped new tickets. Slots a halt left in `active` go in the report as "Unfinished". Then sweep:
+for each worktree of this run still on disk (the `worktree_paths` of the run's `completed` and
+`blocked` entries) whose review **review-state** reads `merged` or `closed`, run the same checks
+and **Cleanup** commands. Run `git -C <clone> worktree prune` in every registry clone once more.
 
 ### 8. Completion
 
@@ -352,6 +406,8 @@ Blocked: <M>
 Not dispatched: <K>
   #60 "title": run:solo label: human-in-loop required
 Unfinished (resume with the next run): <L>
+Worktrees kept: <W>
+  #50 <repo>: <path> (blocked_push_rejected; a worktree that failed a check names it)
 Left alone: <A> Ready tickets assigned to others, <U> unassigned
 Held (carry the blocked label, not dispatched): <H>
   #71 <repo>: Blocked: dependency
@@ -363,7 +419,8 @@ of `completed` and `blocked` entries: a new backlog ticket (or a comment on an
 existing one) for something the worker left undone, declined in review or noticed along the
 way, assigned to the same person and waiting for grooming. A `needs_manual_action` line's
 reason names the live action and the review links from `manual_action_refs`, which tells the
-user at a glance which Blocked items are a bug to fix and which are a click to make. Follow the block with one plain
+user at a glance which Blocked items are a bug to fix and which are a click to make. A "Worktrees kept" line is one the cleanup left on purpose or could not remove; the user removes
+it (`git worktree remove <path>`) once its work is done. Follow the block with one plain
 sentence on what needs the user: the held tickets and the blocked tickets of this run, each
 with the kind of its most recent `Blocked:` comment (**read-issue**; a run's own `blocked_*` is
 a `failure`, `needs_decision` a `decision`, `needs_manual_action` a `live action`, and a
