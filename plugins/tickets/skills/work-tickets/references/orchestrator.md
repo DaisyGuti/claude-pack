@@ -111,6 +111,12 @@ run-worker label means self-contained), so there is no pairwise conflict check h
   before the live step.
 - **Blocker isolation.** A blocked ticket halts only its own slot; the rest of the pool
   keeps running and the freed slot takes the next ticket.
+- **One poller.** The board watcher the user runs, when there is one, is the only thing that
+  polls the tracker. Act on its events (a review reported ready to queue, a review that merged)
+  and never start a polling loop per review or per worker: the tracker's rate limit is shared
+  by every worker and session on the machine. A review reported ready to queue is enqueued from
+  its event, when the user has asked this session to enqueue reviews; otherwise list it for the
+  user. Nothing here merges a review.
 - **Preflight**, before the first slot is created: **auth-check** passes, `<data>` is
   writable, the current folder is inside a git repository (workers get a throwaway worktree of
   it; when it is not, stop and tell the user to start Claude Code inside one of the registry's
@@ -229,7 +235,8 @@ resolver prints on that ticket's dry-run and report line.
 ### 5. Sort, then cap
 
 Sort by priority in the rank order of the registry's Priority table (P0 first by default),
-then unset, stable within a priority, then keep the first `--limit`.
+then unset, stable within a priority, except that a flaky-test or CI ticket (judged from its
+title and labels) goes ahead of the rest of its priority, then keep the first `--limit`.
 
 ### 6. Dry run
 
@@ -264,7 +271,8 @@ returned. The pool size is measured against that count, not against `active`, be
 whose worker ended without a `RESULT` stays in `active` with nothing running.
 
 **7a. Fill the pool.** Take tickets from the front of the queue until the running count
-reaches `--max-parallel`. Slots resumed in step 2 come first and the pool is topped up behind
+reaches `--max-parallel`. A freed slot takes the front ticket, so flaky-test and CI tickets
+fill slots first and the pool never waits for the rest of its workers. Slots resumed in step 2 come first and the pool is topped up behind
 them. For each ticket get `ticket_state.py next-slot` (one id at a time, calling `begin` right
 after each so the next call sees it) and `begin` the slot with its JSON. A `begin` refusal
 (exit 3) means the ticket is already tracked: skip it.
@@ -277,7 +285,7 @@ worker's agent file, `agents/ticket-worker.md`: `mode`
 `files.ticket_template` (the plugin's `skills/write-ticket/assets/ticket-template.md`) and
 `files.check_ticket` (`<scripts>/check_ticket.py`) as absolute paths, `model` (the resolved
 model), `validate_plan_first: true` and `context_files` (the owning repo's brief, or the
-`--context` files).
+`--context` files), plus `resume_worktrees` for a slot resumed after a locked signing key (7c).
 
 Then, in one message, make one Agent call per slot just begun or resumed: `subagent_type` `tickets:ticket-worker`,
 `model` set to the slot's resolved model, `effort` set to the slot's resolved effort when it
@@ -306,6 +314,15 @@ not wait for the others. The worker's last line is `RESULT {...}`:
   told apart by its `status` and by `manual_action_refs` (review URLs). A `blocked_not_assigned`
   slot means the ticket was reassigned after the queue was built: it is reported, nothing on
   the ticket was touched, and it will not be dispatched again until it is assigned back.
+- `status` is `blocked_sandbox` and the `reason` is a locked signing key: the worker kept its
+  staged change in the trees named in `worktree_paths` and held the ticket. Run `finish` with
+  the RESULT JSON like any blocked status. Ask the user once, at the first such stop, to unlock
+  the key, naming every ticket stopped this way; stops that arrive before they answer join the
+  same ask. Do not ask per worker. When the user says it is unlocked, that is the person
+  clearing the hold: resume all of those workers together. For each, **remove-label** the
+  blocked label, **comment** `Unblocked: signing key unlocked.`, run `ticket_state.py forget`,
+  `begin` it again with the same `slot_id`, and dispatch it as in 7b with `resume_worktrees`
+  set from its `worktree_paths`, all in one message. A stop that arrives after that asks again.
 - `status == "review_opened"`: the worker built and tested the ticket and opened a review;
   this is successful work. Run `finish` with the RESULT JSON. The branch is on the
   remote, so nothing is lost. The issue stays open until the review merges. Any

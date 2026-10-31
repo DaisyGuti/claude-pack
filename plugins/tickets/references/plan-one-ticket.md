@@ -1,8 +1,12 @@
 # Plan one ticket
 
 The one procedure for writing a ticket's plan, shared by `plan-ticket` (one ticket) and
-`daily-grooming` (every unplanned Ready ticket, possibly through subagents). It lives here
-and nowhere else.
+`daily-grooming` (every unplanned ticket headed for Ready, possibly through subagents). It
+lives here and nowhere else.
+
+**Ready means planned.** A ticket goes to the ready lane only with a `### Final Plan` and no
+open blocker, and a planned ticket with no open blocker moves to the ready lane in the same
+step that posts its plan. A planned ticket is never left in the backlog.
 
 A worker reads the plan before it builds, checks it for drift, and re-plans only when it has
 drifted. So the plan is a short brief for the worker: a short plan that is 80% right and gets
@@ -58,7 +62,8 @@ Do not write a plan, and hold the ticket, in three cases:
 
 Holding follows [ticket-labels.md](ticket-labels.md), "Blocked": **ensure-label** and
 **add-label** for the registry's blocked label, then **comment** in the `Blocked:` shape.
-The ticket keeps its lane, because no one has started it. Return `held: <kind>`. In a dry
+A held ticket is not ready: when it sits in the ready lane, **set-lane** moves it to the
+backlog lane, and in any other lane it stays where it is. Return `held: <kind>`. In a dry
 run, print what you would post and write nothing.
 
 ## 3. Write the plan, one pass
@@ -89,12 +94,15 @@ will not fit in 200 words, the ticket is too vague: go to step 2.
 
 ## 4. Post it and set the labels
 
-In a dry run, print the plan and the labels below, run no write operation, and return.
+In a dry run, print the plan, the labels and the lane move below, run no write operation, and return.
 
 1. **comment** with the plan. Keep the comment's URL if the operation printed one.
 2. **Model label.** Judge the tier from the plan you just wrote: its files, its traps.
    [ticket-labels.md](ticket-labels.md), "Model label", holds the rubric, and the registry's
-   Model labels table gives the label for the tier. A model label already on the ticket stays
+   Model labels table gives the label for the tier. Size it to the plan's scope: `fast` for a
+   test-only or document-only change or one small file, `workhorse` for a normal multi-file
+   change, `frontier` for security, authentication or gate logic, cross-cutting design or
+   tricky invariants. A model label already on the ticket stays
    as it is, in any form the registry resolves, and so does a ticket that has several (report
    that; do not pick). Otherwise **ensure-label**, then **add-label**.
 3. **Run label.** Judge it from the acceptance criteria you just wrote, per
@@ -102,6 +110,11 @@ In a dry run, print the plan and the labels below, run no write operation, and r
    and **add-label** the right one. The wrong one: **remove-label** it and add the right one.
    Both on the ticket: a contradiction only a person can settle, so report it and change
    nothing.
+
+4. **Lane.** A ticket with no open blocker (step 1.5 found none) is now planned, so
+   **set-lane** with role `ready` when it sits in the backlog lane. A ticket already in the
+   ready lane stays. A ticket in any other lane stays where it is, because a worker or a person
+   put it there.
 
 **ensure-label** can lose a race when several planners run at once. A failure to create a
 label that now exists is success: run it again to confirm, and carry on.
@@ -119,7 +132,7 @@ The caller reads this line and nothing else; it does not need the plan text back
 
 ## Labels only, when the plan already exists
 
-`daily-grooming` also uses this procedure on a Ready ticket that already has a `### Final
-Plan` comment but lacks a model or run label, since `work-tickets` will not dispatch it that
-way. Do step 4's labels (2 and 3) judging from the existing plan, post nothing, and return
-`labelled <repo>#<n>: <labels added>`.
+`daily-grooming` also uses this procedure on a ticket that already has a `### Final Plan`
+comment but lacks a model or run label, since `work-tickets` will not dispatch it that way. Do
+step 4's labels (2 and 3) judging from the existing plan, and its lane (4), post nothing, and
+return `labelled <repo>#<n>: <labels added>`.
