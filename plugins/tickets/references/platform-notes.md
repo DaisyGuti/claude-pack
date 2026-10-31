@@ -37,8 +37,9 @@ to correct; the skills and the worker agent point here instead of restating it.
   `${CLAUDE_PLUGIN_DATA}/worktrees/`. Edits outside the session's folders can prompt for
   approval once.
 - While the session that spawned a worker lives, Claude Code keeps that worktree locked to the
-  session's process (`git worktree list --porcelain` shows `locked claude agent <id> (pid <N>
-  ...)`), so a finished worker's worktree is not swept. They pile up: at about 110 worktrees
+  session's process (`git worktree list --porcelain` shows `locked claude agent agent-<id>
+  (pid <N> start <time>)`, the time in UTC as `TZ=UTC ps -o lstart= -p <N>` prints it), so a
+  finished worker's worktree is not swept. A subagent's shell runs under that same process. They pile up: at about 110 worktrees
   new `isolation: worktree` spawns fail with "Could not read the repository git config to
   neutralize filter drivers". Observed in a long `work-tickets` run, not documented on the
   page above. The safe cleanup, which `work-tickets` runs as each worker returns: remove a

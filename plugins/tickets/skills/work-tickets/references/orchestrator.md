@@ -341,14 +341,20 @@ session lives, and past roughly 110 worktrees new `isolation: worktree` spawns f
 (platform-notes.md, "Worktrees for workers"). So clean up after every worker as it is
 reaped, never only at the end of the run, once its slot is recorded. The review's branch holds
 the commits, so removing the worktree loses nothing. For each path in the RESULT's
-`worktree_paths` (skip one that is already gone), remove it only when every check passes:
+`worktree_paths` (skip one that is already gone), remove it only when every check passes.
+`<path>` is written the way `git worktree list --porcelain` prints it: resolved, with no
+trailing slash (`/private/tmp/...` on macOS, never `/tmp/...`), which is also how `lsof` prints
+directories; `cd <path> && pwd -P` gives that form.
 
 1. `git -C <path> status --porcelain --untracked-files=all` prints nothing.
 2. `git -C <path> symbolic-ref -q HEAD` succeeds: it is on a branch, not detached.
-3. After `git -C <path> fetch origin <branch>`, `git -C <path> merge-base --is-ancestor HEAD
-   origin/<branch>` succeeds: every commit is on the remote branch.
-4. No process has its working directory inside it: `lsof -d cwd -Fn` lists no `n<path>` line
-   equal to the path or under it.
+3. `git -C <path> fetch origin <branch>` succeeds and `git -C <path> merge-base --is-ancestor
+   HEAD FETCH_HEAD` succeeds: every commit is on the remote branch. When the fetch fails with
+   `couldn't find remote ref` (the branch was deleted after its review merged), the check
+   passes only if the review reads `merged` or `closed`; the local branch keeps the commits.
+4. No process has its working directory inside it: `lsof -d cwd -Fn` exits 0 and lists no
+   `n` line equal to `<path>` or starting with `<path>/` (a bare prefix also matches a sibling
+   such as `<path>-2`). A missing `lsof` prints nothing and exits 127: that fails the check.
 
 Then, with `<clone>` the registry clone of that repo:
 
@@ -359,11 +365,21 @@ git -C <clone> worktree remove <path>          # never --force
 git -C <clone> worktree prune
 ```
 
-`<N>` is this session's own process when it is an ancestor of your shell: walk up from
-`ps -o ppid= -p $$` until the pid matches. Never unlock a worktree whose lock names another pid
-or has another reason: another session or a person holds it. Never pass `--force`: a refusal
-means one of the checks missed something, so keep the worktree and report it. The local branch
-stays.
+`<N>` is this session's own process when it is an ancestor of your shell (a subagent's shell
+has the same ancestry) and the lock's `start` matches it:
+
+```bash
+p=$$; while [ "$p" -gt 0 ] && [ "$p" != "<N>" ]; do p=$(ps -o ppid= -p "$p" | tr -d ' '); p=${p:-0}; done
+TZ=UTC ps -o lstart= -p <N>                    # the lock's start is UTC; plain ps prints local time
+```
+
+Unlock only when the walk ends on `p` equal to `<N>` and that time equals the lock's `start`
+(compare with runs of spaces squeezed); a mismatch is a dead session's lock on a reused pid.
+Never unlock a worktree whose lock names another pid or has another reason: another session or
+a person holds it. Never pass `--force`: a refusal means one of the checks missed something, so
+keep the worktree and report it. When `remove` fails with `failed to delete`, git has already
+deleted part of the tree and unregistered it; keep the leftover directory, never `rm -rf` it,
+and report it. The local branch stays.
 
 Keep, and list in the report with the failed check, the worktrees of workers still running,
 of every `blocked_*`, `needs_decision` and `needs_manual_action` slot (the branch and review may
