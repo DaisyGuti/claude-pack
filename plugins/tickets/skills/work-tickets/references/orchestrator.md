@@ -273,9 +273,11 @@ after each so the next call sees it) and `begin` the slot with its JSON. A `begi
 worker's agent file, `agents/ticket-worker.md`: `mode`
 `dispatched`, the slot, the ticket and its repos, `item_ref`, `assignee`, `project` (from
 `set-project`: `tracker`, `host`, `board`, `tracker_ids`, `lanes`, `priorities`, `labels`,
-`model_labels`), `repo_map`, `worktree_root`, `files.adapter` and `files.labels` as absolute
-paths, `model` (the resolved model), `validate_plan_first: true` and `context_files` (the
-owning repo's brief, or the `--context` files).
+`model_labels`), `repo_map`, `worktree_root`, `files.adapter`, `files.labels`,
+`files.ticket_template` (the plugin's `skills/write-ticket/assets/ticket-template.md`) and
+`files.check_ticket` (`<scripts>/check_ticket.py`) as absolute paths, `model` (the resolved
+model), `validate_plan_first: true` and `context_files` (the owning repo's brief, or the
+`--context` files).
 
 Then, in one message, make one Agent call per slot just begun or resumed: `subagent_type` `tickets:ticket-worker`,
 `model` set to the slot's resolved model, `effort` set to the slot's resolved effort when it
@@ -306,7 +308,8 @@ not wait for the others. The worker's last line is `RESULT {...}`:
   the ticket was touched, and it will not be dispatched again until it is assigned back.
 - `status == "review_opened"`: the worker built and tested the ticket and opened a review;
   this is successful work. Run `finish` with the RESULT JSON. The branch is on the
-  remote, so nothing is lost. The issue stays open until the review merges.
+  remote, so nothing is lost. The issue stays open until the review merges. Any
+  `follow_up_refs` ride along in the record; the worker already filed those tickets.
 - No `RESULT` line, or a status that is not one of those: the worker ended without finishing
   (a turn limit or a crash). Leave the slot in `active` so the next run resumes it, log a
   warning with the worker's last paragraph, and start no further tickets this run (a halt);
@@ -323,6 +326,8 @@ stopped new tickets. Slots a halt left in `active` go in the report as "Unfinish
 === work-tickets complete: board <board key> for <login> ===
 In review: <R>
   #190 <repo>: <review URL> (slot-2, workhorse sonnet, merging closes the issue)
+Follow-ups: <F>
+  #201 <repo>: <title> (from #190; a `not_filed` item is listed with its error)
 Blocked: <M>
   #50 <repo>: blocked_push_rejected: non-fast-forward (worktree: ...)
   #189 <repo>: needs_manual_action: create the product for plan B and set PRICE_ID_B
@@ -336,9 +341,12 @@ Held (carry the blocked label, not dispatched): <H>
 ```
 
 An "In review" line needs nothing from anyone but its reviewer: the ticket is built and tested,
-and stays open until its review merges. A `needs_manual_action` line's reason names the live
-action and the review links from `manual_action_refs`, which tells the user at a glance which
-Blocked items are a bug to fix and which are a click to make. Follow the block with one plain
+and stays open until its review merges. A "Follow-ups" line comes from the `follow_up_refs`
+of `completed` and `blocked` entries: a new backlog ticket (or a comment on an
+existing one) for something the worker left undone, declined in review or noticed along the
+way, assigned to the same person and waiting for grooming. A `needs_manual_action` line's
+reason names the live action and the review links from `manual_action_refs`, which tells the
+user at a glance which Blocked items are a bug to fix and which are a click to make. Follow the block with one plain
 sentence on what needs the user: the held tickets and the blocked tickets of this run, each
 with the kind of its most recent `Blocked:` comment (**read-issue**; a run's own `blocked_*` is
 a `failure`, `needs_decision` a `decision`, `needs_manual_action` a `live action`, and a

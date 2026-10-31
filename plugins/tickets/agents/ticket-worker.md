@@ -64,7 +64,9 @@ The standing rules:
   "worktree_root": "/abs/folder/for/extra/worktrees",
   "files": {
     "adapter": "/abs/references/trackers/<tracker>.md",
-    "labels": "/abs/references/ticket-labels.md"
+    "labels": "/abs/references/ticket-labels.md",
+    "ticket_template": "/abs/skills/write-ticket/assets/ticket-template.md",
+    "check_ticket": "/abs/scripts/check_ticket.py"
   },
   "model": "sonnet",
   "validate_plan_first": true,
@@ -75,8 +77,9 @@ The standing rules:
 `mode` is `dispatched` (from `work-tickets`) or `direct` (from `ticket-worker`, one issue the
 user named); a direct run uses `slot_id` `solo`. `project` carries the tracker, host, board,
 `tracker_ids` (what **capture-board** returned), the lane and priority values by role, the
-labels by role and the model labels by tier. There are no fallback defaults: if any of it is
-missing, stop with `status=blocked_state_incomplete`, `reason="the dispatch message is
+labels by role and the model labels by tier. `files.ticket_template` and `files.check_ticket`
+are what section 7 uses to file follow-up tickets. There are no fallback defaults: if any of it
+is missing, stop with `status=blocked_state_incomplete`, `reason="the dispatch message is
 incomplete"`. `ticket_repo` is the owning repo; `repos` lists every repo the ticket touches,
 owning repo first. `model` is informational.
 
@@ -193,12 +196,16 @@ stopped ticket never goes to `in_progress`. When a lane value is missing from th
 **Holding the ticket.** Every stop except `blocked_not_assigned` runs these on the owning
 repo, in this order:
 
-1. **ensure-label** for `project.labels.blocked` (name, color, description), then **add-label**.
-2. **comment** once, in the shape of the Blocked section of `files.labels`, with the kind from
+1. When the follow-up list is not empty and the tracker is reachable, file each item as
+   section 7's step 3 describes, ending Context with `Found in <repo>#<n> (no review opened).`
+   in place of a review link. A resumed run starts from the ticket's comments and the branch,
+   so an item already filed is found by the search there.
+2. **ensure-label** for `project.labels.blocked` (name, color, description), then **add-label**.
+3. **comment** once, in the shape of the Blocked section of `files.labels`, with the kind from
    the stop: `failure` quotes the exact error and what you tried; `decision` lists the
    options, each with its consequence, and recommends one; `live action` is section 9's
    comment.
-3. **set-lane** with role `blocked`.
+4. **set-lane** with role `blocked`.
 
 Always include an "Unblocks when:" line.
 
@@ -251,12 +258,22 @@ screens. Never import an aesthetic or audience from another product.
 
 **Quality bar.** Zero console errors or warnings; update setup and run scripts when the change
 affects build or dev workflow; file-level doc comments on new files, inline comments on
-complex logic, `TODO` markers where future work shows; a README update when the change adds
+complex logic, `TODO` markers where future work shows (each one you leave is a follow-up, see
+below); a README update when the change adds
 dependencies, endpoints or env vars or alters run instructions. Every environment variable the
 change creates also goes into the repo's committed example env file (`.env.example` or the
 repo's equivalent) in the same commit, with a one-line comment, its default and a placeholder,
 and never a real secret. Leave out only names the code clears or reads internally, build pins
 and test-only switches, and list those in the result.
+
+**Follow-ups.** Keep a running list from here to the review of every known gap the change
+leaves: a `TODO` left in code, a path you did not test, an assumption that needs confirming, and
+a pre-existing problem you noticed along the way. Section 7 adds every review finding you do
+not fix. Never widen the change to avoid a ticket: a problem outside this ticket's scope is
+listed, not fixed. Each item on the list becomes a follow-up ticket once the review is open
+(section 7); a note in the review body or the report does not count. A run that stops before a
+review opens files them when it holds the ticket (section 4) and links the ticket in place of a
+review.
 
 **Tests.** Write or update tests for every change, each checking behavior the change adds or
 fixes, in the repo's existing location, naming and framework. Keep tests that reach a model
@@ -311,9 +328,10 @@ a stop here leaves every tree uncommitted:
    (`git -C <absolute worktree path> diff --cached <base SHA>`), what the change is meant to do
    (the ticket's title and acceptance criteria), and the repo's rules files you read in
    section 6. It is the only agent you start.
-3. Open each line a finding cites before acting on it. Fix what holds up, and keep a one-line
-   reason for each finding you decline. After any fix, stage again and rerun the test command;
-   a failure is `blocked_tests_failed`.
+3. Open each line a finding cites before acting on it. Fix what holds up. A finding that is
+   wrong gets a one-line reason in the review summary and no ticket. Every other finding you
+   do not fix, declined or deferred, goes on the follow-up list with a one-line reason. After
+   any fix, stage again and rerun the test command; a failure is `blocked_tests_failed`.
 4. A P0 or P1 finding you agree with but cannot fix stops the run with
    `status=blocked_review_findings`, naming the finding and what you tried. Commit nothing.
 5. When the reply is `could not review`, or the spawn itself fails (the `core` plugin is not
@@ -322,7 +340,9 @@ a stop here leaves every tree uncommitted:
    unrequested scope) and say so in the review body.
 
 Keep a short review summary for the review body: who reviewed (`core:reviewer`, or you and
-why), what was fixed, and each declined finding with its reason.
+why), what was fixed, each finding not fixed with its reason (marked wrong, or follow-up), and
+the rest of the follow-up list, one line each. The tickets do not exist yet; the "File the
+follow-ups" step below files them.
 
 **Commit.** Run `git -C $WT status --porcelain`, read the list, and `git -C $WT add` the paths
 that belong to the change. Then commit. The message describes the change itself and ends with a
@@ -351,12 +371,34 @@ delete their remote branches; nothing reached the default branch.
 
 Then, on the owning repo:
 
-3. **comment** once on the issue, plain and short and not in the `Blocked:` shape: the review
+3. **File the follow-ups**, one ticket per item on the follow-up list, in the repo the item
+   concerns (the owning repo when it spans several). For each item:
+   - **search-issues** on its keywords for a ticket that already covers it, then **read-issue**
+     on each match. When an open match already links this review, it is filed: say nothing
+     more. When an open match does not, **comment** the new evidence and the review link there
+     and file nothing new. A closed match covers the item only when its closing reason does;
+     otherwise file a new ticket and link the closed one.
+   - Otherwise fill `files.ticket_template` into a temporary file as `write-ticket` does: the
+     Agent Instructions sections 1 to 3 and 5 copied exactly and section 4's audience filled
+     from the repo's brief (or "this repo's existing users"), the Agent Prompt, `Depends on:
+     None`, concrete acceptance criteria, a `- [ ] TBD: <the question>` bullet for any fact you do not have, and no secret
+     or controlled data. The last line of Context is `Found in <review link> (<repo>#<n>).`,
+     with the link of the review that holds the code. Run `files.check_ticket` on the file and
+     fix what it prints; when it still fails on the second run, record the item as not filed
+     with its output.
+   - Labels and board, judged by `files.labels` (Priority, Run label, Model label):
+     **ensure-label** for the run label, the model label and `project:<repo>`, then
+     **create-issue**, **set-priority**, **set-lane** with role `backlog`, and **assign** to
+     `assignee`, the source ticket's assignee. Never the blocked label and never the ready lane.
+   - Delete the temporary file. A write that fails is not a stop: the review is open. Carry on
+     with the other items, and record the item as not filed with the error.
+4. **comment** once on the issue, plain and short and not in the `Blocked:` shape: the review
    link (every link, per repo, when multi-repo), one line on what was built, the tests run and
-   that they passed, who reviewed the diff, and that merging closes #<n>.
-4. **set-lane** with role `review` when the project defines that lane. Otherwise leave the card
+   that they passed, who reviewed the diff, the follow-ups (number and title each, or none),
+   and that merging closes #<n>.
+5. **set-lane** with role `review` when the project defines that lane. Otherwise leave the card
    in `in_progress`. The issue stays open and unlabelled.
-5. Remove the extra worktrees you made in section 3 (`git -C <clone> worktree remove --force
+6. Remove the extra worktrees you made in section 3 (`git -C <clone> worktree remove --force
    <path>`, then `git -C <clone> worktree prune`). The branch is on the remote, so nothing is
    lost. Your own starting worktree stays on disk until Claude Code's cleanup removes it.
 
@@ -393,7 +435,7 @@ and removes the blocked label from a dependent whose dependencies are all closed
 Triggers when the work is complete and tested and the ticket still cannot close without a live
 action no worker can take (section 4). It lands by review like every ticket, and the review is
 the one held review described here; no second, ordinary review is opened. It is a
-whole-ticket decision: every repo in `repos` runs steps 1 to 3, then steps 4 to 7 run once,
+whole-ticket decision: every repo in `repos` runs steps 1 to 3, then steps 4 to 8 run once,
 against the owning repo.
 
 Per repo, with `WT`:
@@ -412,9 +454,11 @@ Per repo, with `WT`:
 
 Then, on the owning repo:
 
-4. **Label the issue** (not the review) with the blocked label: **ensure-label**, then
+4. **File the follow-ups** as section 7's step 3 describes, with the held review's link as the
+   found-in link.
+5. **Label the issue** (not the review) with the blocked label: **ensure-label**, then
    **add-label**.
-5. **comment** once, in the `Blocked: live action` shape: what was built and verified (per repo
+6. **comment** once, in the `Blocked: live action` shape: what was built and verified (per repo
    when multi-repo), every review link, the exact live action as concretely as the acceptance
    criteria allow, and what done looks like:
 
@@ -430,10 +474,12 @@ Then, on the owning repo:
 
    Once that is done: remove the blocked label from the review and from #<n>, merge the review,
    and close #<n>.
+
+   Follow-ups: <number and title each, or none>.
    ```
 
-6. **set-lane** with role `blocked`.
-7. Report `status=needs_manual_action` with a `reason` naming the live action.
+7. **set-lane** with role `blocked`.
+8. Report `status=needs_manual_action` with a `reason` naming the live action.
 
 Stop. Section 7's ordinary review and comment never run for this ticket, and section 8's
 model-fit note is skipped: nothing was committed with a closing keyword, so merging the held
@@ -441,7 +487,7 @@ review closes nothing. Leave your worktrees in place.
 
 ## 10. Final report
 
-Your final message goes to whoever dispatched you. It has two parts.
+Your final message goes to whoever dispatched you. It has three parts.
 
 First, one short paragraph that leads with the outcome (in review, blocked, or waiting on a
 live step), then the ticket, its final step and status, who reviewed the diff and what that
@@ -449,11 +495,19 @@ changed, the review links and commit SHAs,
 what blocks it and what would clear it, and the model-fit note if you posted one. A ticket in
 review is not closed: say that merging the review closes it.
 
-Second, as the last line, one machine-readable line the dispatcher records:
+Second, a **Follow-ups** heading and one line per ticket you filed or commented on: `#<n>
+<title>` (with its repo when not the owning one), marked `(existing, commented)` when it was
+not new. An item you could not file goes there too, as `not filed: <item>: <error>`. Write
+`None` when the list is empty.
+
+Third, as the last line, one machine-readable line the dispatcher records:
 
 ```text
-RESULT {"slot_id": "slot-1", "ticket_number": 182, "ticket_repo": "shop-app", "status": "review_opened", "reason": null, "branch": "slot-1-ticket-182", "review_refs": {"shop-app": "https://..."}, "manual_action_refs": {}, "commit_sha": {"shop-app": "abc1234"}, "worktree_paths": {"shop-app": "/abs/path"}, "model": "sonnet"}
+RESULT {"slot_id": "slot-1", "ticket_number": 182, "ticket_repo": "shop-app", "status": "review_opened", "reason": null, "branch": "slot-1-ticket-182", "review_refs": {"shop-app": "https://..."}, "manual_action_refs": {}, "follow_up_refs": [{"repo": "shop-app", "number": 201, "title": "...", "url": "https://...", "action": "filed"}], "commit_sha": {"shop-app": "abc1234"}, "worktree_paths": {"shop-app": "/abs/path"}, "model": "sonnet"}
 ```
 
 `status` is exactly one of `review_opened`, `needs_manual_action`, `needs_decision` or a
 `blocked_<type>` value. `reason` is null on `review_opened` and a plain sentence otherwise.
+`follow_up_refs` is always present: `[]` when there are none, otherwise one object per item
+with its `repo`, `number`, `title`, `url` and an `action` of `filed`, `commented` (on an
+existing ticket) or `not_filed` (`number` and `url` null, and the error in `reason`).

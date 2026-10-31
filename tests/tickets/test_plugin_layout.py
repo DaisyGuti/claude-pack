@@ -128,6 +128,44 @@ def test_worker_reviews_its_diff_before_committing() -> None:
     assert "core" in manifest.get("dependencies", [])
 
 
+def test_worker_files_a_follow_up_ticket_for_every_unfixed_finding_and_known_gap() -> None:
+    """Daisy's rule: nothing the worker leaves behind stays only in a report. The agent files
+    it after the review opens, on both landing paths, and reports it in the RESULT line, and
+    both dispatchers hand it the template and checker it files with."""
+    body = (PLUGIN / "agents" / "ticket-worker.md").read_text(encoding="utf-8")
+    build = body[body.index("## 6. Implement and test") : body.index("## 7. Land the work")]
+    land = body[body.index("## 7. Land the work") : body.index("## 8. After the review opens")]
+    held = body[body.index("## 9. Needs manual action") : body.index("## 10. Final report")]
+    final = body[body.index("## 10. Final report") :]
+    for gap in ("`TODO` left in code", "a path you did not test", "an assumption", "pre-existing"):
+        assert gap in build, gap
+    assert "wrong gets a one-line reason in the review summary and no ticket" in land
+    filing = land[land.index("**File the follow-ups**") : land.index("4. **comment**")]
+    assert land.index("**open-review**") < land.index("**File the follow-ups**")
+    for part in (
+        "**search-issues**",
+        "`files.check_ticket`",
+        "Found in <review link>",
+        "**set-lane** with role `backlog`",
+        "**assign** to",
+        "**read-issue**",
+    ):
+        assert part in filing, part
+    assert "File the follow-ups** as section 7's step 3" in held
+    # A stop files them too, linking the ticket in place of a review.
+    assert "(no review opened)" in body[body.index("**Holding the ticket.**") : body.index("## 5.")]
+    assert "**Follow-ups** heading" in final
+    assert '"follow_up_refs": [' in final
+    for dispatcher in (
+        PLUGIN / "skills" / "ticket-worker" / "SKILL.md",
+        PLUGIN / "skills" / "work-tickets" / "references" / "orchestrator.md",
+    ):
+        text = dispatcher.read_text(encoding="utf-8")
+        assert "`files.ticket_template`" in text and "`files.check_ticket`" in text, dispatcher
+    assert (PLUGIN / "skills" / "write-ticket" / "assets" / "ticket-template.md").is_file()
+    assert (PLUGIN / "scripts" / "check_ticket.py").is_file()
+
+
 def test_ticket_worker_skill_turns_on_auto_fix_for_an_opened_review() -> None:
     """The session that started the worker turns Auto-fix on, never the worker, and only for a
     review that is open for merging; the held `needs_manual_action` review is skipped."""
