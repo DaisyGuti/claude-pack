@@ -82,6 +82,22 @@ def test_gates_run_at_the_repos_full_parallelism():
     assert "**Run at the repo's full parallelism.**" in worker
 
 
+def test_eng_ends_its_report_with_follow_ups_for_every_unfixed_finding_and_gap():
+    # Unfixed review findings and known gaps become tickets, not a line in a report.
+    eng = (PLUGIN / "agents" / "eng.md").read_text(encoding="utf-8")
+    report = eng[eng.index("## Report") :]
+    assert "**Follow-ups**, last" in report
+    for gap in ("`TODO` left in code", "a path with no test", "an assumption", "pre-existing"):
+        assert gap in report, gap
+    assert "A follow-up needs a ticket" in report
+    assert "leave the list for the caller to file" in report
+    assert "every other finding you do not fix" in eng
+    standards = (PLUGIN / "skills" / "eng" / "references" / "engineering-standards.md").read_text(
+        encoding="utf-8"
+    )
+    assert "becomes a follow-up (a ticket" in standards
+
+
 def test_new_environment_variables_land_in_the_example_file():
     # A change added 29 variables a developer could not discover; the rule is generic.
     standards = (PLUGIN / "skills" / "eng" / "references" / "engineering-standards.md").read_text(
