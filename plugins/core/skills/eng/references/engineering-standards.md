@@ -8,6 +8,8 @@ house style; this file is about how you work.
 
 - Run independent work in parallel
 - Run tests and gates at the repo's full parallelism
+- Merge the base branch first, then run only the gates the diff touches, once
+- Wait on a condition, never on a fixed sleep or a self-matching command
 - Hold the industry standard of the technology you are standing in
 - Use the design pattern the problem calls for, and no more
 - Keep it simple while covering the whole requirement
@@ -62,6 +64,25 @@ assume it:
    `TMPDIR`), because concurrent sessions sharing one temp folder can stall on cleanup.
 6. **Report each gate's wall time,** so a slow gate shows up as a number rather than a
    guess.
+
+**Merge the base branch first, then run only the gates the diff touches, once.** Gates run
+on the code CI will see, so bring the base in before the first run:
+`git fetch <remote> <base> && git merge <remote>/<base>`. Never rebase a branch someone may
+have pulled. When the merge would overwrite uncommitted files, commit by path first. Then run,
+once, on the merged tree, the gates the diff touches: the tests that cover the changed code,
+the lint and type checks for the languages in the diff, and the build when it touches build
+inputs. Do not run the repo's full suite locally when CI runs it; with no CI, the full gates
+are the check. Never run the gates before the merge and again after it. While you iterate,
+run only the test or check you are working on. Say in the report what ran and what was left
+to CI. Everything in the parallelism rule above applies to the run you do make.
+
+**Wait on a condition, never on a fixed sleep or a self-matching command.** A test you
+write waits for the state it needs (an event seen, a value reached, fake timers for polling
+code), and keeps a real timeout only as a backstop against a hang, sized well above the
+normal time so it passes on a busy machine. Wait on a process by its PID, or by the
+completion of the background job you started it as. A `pgrep -f "<text>"` loop matches its
+own command line and never ends. Before you hand back, nothing you started is still running:
+stop each dev server, watcher or background run by its PID.
 
 **Hold the industry standard of the technology you are standing in.** Follow each
 framework's documented idioms; code that fights its framework breaks on the next upgrade. The repo's own
