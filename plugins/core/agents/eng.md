@@ -120,7 +120,8 @@ start line.
      or `model: "opus"` for the sensitive areas. Its brief names the command that prints the
      diff (`git diff <base>...HEAD`, or `git diff HEAD` for uncommitted work), what the change
      is meant to do, and the repo's rules files. Open the lines a finding cites before you
-     act on it. Fix what holds up; report each finding you decline with the reason. A reply
+     act on it. Fix what holds up. A finding that is wrong gets a one-line reason in the report;
+     every other finding you do not fix, declined or deferred, is a follow-up (see Report). A reply
      that says it could not review is not a pass: supply what it names as missing and run it
      once more, then review inline and say so.
    - Fix what you find before step 9, so the checks run on the fixed state.
@@ -167,16 +168,28 @@ what it does now. Then:
   plainly that nothing was merged.
 - Files touched as repo paths, the commands you ran and what each said, and how you
   confirmed the covering test reached the changed code.
-- What the adversarial review found: fixed, and left on purpose with the reason. Say whether
-  `core:reviewer` ran and what you did with each finding.
+- What the adversarial review found: fixed, wrong (with the reason), and not fixed (each also
+  a follow-up). Say whether `core:reviewer` ran and what you did with each finding.
 - The better version, if you saw one: built, or described for the user to pick.
-- Improvements you noticed outside the brief, one line each with a path.
 - The split: each subagent with its model, and the units you kept inline.
 - If the model or effort you ran on was wrong for the work: which axis (more effort on the
   same model, or a different model) and the decision that needed it.
 - Assumptions, deferrals and anything you could not verify. A choice a standing rule made
   for you (the commit attribution trailer, a CLAUDE.md or memory rule) is not an
   assumption; leave it out.
+- **Follow-ups**, last: one line each, with `file:line` where it applies, for every review
+  finding you did not fix (declined or deferred; not one that was wrong) and every known gap
+  the change leaves: a `TODO` left in code, a path with no test, an assumption that needs
+  confirming, a deferral, an improvement outside the brief, and a pre-existing problem you
+  noticed along the way. Write `None` when there are none.
+
+A follow-up needs a ticket; a line in the report is not enough. When the brief or the repo
+gives you a ticket workflow (the tickets plugin's registry, or an issue tracker the brief
+names), file each one yourself once the review is open: read that workflow's instructions for
+the ticket shape and commands first, check that no existing ticket already covers it (comment
+the new evidence there instead), end the body with `Found in <review link>`, and put the ticket
+number on its line. With no such workflow, say so and leave the list for the caller to file.
+Never invent a tracker, and put no secret or customer data in a ticket.
 
 Plain language, short paragraphs, lists only for parallel items, no narration of tools.
 Durable output (research with sources, designs, audits) goes in the repo's own place for it

@@ -52,6 +52,13 @@ Run any command again; it checks the registry and names whatever is still missin
 4. A person reviews and merges. Merging closes the issue; the next `daily-grooming` pass moves
    the card to Done and frees any ticket that waited on it.
 
+Whatever a worker leaves behind is filed as a ticket: each review finding
+it does not fix (unless the finding is wrong), each `TODO` left in code, untested path,
+assumption to confirm and pre-existing problem it noticed. Once the review is open it checks
+the tracker for an existing ticket (and comments there if it finds one), otherwise files a
+backlog ticket in the `write-ticket` shape, assigned to the same person, that links the review.
+They are listed under "Follow-ups" in its report and in the `RESULT` line's `follow_up_refs`.
+
 Work that cannot proceed is held with the `blocked` label and a `Blocked: dependency`,
 `decision`, `live action` or `failure` comment that says what clears it. Workers never push to
 the default branch, never merge, and never close an issue.

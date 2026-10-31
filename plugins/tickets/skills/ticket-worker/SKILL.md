@@ -81,8 +81,10 @@ Build the dispatch message exactly as section 1 of the agent file describes, wit
 `direct`, `slot_id` `solo`, `ticket_number`, `ticket_repo` and `repos` (the repo, plus any
 other repo the issue body names that the registry lists), `item_ref`, `assignee` (the
 current user), `project` (from the registry and **capture-board**), `repo_map`,
-`worktree_root` `<data>/worktrees/solo`, `files.adapter` and `files.labels` as absolute paths,
-`model`, `validate_plan_first` `true`, and `context_files` (the repo's product brief).
+`worktree_root` `<data>/worktrees/solo`, `files.adapter`, `files.labels`,
+`files.ticket_template` (`${CLAUDE_PLUGIN_ROOT}/skills/write-ticket/assets/ticket-template.md`)
+and `files.check_ticket` (`<scripts>/check_ticket.py`) as absolute paths, `model`,
+`validate_plan_first` `true`, and `context_files` (the repo's product brief).
 
 Make one Agent call: `subagent_type` `tickets:ticket-worker`, `model` set to the chosen model,
 `effort` set to the resolved effort when it is not null (Claude Code v2.1.292 or later; on an
@@ -121,8 +123,8 @@ Auto-fix sends the next event itself. [platform-notes.md](${CLAUDE_PLUGIN_ROOT}/
 
 ## 6. Report
 
-Relay the worker's report as yours. Put one line before it saying which model ran and why
-(the label, the user's choice, or the fallback), and one line saying Auto-fix is on for each
-review or why it is not. The worker's last line is a `RESULT` line; read it for the status and
+Relay the worker's report as yours, its Follow-ups list included. Put one line before it saying
+which model ran and why (the label, the user's choice, or the fallback), and one line saying
+Auto-fix is on for each review or why it is not. The worker's last line is a `RESULT` line; read it for the status and
 the review links, and keep it out of your own summary. A ticket in review is not closed: say
 that merging the review closes it.
