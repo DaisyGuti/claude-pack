@@ -352,9 +352,13 @@ directories; `cd <path> && pwd -P` gives that form.
    HEAD FETCH_HEAD` succeeds: every commit is on the remote branch. When the fetch fails with
    `couldn't find remote ref` (the branch was deleted after its review merged), the check
    passes only if the review reads `merged` or `closed`; the local branch keeps the commits.
-4. No process has its working directory inside it: `lsof -d cwd -Fn` exits 0 and lists no
-   `n` line equal to `<path>` or starting with `<path>/` (a bare prefix also matches a sibling
-   such as `<path>-2`). A missing `lsof` prints nothing and exits 127: that fails the check.
+4. No process has its working directory inside it: `lsof -d cwd -Fn` exits 0, writes nothing to
+   stderr and lists no `n` line equal to `<path>` or starting with `<path>/` (a bare prefix
+   also matches a sibling such as `<path>-2`). Any non-zero exit (127 for a missing `lsof`) or
+   any stderr warning (a permission denial hides processes) fails the check. The check sees only
+   a working directory: a process that writes into the worktree from a cwd outside it (a file
+   watcher, a Docker bind mount) is invisible to it, so the worker's own cleanup (stop what you
+   started) is the guard.
 
 Then, with `<clone>` the registry clone of that repo:
 
@@ -376,10 +380,15 @@ TZ=UTC ps -o lstart= -p <N>                    # the lock's start is UTC; plain 
 Unlock only when the walk ends on `p` equal to `<N>` and that time equals the lock's `start`
 (compare with runs of spaces squeezed); a mismatch is a dead session's lock on a reused pid.
 Never unlock a worktree whose lock names another pid or has another reason: another session or
-a person holds it. Never pass `--force`: a refusal means one of the checks missed something, so
-keep the worktree and report it. When `remove` fails with `failed to delete`, git has already
-deleted part of the tree and unregistered it; keep the leftover directory, never `rm -rf` it,
-and report it. The local branch stays.
+a person holds it. Copy the lock's reason from the `worktree list --porcelain` line (the text
+after `locked `) before you unlock. Never pass `--force`: a refusal means one of the checks
+missed something, so keep the worktree and report it. When you had unlocked it and `remove`
+refuses (the worktree is still listed), lock it again at once with that reason (`git -C <clone> worktree lock --reason
+"<original reason>" <path>`), so Claude Code's own sweep cannot remove it later, and list it
+under "Worktrees kept" as re-locked; when the re-lock itself fails, say so there. When `remove`
+fails with `failed to delete`, git has already deleted part of the tree and unregistered it
+(there is nothing left to lock): keep the leftover directory, never `rm -rf` it, and report it
+as an orphan under "Worktrees kept". The local branch stays.
 
 Keep, and list in the report with the failed check, the worktrees of workers still running,
 of every `blocked_*`, `needs_decision` and `needs_manual_action` slot (the branch and review may
@@ -407,7 +416,7 @@ Not dispatched: <K>
   #60 "title": run:solo label: human-in-loop required
 Unfinished (resume with the next run): <L>
 Worktrees kept: <W>
-  #50 <repo>: <path> (blocked_push_rejected; a worktree that failed a check names it)
+  #50 <repo>: <path> (blocked_push_rejected; a failed check, a re-locked refusal or an orphan directory is named)
 Left alone: <A> Ready tickets assigned to others, <U> unassigned
 Held (carry the blocked label, not dispatched): <H>
   #71 <repo>: Blocked: dependency
