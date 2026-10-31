@@ -166,6 +166,117 @@ def test_worker_files_a_follow_up_ticket_for_every_unfixed_finding_and_known_gap
     assert (PLUGIN / "scripts" / "check_ticket.py").is_file()
 
 
+def flat(path: Path) -> str:
+    """A file's text with every run of whitespace collapsed, so a phrase can wrap across lines."""
+    return " ".join(path.read_text(encoding="utf-8").split())
+
+
+def test_worker_merges_the_base_then_runs_only_the_gates_the_diff_touches_once() -> None:
+    """Ticket workers share one laptop: the default branch is merged in first (never a rebase),
+    then the gates the diff touches run once on the merged tree, and the full suite is left to
+    CI. The worker says in its report which gates ran."""
+    body = flat(PLUGIN / "agents" / "ticket-worker.md")
+    section = body[body.index("**Merge the default branch, then run the gates once.**") :]
+    section = section[: section.index("**Waiting.**")]
+    assert "merge --no-edit origin/<default_branch>" in section
+    assert "Never rebase." in section
+    assert "only the ones the diff touches" in section
+    assert "Do not run the repo's full suite: CI runs it on the review." in section
+    assert "Never run the gates before the merge and again after it" in section
+    assert section.index("merge --no-edit") < section.index("run the gates on the merged tree")
+    assert "which gates ran and which were left to CI" in section
+    assert "the gates that ran and the ones left to CI" in body[body.index("## 10. Final report") :]
+
+
+def test_worker_waits_by_pid_never_by_a_self_matching_pgrep() -> None:
+    body = flat(PLUGIN / "agents" / "ticket-worker.md")
+    section = body[body.index("**Waiting.**") : body.index("## 7. Land the work")]
+    assert 'Never loop on `pgrep -f "<text>"`' in section
+    assert "by its PID" in section and "completion of the background job" in section
+    assert "nothing you started is still running" in section
+    assert "nothing you started is still running" in body[body.index("## 10. Final report") :]
+
+
+def test_worker_tests_wait_on_conditions_not_sleeps() -> None:
+    body = flat(PLUGIN / "agents" / "ticket-worker.md")
+    section = body[body.index("**Tests.**") : body.index("**Gate command**")]
+    assert "never on a fixed sleep" in section
+    assert "fake timers for polling code" in section
+    assert "only as a backstop against a hang" in section
+
+
+def test_a_locked_signing_key_blocks_the_ticket_and_the_orchestrator_resumes_all_together() -> None:
+    """No long retry windows and signing is never turned off: the worker keeps the change
+    staged and ends `blocked_sandbox`; the orchestrator asks the user to unlock once and
+    resumes every such worker in one message from the trees the worker reported."""
+    worker = flat(PLUGIN / "agents" / "ticket-worker.md")
+    land = worker[worker.index("**A locked signing key.**") : worker.index("**Review.** Per repo")]
+    assert "do not wait out retry windows and never turn signing off" in land
+    assert "status=blocked_sandbox" in land and "signing key locked" in land
+    assert "worktree_paths" in land and "resume_worktrees" in land
+    assert "A locked signing key stops the run as section 7 describes" in worker
+    assert "**Resuming after a locked signing key.**" in worker
+    orchestrator = flat(PLUGIN / "skills" / "work-tickets" / "references" / "orchestrator.md")
+    reap = orchestrator[orchestrator.index("`blocked_sandbox` and the `reason`") :]
+    reap = reap[: reap.index('`status == "review_opened"`')]
+    assert "Ask the user once" in reap and "Do not ask per worker" in reap
+    assert "resume all of those workers together" in reap
+    assert "`resume_worktrees` set from its `worktree_paths`" in reap
+
+
+def test_the_orchestrator_has_one_poller_and_runs_flaky_test_and_ci_tickets_first() -> None:
+    text = flat(PLUGIN / "skills" / "work-tickets" / "references" / "orchestrator.md")
+    poller = text[text.index("- **One poller.**") : text.index("- **Preflight**")]
+    assert "is the only thing that polls the tracker" in poller
+    assert "never start a polling loop per review or per worker" in poller
+    assert "rate limit is shared" in poller
+    assert "Nothing here merges a review." in poller
+    assert "a flaky-test or CI ticket (judged from its title and labels) goes ahead" in text
+    assert "so flaky-test and CI tickets fill slots first" in text
+
+
+def test_ready_means_planned_in_planning_and_grooming() -> None:
+    """A ticket is in Ready only with a Final Plan and no open blocker, and a planned,
+    unblocked ticket moves to Ready in the step that plans it."""
+    planning = flat(PLUGIN / "references" / "plan-one-ticket.md")
+    assert "**Ready means planned.**" in planning
+    assert "only with a `### Final Plan` and no open blocker" in planning
+    assert "never left in the backlog" in planning
+    assert "**Lane.**" in planning and "**set-lane** with role `ready`" in planning
+    grooming = flat(PLUGIN / "skills" / "daily-grooming" / "references" / "grooming.md")
+    triage = grooming[grooming.index("## 4. Triage the lanes") : grooming.index("## 5.")]
+    assert "**Ready means planned.**" in triage
+    assert "| Planned, with no open blocker | ready |" in triage
+    assert "| Not planned yet | backlog until step 7 plans it" in triage
+    assert "carries the blocked label and sits in the ready lane" in triage
+    for doc in (
+        PLUGIN / "skills" / "daily-grooming" / "SKILL.md",
+        PLUGIN / "README.md",
+    ):
+        assert "Ready means planned" in flat(doc), doc
+
+
+def test_model_label_is_sized_to_the_plans_scope() -> None:
+    labels = flat(PLUGIN / "references" / "ticket-labels.md")
+    section = labels[labels.index("## Model label") : labels.index("## Blocked")]
+    assert "read from the scope of the plan" in section
+    assert "only adds or edits tests or documents, or touches one small file" in section
+    assert "A normal multi-file change" in section
+    assert "Security, authentication or gate logic" in section
+    assert "tricky invariants" in section
+    planning = flat(PLUGIN / "references" / "plan-one-ticket.md")
+    assert "Size it to the plan's scope" in planning
+
+
+def test_grooming_reports_ready_in_waves_that_share_no_file() -> None:
+    grooming = flat(PLUGIN / "skills" / "daily-grooming" / "references" / "grooming.md")
+    summary = grooming[grooming.index("- **Ready (in waves)**") : grooming.index("- **Backlog")]
+    assert "touch no file in common" in summary
+    assert "at most the pool size" in summary
+    assert "Flaky-test and CI tickets come first" in summary
+    assert "adds a migration gets a wave to itself" in summary
+
+
 def test_ticket_worker_skill_turns_on_auto_fix_for_an_opened_review() -> None:
     """The session that started the worker turns Auto-fix on, never the worker, and only for a
     review that is open for merging; the held `needs_manual_action` review is skipped."""

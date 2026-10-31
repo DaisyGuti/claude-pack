@@ -99,7 +99,7 @@ Check, using the bodies and labels already fetched:
   **issue-state**. When every one is closed (a merged review closes its issue, so
   this is how review-landed work frees what waits on it), **remove-label** the
   blocked label and **comment** "Unblocked: every dependency is closed." If it
-  sits in the blocked lane, it moves to the ready lane in step 4. Any other kind of
+  sits in the blocked lane, it goes through step 4's table like any open ticket. Any other kind of
   hold stays for a person.
 
 **Label preservation.** Grooming removes a label in exactly two cases: a priority label
@@ -140,20 +140,30 @@ there; leave its lane exactly as it is. It is still audited and given a priority
 Needs Attention.
 
 A ticket whose dependency hold step 3 cleared in this run is no longer held, even in
-the blocked lane: it goes through the table below like any other open ticket.
+the blocked lane: it goes through the table below like any other open ticket. One more
+exception: a ticket that carries the blocked label and sits in the ready lane is not ready, so
+it moves to the backlog lane and keeps its label and comment.
+
+**Ready means planned.** A ticket goes to the ready lane only with a `### Final Plan` comment
+and no open blocker, and a planned, unblocked ticket always goes there, never left in the
+backlog. The list from step 1 carries no comments, so run **read-issue** on each ticket the
+table would otherwise send to ready, and look for the plan.
 
 For everything else (the open tickets that are not held):
 
 | Condition | Lane |
 | --- | --- |
 | A P3, or the repo's brief marks it deferred or outside the current work | backlog |
-| Anything else | ready |
+| Planned, with no open blocker | ready |
+| Not planned yet | backlog until step 7 plans it; a ticket already in ready stays there until then |
 
 ## 5. Order the Ready lane
 
-The tickets step 4 sent to ready, and only those, are ordered for the summary: by the
-Priority table's rank, highest first; within a rank, tickets that other open tickets
-name on a `Depends on:` line first, then the ticket number ascending. There is no cap.
+The tickets step 4 sent to ready, and the ones step 7 will plan into it, and only those, are
+ordered for the summary: by the Priority table's rank, highest first; within a rank, tickets
+that other open tickets name on a `Depends on:` line first, then the ticket number ascending.
+There is no cap on the order. Step 8 cuts it into waves, once step 7 has made every plan
+readable.
 A ticket step 4 held or left alone is not in this order and its lane is not touched
 here, wherever its priority would rank it: a worker moves a ticket to in-progress the
 moment it claims it, and changing its lane here would un-claim work in flight. When a
@@ -184,11 +194,14 @@ tracker's error, and the run goes on to the next change; never retry one in a lo
 ## 7. Make every Ready ticket dispatchable
 
 After the lanes are set, a Ready ticket is dispatchable when it has a plan, a priority,
-one model label and one run label. For every Ready ticket that is not held, board-wide
-(not only the ones assigned to the person running this):
+one model label and one run label. For every ticket in the ready lane that is not held, and
+every other unplanned, unblocked ticket step 4 left in the backlog, board-wide (not only the
+ones assigned to the person running this):
 
 1. **read-issue**. A `### Final Plan` comment means it is planned.
-2. **Unplanned:** plan it by `plan-one-ticket.md`.
+2. **Unplanned:** plan it by `plan-one-ticket.md`. The model label is sized to the plan's
+   scope as `ticket-labels.md` says. Posting the plan moves the ticket to the ready lane
+   unless it is blocked; a ticket the planning holds goes to the backlog lane.
 3. **Planned, but missing a model or run label:** labels-only mode of the same file.
 4. **Several model labels:** list under Needs Attention; `work-tickets` will not
    dispatch it.
@@ -210,7 +223,8 @@ one model label and one run label. For every Ready ticket that is not held, boar
     absolute paths of `plan-one-ticket.md`, `registry-rules.md`, `ticket-labels.md` and the
     tracker adapter file; the `<scripts>` and `<data>` paths; the ticket's repo Remote and
     number; the repo's brief and local clone paths from the registry (or the `--context`
-    file); which mode to run; and the instruction to change no lane, priority or assignee.
+    file); which mode to run; and the instruction to change no priority or assignee, and to move the
+    lane only as `plan-one-ticket.md` says.
   - **What it returns.** Only the one-line result `plan-one-ticket.md` defines, with its
     word count. No plan text, no logs.
 - Re-run once, yourself, any ticket whose plan came back over 200 words or whose child
@@ -227,8 +241,14 @@ Plain language, short, grouped under these headings, each with its count:
 
 - **Moved to Done**: the finished items step 1 settled.
 - **Duplicates to Review**: each group with ticket numbers and titles.
-- **Ready (priority order)**: `#N title [priority] [repo]`, marked planned, already
-  planned, or labelled, and with the reasoning for any priority that was a close call.
+- **Ready (in waves)**: `#N title [priority] [repo]`, marked planned, already planned, or
+  labelled, and with the reasoning for any priority that was a close call. Cut the step 5
+  order into waves of tickets that touch no file in common, read from each plan's **Files to
+  touch**, so the tickets of a wave can run side by side. A wave holds at most the pool size
+  (`--max-parallel` of `work-tickets`, 5 by default). Flaky-test and CI tickets come first,
+  in the earliest waves. A ticket whose plan adds a migration gets a wave to itself. A ticket
+  goes into the first wave with room that has no file in common with it; within a wave,
+  priority order holds.
 - **Backlog (priority order)**: `#N title [priority]` and the reason it is in the
   backlog.
 - **In progress**: `#N title`, with its review link when it has one.

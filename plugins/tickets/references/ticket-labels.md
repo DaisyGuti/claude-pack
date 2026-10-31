@@ -34,16 +34,19 @@ person can settle: report it and change nothing.
 
 ## Model label
 
-The tier follows the hardest judgment in the work. A P0 typo is still `fast`. Write the
-label the registry's Model labels table maps the tier to.
+The tier follows the hardest judgment in the work, read from the scope of the plan: the
+files it names and the traps it lists. A P0 typo is still `fast`. Write the label the
+registry's Model labels table maps the tier to.
 
-- **fast** (Haiku): mechanical, one concern, no design judgment. A rename, a dead-code
-  sweep, a copy or label tweak, a regex replacement, a dependency bump.
-- **workhorse** (Sonnet): ordinary implementation. A multi-file change, a new module that
-  mirrors an existing pattern, a schema or prompt edit, test additions, wiring whose design
-  is already specified. The default when in doubt.
-- **frontier** (Opus): hard. New architecture, several cross-cutting concerns, tradeoffs
-  the ticket leaves open, correctness or performance work that needs deep reasoning.
+- **fast** (Haiku): mechanical, one concern, no design judgment. A change that only adds or
+  edits tests or documents, or touches one small file. A rename, a dead-code sweep, a copy or
+  label tweak, a regex replacement, a dependency bump.
+- **workhorse** (Sonnet): ordinary implementation. A normal multi-file change, a new module
+  that mirrors an existing pattern, a schema or prompt edit, test additions that need new
+  fixtures, wiring whose design is already specified. The default when in doubt.
+- **frontier** (Opus): hard. Security, authentication or gate logic. Cross-cutting design or
+  several cross-cutting concerns, tradeoffs the ticket leaves open, and tricky invariants:
+  correctness or performance work that needs deep reasoning.
 
 [model-selection.md](model-selection.md) has the detail and how the label becomes a model.
 A model label a person put on the ticket stays as it is.

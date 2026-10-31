@@ -70,6 +70,9 @@ Paths used below (read them as `<scripts>` and `<data>`):
   summary opens with what changed on the board.
 - **`--dry-run` runs read operations only.** It prints every planned change and every ticket it
   would plan, and writes nothing, creates no label and spawns nothing.
+- **Ready means planned.** A ticket goes to the ready lane only with a `### Final Plan` and no
+  open blocker, and a planned, unblocked ticket goes there in the same pass, never left in the
+  backlog.
 - **Duplicates and lane order are reported.** Duplicates are listed for a person and never
-  closed or merged. The Ready order goes in the summary for someone to apply, since no tracker
-  operation reorders a lane.
+  closed or merged. The Ready order goes in the summary, in waves of tickets that share no
+  file, for someone to apply, since no tracker operation reorders a lane.
