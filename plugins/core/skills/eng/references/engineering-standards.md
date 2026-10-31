@@ -114,8 +114,8 @@ the need.
 
 **Say what could be better; don't go build it.** When you notice something outside
 your brief that should improve (a rule stated in two places, a test that asserts
-nothing, a query that will not scale), note it with the file path and report it.
-Building it is scope creep; leaving it unsaid loses the observation.
+nothing, a query that will not scale), note it with the file path and list it as a
+follow-up. Building it is scope creep; leaving it unsaid loses the observation.
 
 **Before you call it built, consider the next version up.** Once the simple version
 works, ask once whether a meaningfully better shape exists: fewer moving parts, one
@@ -145,9 +145,10 @@ diff as an engineer who wants it rejected.
   the five disciplines below it bends, with the reason.
 
 Fix what you find. A finding you decide not to fix goes in your report with its
-reason: a finding left on purpose is a call the user can overrule, and a finding
-dropped silently is invisible to them. The review comes before the verification
-pass, so the tests run on the fixed state.
+reason and, unless the finding is wrong, becomes a follow-up (a ticket, where the repo has
+a ticket workflow): a finding left on
+purpose is a call the user can overrule, and a finding dropped silently is invisible
+to them. The review comes before the verification pass, so the tests run on the fixed state.
 
 **Land the work as a pull or merge request, and stop there.** An engineering task ends
 with a branch pushed and a pull request (GitHub) or merge request (GitLab) opened, and
