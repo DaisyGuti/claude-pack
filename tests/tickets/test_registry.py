@@ -136,6 +136,131 @@ def test_works_for_is_optional_and_read_from_the_tracker_section(filled_registry
     assert registry.parse(pinned)["works_for"] == "DaisyGuti"
 
 
+def as_gitlab(text: str, lanes_line: str | None) -> str:
+    """Switch a filled registry to GitLab, with the Board's Lanes line replaced or removed."""
+    swaps = {
+        "- Tracker: `github`": "- Tracker: `gitlab`",
+        "- Host: `github.com`": "- Host: `gitlab.com`",
+        "acme/shop-app": "acme-team/shop-app",
+        "- Lanes: `labels`\n": "" if lanes_line is None else lanes_line + "\n",
+    }
+    for old, new in swaps.items():
+        assert old in text, f"the example registry no longer holds {old!r}"
+        text = text.replace(old, new)
+    return text
+
+
+STATUS_LANES = {
+    "`status::backlog`": "`Backlog`",
+    "`status::ready`": "`Ready`",
+    "`status::in-progress`": "`In progress`",
+    "`status::blocked`": "`Blocked`",
+    "`status::in-review`": "`In review`",
+    "`status::done`": "`Done`",
+}
+
+
+def test_gitlab_lane_mode_defaults_to_labels_when_the_line_is_absent(
+    filled_registry: Path,
+) -> None:
+    path = filled_registry / "registry.md"
+    path.write_text(as_gitlab(path.read_text(encoding="utf-8"), None), encoding="utf-8")
+    assert registry.ensure(filled_registry)[0] == 0
+    reg = registry.parse(path.read_text(encoding="utf-8"))
+    assert reg["lane_mode"] == "labels"
+    assert reg["lanes"]["ready"] == "status::ready"
+
+
+def test_gitlab_status_mode_reads_status_names_as_lanes(
+    filled_registry: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = filled_registry / "registry.md"
+    # The mode is matched case-insensitively, as a person may write it.
+    text = as_gitlab(path.read_text(encoding="utf-8"), "- Lanes: `Status`")
+    for label, status in STATUS_LANES.items():
+        text = text.replace(label, status)
+    path.write_text(text, encoding="utf-8")
+    code, payload = registry.ensure(filled_registry)
+    assert (code, payload["status"]) == (0, "ok")
+    # In process, so the fixture's stand-in for `which` covers glab, which CI does not install.
+    assert registry.main(["show", "--data-dir", str(filled_registry)]) == 0
+    assert json.loads(capsys.readouterr().out)["lane_mode"] == "status"
+    reg = registry.parse(text)
+    assert reg["lane_mode"] == "status"
+    assert reg["lanes"]["in_progress"] == "In progress"
+    assert reg["priorities"][0]["value"] == "priority::0"
+
+
+def test_gitlab_status_mode_with_label_lanes_is_a_problem(filled_registry: Path) -> None:
+    path = filled_registry / "registry.md"
+    path.write_text(
+        as_gitlab(path.read_text(encoding="utf-8"), "- Lanes: `status`"), encoding="utf-8"
+    )
+    code, payload = registry.ensure(filled_registry)
+    assert code == registry.EXIT_INCOMPLETE
+    assert any("'status::ready'" in p and "Status name" in p for p in payload["problems"])
+
+
+def test_unknown_gitlab_lane_mode_is_a_problem(filled_registry: Path) -> None:
+    path = filled_registry / "registry.md"
+    path.write_text(
+        as_gitlab(path.read_text(encoding="utf-8"), "- Lanes: `columns`"), encoding="utf-8"
+    )
+    _, payload = registry.ensure(filled_registry)
+    assert any("'labels' or 'status'" in p for p in payload["problems"])
+
+
+def test_github_has_no_lane_mode(filled_registry: Path) -> None:
+    reg = registry.parse((filled_registry / "registry.md").read_text(encoding="utf-8"))
+    assert reg["lane_mode"] is None
+
+
+def test_batching_is_off_with_the_default_size_when_the_section_is_absent(
+    filled_registry: Path,
+) -> None:
+    text = (filled_registry / "registry.md").read_text(encoding="utf-8")
+    assert "- Batching: `off`" in text
+    without = text.replace("- Batching: `off`\n", "").replace("- Batch size: `5`\n", "")
+    assert registry.parse(without)["batching"] == {"mode": "off", "size": 5}
+
+
+@pytest.mark.parametrize(
+    ("tracker", "mode", "ok"),
+    [
+        ("github", "sub-issues", True),
+        ("github", "labels", True),
+        ("github", "epics", False),
+        ("gitlab", "epics", True),
+        ("gitlab", "sub-issues", False),
+        ("gitlab", "Labels", True),
+    ],
+)
+def test_batching_mode_must_exist_on_the_tracker(
+    filled_registry: Path, tracker: str, mode: str, ok: bool
+) -> None:
+    path = filled_registry / "registry.md"
+    text = path.read_text(encoding="utf-8").replace("- Batching: `off`", f"- Batching: `{mode}`")
+    if tracker == "gitlab":
+        text = as_gitlab(text, "- Lanes: `labels`")
+    path.write_text(text, encoding="utf-8")
+    code, payload = registry.ensure(filled_registry)
+    assert (code == 0) is ok, payload
+    if ok:
+        assert registry.parse(text)["batching"]["mode"] == mode.lower()
+    else:
+        assert any(f"'{mode}' does not exist" in p for p in payload["problems"])
+
+
+@pytest.mark.parametrize("value", ["`zero`", "`0`", "`many`"])
+def test_bad_batch_size_or_mode_is_a_problem(filled_registry: Path, value: str) -> None:
+    path = filled_registry / "registry.md"
+    text = path.read_text(encoding="utf-8").replace("- Batch size: `5`", f"- Batch size: {value}")
+    path.write_text(text.replace("- Batching: `off`", "- Batching: `piles`"), encoding="utf-8")
+    _, payload = registry.ensure(filled_registry)
+    assert any("Batch size is" in p for p in payload["problems"])
+    assert any("Batching is 'piles'" in p for p in payload["problems"])
+
+
 def test_tilde_in_a_clone_path_expands_against_home(tmp_path: Path) -> None:
     text = (PLUGIN / "registry.example.md").read_text(encoding="utf-8")
     reg = registry.parse(text, home=tmp_path)

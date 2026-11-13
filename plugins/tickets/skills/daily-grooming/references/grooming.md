@@ -8,8 +8,14 @@ tracker. Read that one file once and run each operation as written. `<scripts>` 
 are the two paths printed at the top of SKILL.md.
 
 The board is shared. Grooming never changes an assignee, never closes or deletes an
-issue, and never moves a ticket that a worker or a person put somewhere (step 4 lists
-them).
+issue (the one exception: with batching on, a batch parent that has children, all closed),
+and never moves a ticket that a worker or a person put somewhere (step 4 lists them).
+
+**Batching.** `registry.py show` prints `batching` (`mode`, `size`). With `mode` `off`, skip
+every paragraph below marked "when batching is on", and `--convert-batch-labels` changes
+nothing and says so. Otherwise read the plugin's `references/batches.md` in full; the batch
+steps follow it, and the parent operations (**list-parents**, **create-parent**,
+**attach-child**, ...) are built as it says for `mode`.
 
 ## Contents
 
@@ -17,6 +23,7 @@ them).
 - 1. Fetch the board, and settle finished work first
 - 2. Flag duplicates
 - 3. Audit each open ticket (with the priority sync)
+- 3b. Form batches (when batching is on)
 - 4. Triage the lanes
 - 5. Order the Ready lane
 - 6. Apply the changes
@@ -46,6 +53,18 @@ left alone. Drop, and list under Needs Attention, any item whose repo is not in 
 registry's table, and with `--repo` any item outside the named repos: a repo missing
 from the table is invisible by design.
 
+**Parents, when batching is on.** Run **list-parents** (per repo, or once for the board's
+group, as the adapter says) and keep each parent with its children. It returns batch parents
+only (titles starting with `Batch: `; batches.md, "A batch parent's title"): any other parent,
+a roadmap epic or a tracking issue, is not touched by the batch steps, and one that is on the
+board is an ordinary item. In `labels` mode, list each `batch:<area>` label that has children
+but no parent issue under Needs Attention; step 3b makes its parent. With
+`--convert-batch-labels`, convert the labels now (batches.md, "Converting `batch:<area>`
+labels"; in `labels` mode it changes nothing and says so), and treat the parents it made or
+would make as parents for the rest of the pass. Then drop every parent from the items before
+anything else looks at it (batches.md, "What a parent is not") and count them for the
+summary. Each remaining item's parent, if any, is the one whose children include it.
+
 Real state decides. An item whose lane was never set reads as "not done"
 while its issue is closed and shipped. For each registry repo on the board:
 
@@ -61,6 +80,10 @@ while its issue is closed and shipped. For each registry repo on the board:
    On a tracker whose **list-items** lists open issues only (the adapter says so;
    GitLab does), also run it for closed issues as the adapter describes, and move
    each one still in a lane other than done.
+
+5. When batching is on, after the items are settled: **close-parent** every open batch
+   parent that has at least one child and whose children are all closed (batches.md,
+   "Settling a batch"). A parent with no children is left open.
 
 A finished item is done and goes no further: no audit, no priority, no triage, and
 above all no plan. Planning shipped work fills the ticket with a plan for something
@@ -130,6 +153,19 @@ reason decided it. The role names come from the registry.
   others out on both trackers.
 - A priority value in `missing_priorities` is skipped, with one warning for the run.
 
+## 3b. Form batches (when batching is on)
+
+Now that every ticket has its priority, form batches as batches.md says ("Forming
+batches"): attach each fitting unparented candidate to an open parent, else form new
+parents from candidates that fit each other, never a batch of one. The singles rules there
+hold. The labels are already fetched; run **read-issue** for a candidate's plan only when
+its labels give no area signal. In `epics` and `sub-issues` mode run **read-parent** on each
+candidate first: one with any parent (a non-batch one, `batch` false) is not a candidate,
+since attaching it would re-parent it. In `labels` mode, also decide a `Batch: <area>`
+parent for each `batch:<area>` label step 1 listed without one. Here you only decide: step 6
+runs **create-parent** and **attach-child** (a `--dry-run` lists them), and from now on a
+ticket you attach counts as that parent's child.
+
 ## 4. Triage the lanes
 
 **Held tickets keep their lane.** A ticket is held when it is in the in-progress lane,
@@ -149,6 +185,16 @@ and no open blocker, and a planned, unblocked ticket always goes there, never le
 backlog. The list from step 1 carries no comments, so run **read-issue** on each ticket the
 table would otherwise send to ready, and look for the plan.
 
+**Batches, when batching is on.** Children move together (batches.md, "Lanes"). Run
+**read-parent-item** for each parent with an open child: the batch is planned when its
+`### Final Plan` (with any `### Final Plan addendum: #<n>`) has a section for every open
+child. A planned batch with no blocked child sends every open child to ready; otherwise every
+child that is not held goes to (or stays in) the backlog lane. A child in the in-progress or
+review lane, or in the `closes` list of an open review, holds the whole batch where it is: no
+child of it moves. A batch is
+deferred, and its children go to the backlog, only when every child is a P3 or deferred. The
+table below is for singles.
+
 For everything else (the open tickets that are not held):
 
 | Condition | Lane |
@@ -162,6 +208,7 @@ For everything else (the open tickets that are not held):
 The tickets step 4 sent to ready, and the ones step 7 will plan into it, and only those, are
 ordered for the summary: by the Priority table's rank, highest first; within a rank, tickets
 that other open tickets name on a `Depends on:` line first, then the ticket number ascending.
+When batching is on, a batch is one entry, ranked by its highest child.
 There is no cap on the order. Step 8 cuts it into waves, once step 7 has made every plan
 readable.
 A ticket step 4 held or left alone is not in this order and its lane is not touched
@@ -187,7 +234,8 @@ write operation and spawn nothing. Then print the summary as if the changes had 
 made, marked as planned.
 
 **Otherwise,** apply in this order, running an operation only when it changes
-something: **ensure-label** for each label that may be missing; **set-priority** and the
+something: **ensure-label** for each label that may be missing; when batching is on, each
+**create-parent** of step 3b and then each **attach-child**; **set-priority** and the
 label adds and removes; **set-lane**. A failed write goes under Needs Attention with the
 tracker's error, and the run goes on to the next change; never retry one in a loop.
 
@@ -203,6 +251,11 @@ ones assigned to the person running this):
    scope as `ticket-labels.md` says. Posting the plan moves the ticket to the ready lane
    unless it is blocked; a ticket the planning holds goes to the backlog lane.
 3. **Planned, but missing a model or run label:** labels-only mode of the same file.
+
+When batching is on, a batch is planned as one unit, on its parent, by that file's "Batches"
+section: one plan covering every open child when the parent has none, or an addendum for each
+child its plan does not cover. It counts as one ticket below, and its brief also names the
+parent's ref and each child's Remote and number. The labels-only mode stays per child.
 4. **Several model labels:** list under Needs Attention; `work-tickets` will not
    dispatch it.
 
@@ -227,9 +280,9 @@ ones assigned to the person running this):
     lane only as `plan-one-ticket.md` says.
   - **What it returns.** Only the one-line result `plan-one-ticket.md` defines, with its
     word count. No plan text, no logs.
-- Re-run once, yourself, any ticket whose plan came back over 200 words or whose child
-  failed in a way that looks like a weak run. Any other failure goes under Needs
-  Attention with the child's reason.
+- Re-run once, yourself, any ticket whose plan came back over 200 words (a batch: any child's
+  section) or whose child failed in a way that looks like a weak run. Any other failure goes
+  under Needs Attention with the child's reason.
 
 Tickets that come back `held` or `could not plan` go under Needs Attention with the
 reason. In a `--dry-run` this step only lists the tickets that would be planned or
@@ -240,6 +293,9 @@ labelled.
 Plain language, short, grouped under these headings, each with its count:
 
 - **Moved to Done**: the finished items step 1 settled.
+- **Batches** (when batching is on): every attach and every created parent, each as
+  `parent <ref> <title>: +#<child> ...`, then the parents closed in step 1 and the labels
+  converted, and the count of parents left out of triage. A `--dry-run` lists what it would do.
 - **Duplicates to Review**: each group with ticket numbers and titles.
 - **Ready (in waves)**: `#N title [priority] [repo]`, marked planned, already planned, or
   labelled, and with the reasoning for any priority that was a close call. Cut the step 5
@@ -248,7 +304,8 @@ Plain language, short, grouped under these headings, each with its count:
   (`--max-parallel` of `work-tickets`, 5 by default). Flaky-test and CI tickets come first,
   in the earliest waves. A ticket whose plan adds a migration gets a wave to itself. A ticket
   goes into the first wave with room that has no file in common with it; within a wave,
-  priority order holds.
+  priority order holds. When batching is on, a batch is one line, `parent <ref> <title>:
+  #<child> ...`, and takes one place in a wave with the files of all its children.
 - **Backlog (priority order)**: `#N title [priority]` and the reason it is in the
   backlog.
 - **In progress**: `#N title`, with its review link when it has one.

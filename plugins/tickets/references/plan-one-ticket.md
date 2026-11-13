@@ -13,7 +13,8 @@ drifted. So the plan is a short brief for the worker: a short plan that is 80% r
 re-checked at build time beats a long one that is stale by next week.
 
 **Inputs.** The ticket (its repo's Remote and number), and whether this is a dry run.
-Optional: `--context FILE`. The registry and the tracker adapter file for the registry's
+Optional: `--context FILE`, and, when batching is on, the ticket's parent and whether to join
+one (see "Batches"). The registry and the tracker adapter file for the registry's
 tracker are already read; if you were handed this file in a subagent brief, read both before
 the first step. Tracker actions are the named operations in bold; run them as the adapter
 file writes them.
@@ -26,6 +27,7 @@ file writes them.
 - 4. Post it and set the labels
 - 5. Return one line
 - Labels only, when the plan already exists
+- Batches, when batching is on
 
 ## 1. Load the context, lean
 
@@ -136,3 +138,36 @@ The caller reads this line and nothing else; it does not need the plan text back
 comment but lacks a model or run label, since `work-tickets` will not dispatch it that way. Do
 step 4's labels (2 and 3) judging from the existing plan, and its lane (4), post nothing, and
 return `labelled <repo>#<n>: <labels added>`.
+
+## Batches, when batching is on
+
+Only when `registry.py show` prints a `batching` `mode` other than `off`; the rules are the
+plugin's `references/batches.md` ("Planning a batch" and "Lanes"). A ticket with a parent is
+never planned alone: planning any child plans its whole batch.
+
+1. **read-parent-item** for the parent's plan and addenda, and **read-issue** for each open
+   child (the parent's children come from **list-parents**). Load the context once for the
+   batch: step 1's reads cover every child.
+2. Step 2 holds a child, never the parent: a held child gets the blocked label and comment,
+   the rest are still planned, and the batch stays in the backlog until the hold clears.
+3. **No plan on the parent:** one `### Final Plan` covering every open child that is not
+   held, posted with **comment-parent**: a `### #<n> <title>` section per child in the order
+   the worker should take them, each the shape of step 3 and about 200 words, then one short
+   paragraph on what they share (files, the test command, why that order). **A plan exists:**
+   post a `### Final Plan addendum: #<n>` for each open child it does not cover, in the same
+   shape. A re-plan opens with step 3's `_Re-planned_` line.
+4. Step 4's model and run labels go on each child, judged from its own section. The lane moves
+   the whole batch: when every open child is covered and none is held, **set-lane** each open
+   child in the backlog lane to `ready`; otherwise move none.
+5. Return `planned batch <parent ref>: #<n> <model label> <run label>, ... (<comment URL>,
+   <words> words)`, or `held` and `could not plan` lines per child as in step 5.
+
+**Joining a parent** (only when the caller asks: `plan-ticket` does, grooming does not). A
+ticket with no parent (**read-parent** prints null; one under a non-batch parent never joins,
+since attaching would re-parent it), planned by step 3 and not held, may join an open parent
+that fits it
+(batches.md, "Joining a batch"; attach only, never create a parent). Before posting, run
+**list-parents** for its repo and judge the fit with the plan's files. One fits:
+**attach-child**, then post the plan on the parent as this child's addendum (or, when the
+parent has no plan yet, plan the batch as above) instead of on the ticket. None fits: post it
+on the ticket as a single. Say in the returned line which parent it joined, or `single`.

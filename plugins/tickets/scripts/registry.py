@@ -41,6 +41,12 @@ REQUIRED_LANES = ("backlog", "ready", "in_progress", "blocked", "done")
 REQUIRED_LABELS = ("blocked", "run_worker", "run_solo")
 TIERS = ("fast", "workhorse", "frontier")
 TRACKERS = ("github", "gitlab")
+# How a GitLab board holds its lanes: scoped labels (the default) or the native work item Status.
+GITLAB_LANE_MODES = ("labels", "status")
+# Where batch parents live: a GitLab group epic, a GitHub sub-issue parent, a shared
+# `batch:<area>` label on either tracker, or no batches at all (every ticket a single).
+BATCH_MODES = {"off": TRACKERS, "epics": ("gitlab",), "sub-issues": ("github",), "labels": TRACKERS}
+DEFAULT_BATCH_SIZE = 5
 # Values that ship in registry.example.md. A board or repo that still holds one was never filled in.
 EXAMPLE_MARKERS = ("your-github-login", "your-group")
 
@@ -138,6 +144,8 @@ def parse(text: str, home: Path | None = None) -> dict[str, Any]:
         row.get("tier", ""): {"label": row.get("label", ""), "color": row.get("color", "")}
         for row in table(top.get("Model labels", ""))
     }
+    batch_vals = key_values(top.get("Batches", ""))
+    size = batch_vals.get("batch size", str(DEFAULT_BATCH_SIZE))
     base = home or Path.home()
     repos = [
         {
@@ -154,6 +162,13 @@ def parse(text: str, home: Path | None = None) -> dict[str, Any]:
         "host": tracker_vals.get("host", ""),
         "works_for": tracker_vals.get("works for", ""),
         "board": board,
+        # A registry written before the Lanes key existed keeps label lanes.
+        "lane_mode": board.get("lanes", "labels").lower() if tracker == "gitlab" else None,
+        # Without a Batches section every ticket stays a single, as before batching existed.
+        "batching": {
+            "mode": batch_vals.get("batching", "off").lower(),
+            "size": int(size) if size.isdigit() else size,
+        },
         "lanes": lanes,
         "lane_meaning": lane_meaning,
         "priorities": priorities,
@@ -195,6 +210,26 @@ def problems(reg: dict[str, Any], which: Callable[[str], str | None] | None = No
         for key in required_board:
             if not reg["board"].get(key):
                 found.append(f"Board has no '{key}' value for the {reg['tracker']} tracker")
+    if reg["tracker"] == "gitlab" and reg["lane_mode"] not in GITLAB_LANE_MODES:
+        found.append(
+            f"Board has Lanes '{reg['lane_mode']}' for the gitlab tracker; "
+            "it must be 'labels' or 'status'"
+        )
+    if reg["tracker"] == "gitlab" and reg["lane_mode"] == "status":
+        # The usual slip when a board moves to Status: the mode flips but the column keeps labels.
+        for role, value in reg["lanes"].items():
+            if "::" in value:
+                found.append(
+                    f"lane '{role}' is '{value}', a scoped label, but the GitLab board's Lanes "
+                    "is 'status'; write the Status name the board shows (for example 'Ready')"
+                )
+    batch_mode, batch_size = reg["batching"]["mode"], reg["batching"]["size"]
+    if batch_mode not in BATCH_MODES:
+        found.append(f"Batching is '{batch_mode}'; it must be one of {', '.join(BATCH_MODES)}")
+    elif reg["tracker"] in TRACKERS and reg["tracker"] not in BATCH_MODES[batch_mode]:
+        found.append(f"Batching '{batch_mode}' does not exist on the {reg['tracker']} tracker")
+    if not isinstance(batch_size, int) or batch_size < 1:
+        found.append(f"Batch size is '{batch_size}'; it must be a whole number of 1 or more")
     for role in REQUIRED_LANES:
         if not reg["lanes"].get(role):
             found.append(

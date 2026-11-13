@@ -43,27 +43,32 @@ A GitHub Projects (v2) board. The owner is a user or organization login.
 
 ### GitLab
 
-An issue board, which is a set of label lists.
+An issue board. Its lists are either labels or the native work item Status.
 
 - Scope: `group`
 - Path: `your-group`
 - Board: `Development`
+- Lanes: `labels`
 
 `Scope` is `group` or `project`. `Path` is the group or project path the board belongs
-to. `Board` is the board's name or its numeric id.
+to. `Board` is the board's name or its numeric id. `Lanes` is `labels` when the board's
+lists are labels (`status::ready`), or `status` when they are the work item Status
+(Backlog, Ready, In progress and so on; a Premium or Ultimate feature). Without the line
+the skills use `labels`.
 
 ## Lanes
 
-Each lane as the tracker shows it: on GitHub a Status option name, on GitLab a label,
-usually scoped (`status::ready`). A lane whose value is missing from the board is skipped
-with a warning when a ticket moves, and a missing `ready` lane stops a run.
+Each lane as the tracker shows it: on GitHub a Status option name; on GitLab a label,
+usually scoped (`status::ready`), or with `Lanes: status` the Status name (`Ready`). A
+lane whose value is missing from the board is skipped with a warning when a ticket
+moves, and a missing `ready` lane stops a run.
 
 The `review` lane is optional: delete its row if the board has no such lane. A worker
 that opens a review (every change lands by one) then leaves the card in `in_progress`.
 A worker never moves a card to `done`: merging closes the issue and `daily-grooming`
 moves the card. Every other lane is required.
 
-| Role | GitHub (Status option) | GitLab (label) | Meaning |
+| Role | GitHub (Status option) | GitLab (label, or Status name) | Meaning |
 | --- | --- | --- | --- |
 | backlog | `Backlog` | `status::backlog` | Filed, not yet queued; where `write-ticket` files by default |
 | ready | `Ready` | `status::ready` | Groomed and queued; the only lane `work-tickets` works |
@@ -115,6 +120,23 @@ tiers run on Claude Haiku (`fast`), Sonnet (`workhorse`) and Opus (`frontier`).
 The labels `model:fast`, `model:workhorse`, `model:frontier` and the dated
 `model:claude-haiku-*`, `model:claude-sonnet-*`, `model:claude-opus-*` forms resolve to
 the same three tiers when a ticket carries one the table does not list.
+
+## Batches
+
+A batch is one parent with a few child tickets that ship together: one worker, one
+branch, one pull or merge request. It keeps the board from filling with small tickets
+that each need their own review and CI run. `daily-grooming` forms batches, and the plan
+lives on the parent. The rules are in the plugin's `references/batches.md`.
+
+- Batching: `off`
+- Batch size: `5`
+
+`Batching` is `off` (every ticket is worked alone; the default without this section),
+`epics` (GitLab: a group epic in the board's group is the parent), `sub-issues` (GitHub:
+an issue whose sub-issues are the children) or `labels` (either tracker: the tickets
+sharing a `batch:<area>` label, led by a parent issue titled `Batch: <area>`). In every mode
+a batch parent's title starts with `Batch: `; other parents are left out of batching.
+`Batch size` is the most children one parent holds.
 
 ## Repos
 

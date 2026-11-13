@@ -16,11 +16,16 @@ Commands:
     show                          print the whole record
     set-project --json JSON       store the board facts; refuses a different board or login
     next-slot                     print the smallest unused slot number as 'slot-N'
-    begin --json JSON             add a slot to active (a ticket already tracked is refused)
+    begin --json JSON             add a slot to active (a ticket already tracked is refused;
+                                  a batch slot claims each of its `children`, and its
+                                  `parent` while another active slot holds it)
     finish --json JSON            move a slot out of active by its result status
     skip --number N --repo R --reason T
     clear-skipped
     forget --number N --repo R    drop a ticket from completed/blocked so it can be retried
+                                  (a batch child leaves its slot, whose ticket_number and
+                                  ticket_repo move to its first child left; the slot goes
+                                  with its last child)
 
 Exit codes: 0 ok, 2 bad input or a state file this script does not understand, 3 refused
 (duplicate ticket, or the file belongs to another board or login).
@@ -135,10 +140,21 @@ def key_of(entry: dict[str, Any]) -> tuple[int, str]:
     return int(entry["ticket_number"]), str(entry["ticket_repo"])
 
 
+def claims(entry: dict[str, Any]) -> list[tuple[int, str]]:
+    """The tickets a slot holds: a batch slot each of its `children`, any other slot its own."""
+    if "children" in entry:
+        return [key_of(child) for child in entry["children"]]
+    return [key_of(entry)]
+
+
+def same_parent(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    return (str(a["ref"]), str(a["repo"])) == (str(b["ref"]), str(b["repo"]))
+
+
 def tracked(state: dict[str, Any], number: int, repo: str) -> str | None:
     for bucket in ("active", "completed", "blocked"):
         for entry in state[bucket]:
-            if key_of(entry) == (number, repo):
+            if (number, repo) in claims(entry):
                 return bucket
     return None
 
@@ -181,12 +197,25 @@ def apply(state: dict[str, Any], command: str, args: argparse.Namespace) -> Any:
     elif command == "begin":
         slot = json.loads(args.json)
         require(slot, ("slot_id", "ticket_number", "ticket_repo"), "slot")
-        where = tracked(state, *key_of(slot))
-        if where:
-            raise StateError(
-                f"ticket {slot['ticket_repo']}#{slot['ticket_number']} is already in {where}",
-                EXIT_REFUSED,
-            )
+        if "children" in slot and not slot["children"]:
+            raise StateError("a batch slot needs at least one child in children")
+        for child in slot.get("children", ()):
+            require(child, ("ticket_number", "ticket_repo"), "child")
+        if "parent" in slot:
+            require(slot["parent"], ("ref", "repo"), "parent")
+        for number, repo in claims(slot):
+            where = tracked(state, number, repo)
+            if where:
+                raise StateError(f"ticket {repo}#{number} is already in {where}", EXIT_REFUSED)
+        if "parent" in slot:
+            # One worker per parent at a time; a finished slot's parent may take a later batch.
+            for entry in state["active"]:
+                if "parent" in entry and same_parent(entry["parent"], slot["parent"]):
+                    raise StateError(
+                        f"batch parent {slot['parent']['ref']} is already in active slot "
+                        f"{entry['slot_id']}",
+                        EXIT_REFUSED,
+                    )
         state["active"].append({**slot, "status": "running"})
     elif command == "finish":
         result = json.loads(args.json)
@@ -204,7 +233,10 @@ def apply(state: dict[str, Any], command: str, args: argparse.Namespace) -> Any:
         )
         if index is None:
             raise StateError(f"no active slot {result['slot_id']!r}")
-        entry = {**state["active"].pop(index), **result}
+        active = state["active"].pop(index)
+        entry = {**active, **result}
+        if "children" in active:
+            entry["children"] = active["children"]  # what the slot claims stays as it began
         state["completed" if completed else "blocked"].append(entry)
     elif command == "skip":
         entry = {"ticket_number": args.number, "ticket_repo": args.repo, "reason": args.reason}
@@ -217,8 +249,21 @@ def apply(state: dict[str, Any], command: str, args: argparse.Namespace) -> Any:
     elif command == "clear-skipped":
         state["skipped"] = []
     elif command == "forget":
+        target = (args.number, args.repo)
         for bucket in ("completed", "blocked"):
-            state[bucket] = [e for e in state[bucket] if key_of(e) != (args.number, args.repo)]
+            kept = []
+            for entry in state[bucket]:
+                if "children" in entry:
+                    entry["children"] = [c for c in entry["children"] if key_of(c) != target]
+                    if entry["children"]:
+                        # The first child left names the slot, as the first child did at begin.
+                        first = entry["children"][0]
+                        entry["ticket_number"] = first["ticket_number"]
+                        entry["ticket_repo"] = first["ticket_repo"]
+                        kept.append(entry)
+                elif key_of(entry) != target:
+                    kept.append(entry)
+            state[bucket] = kept
     return None
 
 

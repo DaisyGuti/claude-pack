@@ -33,10 +33,14 @@ overwrites it) and stops. Open it and fill in:
 - **Tracker** and **Host**: `github` or `gitlab`.
 - **Board**: your GitHub Project (owner and number) or GitLab board (scope, path, board).
 - **Lanes** and **Priority**: the exact Status options and Priority options on the GitHub
-  board, or the labels that stand for them on GitLab. A GitHub board with no Priority
+  board, or the labels that stand for them on GitLab. A GitLab board whose lists are the
+  native work item Status (Premium or Ultimate) sets `Lanes: status` under Board and lists
+  the Status names as its lanes; its priority stays a label. A GitHub board with no Priority
   options uses priority labels named like the Priority values (`P0` to `P3`).
 - **Labels** and **Model labels**: the blocked and run labels, and the label per model tier.
 - **Repos**: each repo's remote, local clone and product brief.
+- **Batches** (optional): `Batching` is `off` (the default), `epics` (GitLab), `sub-issues`
+  (GitHub) or `labels`, and `Batch size` caps the children per parent.
 
 Run any command again; it checks the registry and names whatever is still missing.
 
@@ -56,6 +60,18 @@ Run any command again; it checks the registry and names whatever is still missin
    the issue when merged, and moves the card to In review.
 4. A person reviews and merges. Merging closes the issue; the next `daily-grooming` pass moves
    the card to Done and frees any ticket that waited on it.
+
+**Batches.** With batching on, small related tickets ship together: one parent, one worker,
+one branch, one review, one CI run. `daily-grooming` forms the batches (same repo, same area,
+priorities at most one rank apart; migrations, security work and blocked tickets stay single)
+and closes a parent once its children are closed; `write-ticket` and `plan-ticket` join a new
+ticket to a fitting parent. The plan lives on the parent, the children move between lanes
+together, and `work-tickets` gives each parent one worker that works the children in the plan's
+order on `batch/<parent>-<area>-<slot>` and closes each finished one from the review. A batch
+parent's title starts with `Batch: `; any other parent (a roadmap epic, a tracking issue) is
+left out of batching. A ticket with no parent works exactly as above. The rules are in
+`references/batches.md`;
+`daily-grooming --convert-batch-labels` turns existing `batch:<area>` labels into parents once.
 
 Cleanup is part of each ticket: a worker stops what it started and drops its own test databases
 and temporary data before it returns, and `work-tickets` removes the worker's worktree as soon as

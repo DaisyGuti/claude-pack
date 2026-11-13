@@ -65,6 +65,18 @@ Paths used below (read them as `<scripts>` and `<data>`):
    **assign** only when the user says to. Never offer to take a ticket assigned to someone
    else; that person reassigns it.
    A closed issue or one carrying the blocked label also stops here, with that fact.
+4. **Batch**, when `registry.py show` prints a `batching` `mode` other than `off` (read
+   [batches.md](${CLAUDE_PLUGIN_ROOT}/references/batches.md), "Working a batch"): run
+   **read-parent**. An issue with a batch parent (`batch` true: its title starts with
+   `Batch: `) is worked with its whole batch, and the report says so: **list-parents** gives
+   the parent's children and **read-parent-item** its plan, and the batch is every open child
+   assigned to the current user, without the blocked label, that the plan covers, in the
+   plan's order, at most the registry's Batch size of them and all in the first child's repo
+   (the issue named is one of them, or this step stops and says why). Children left out are
+   named in the report. There is no flag for one child alone: to work it by itself, detach it
+   from its parent first. An issue with no parent, or a parent with `batch` false, is a
+   single. The batch branch is `batch/<parent number>-<area>-solo`, and a direct run never
+   sets `resumed`, so a batch never starts from a branch already on the remote.
 
 ## 3. Choose the model
 
@@ -74,6 +86,9 @@ Paths used below (read them as `<scripts>` and `<data>`):
    effort).
 3. No model label, several, or a label that maps to no tier (resolver exit 3, 4 or 5): use
    `sonnet` and say in the report which of those it was. Do not guess a tier.
+4. A batch resolves every child this way and runs on the strongest tier among them (frontier
+   over workhorse over fast) at the highest effort (`low` < `medium` < `high` < `xhigh` <
+   `max`), unless the user named a model.
 
 ## 4. Hand it to the worker
 
@@ -84,7 +99,12 @@ current user), `project` (from the registry and **capture-board**), `repo_map`,
 `worktree_root` `<data>/worktrees/solo`, `files.adapter`, `files.labels`,
 `files.ticket_template` (`${CLAUDE_PLUGIN_ROOT}/skills/write-ticket/assets/ticket-template.md`)
 and `files.check_ticket` (`<scripts>/check_ticket.py`) as absolute paths, `model`,
-`validate_plan_first` `true`, and `context_files` (the repo's product brief).
+`validate_plan_first` `true`, and `context_files` (the repo's product brief). A batch also sends
+`parent`, the ordered `children` and `files.batches`
+(`${CLAUDE_PLUGIN_ROOT}/references/batches.md`), built as
+[orchestrator.md](${CLAUDE_PLUGIN_ROOT}/skills/work-tickets/references/orchestrator.md) builds
+them ("The run record", and step 4's "Batches"), with `ticket_number` and `ticket_repo` naming
+the first child; a single sends none of them.
 
 Make one Agent call: `subagent_type` `tickets:ticket-worker`, `model` set to the chosen model,
 `effort` set to the resolved effort when it is not null (Claude Code v2.1.292 or later; on an
@@ -133,4 +153,5 @@ Relay the worker's report as yours, its Follow-ups list included. Put one line b
 which model ran and why (the label, the user's choice, or the fallback), and one line saying
 Auto-fix is on for each review or why it is not. The worker's last line is a `RESULT` line; read it for the status and
 the review links, and keep it out of your own summary. A ticket in review is not closed: say
-that merging the review closes it.
+that merging the review closes it. For a batch, name the parent, the children the review
+closes and each child left out or held, from the `RESULT`'s `children_status`.

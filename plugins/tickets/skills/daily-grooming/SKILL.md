@@ -1,7 +1,7 @@
 ---
 name: daily-grooming
 description: Tidies the whole ticket board so that Ready means safe to dispatch. Settles closed and merged work to Done, flags duplicates, syncs priorities, promotes tickets to Ready, and plans and labels each Ready ticket (plan, priority, model, run), for every person's tickets on a GitHub Project or GitLab board. Use for "groom the board", "clean up my backlog", "get Ready in shape", "settle the finished tickets", even when the user names no lane or label. Try --dry-run first.
-argument-hint: "[--dry-run] [--project N --owner OWNER] [--repo NAME] [--context FILE]"
+argument-hint: "[--dry-run] [--convert-batch-labels] [--project N --owner OWNER] [--repo NAME] [--context FILE]"
 allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/registry.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve_model.py *)
 ---
 
@@ -19,6 +19,7 @@ The request: $ARGUMENTS
 /tickets:daily-grooming --project 2 --owner my-group   # a different board (a pasted board URL works too)
 /tickets:daily-grooming --repo my-app              # only these registry repos; repeatable
 /tickets:daily-grooming --context FILE             # one brief for the whole run; repeatable
+/tickets:daily-grooming --convert-batch-labels     # once: turn batch:<area> labels into batch parents
 ```
 
 Never ask for a project number or a repo list. `--context FILE` is right only for a
@@ -42,8 +43,10 @@ Paths used below (read them as `<scripts>` and `<data>`):
 3. Read [grooming.md](${CLAUDE_SKILL_DIR}/references/grooming.md) in full. It holds the steps,
    in order: set up and capture the board; fetch the items and settle closed or merged work to
    done before anything else looks at it; flag duplicates; audit each open ticket, with the
-   priority sync; triage lanes and order the Ready lane; apply the changes; make every Ready
-   ticket dispatchable; print the summary.
+   priority sync; form batches; triage lanes and order the Ready lane; apply the changes; make
+   every Ready ticket dispatchable; print the summary. The batch steps run only when batching
+   is on (`registry.py show` prints `batching`, and its `mode` is not `off`); they follow
+   [batches.md](${CLAUDE_PLUGIN_ROOT}/references/batches.md), which you then read in full too.
 4. Planning follows
    [plan-one-ticket.md](${CLAUDE_PLUGIN_ROOT}/references/plan-one-ticket.md), the same
    procedure `/tickets:plan-ticket` uses. Plan each ticket in its own subagent started with
@@ -70,6 +73,11 @@ Paths used below (read them as `<scripts>` and `<data>`):
   summary opens with what changed on the board.
 - **`--dry-run` runs read operations only.** It prints every planned change and every ticket it
   would plan, and writes nothing, creates no label and spawns nothing.
+- **Batches, when batching is on.** A parent is never a ticket: it is dropped from triage and
+  counted apart. Grooming forms and joins batches and closes finished parents without asking,
+  moves a batch's children between lanes together, plans a batch on its parent, and lists every
+  attach and created parent under **Batches** in the summary. With batching off none of this
+  runs and the pass is exactly as above.
 - **Ready means planned.** A ticket goes to the ready lane only with a `### Final Plan` and no
   open blocker, and a planned, unblocked ticket goes there in the same pass, never left in the
   backlog.

@@ -36,10 +36,15 @@ it in. Run this as step 0 of every skill:
 <scripts>/registry.py show --data-dir <data>
 ```
 
-prints the registry as JSON: `tracker`, `host`, `board`, `lanes` (role to the value for the
-registry's tracker), `lane_meaning`, `priorities` (in rank order, each with `role`, `value`,
+prints the registry as JSON: `tracker`, `host`, `board`, `lane_mode` (on GitLab, `labels`
+when the board's lists are labels or `status` when they are the native work item Status;
+null on GitHub), `lanes` (role to the value for the registry's tracker: a Status option on
+GitHub, a label or a Status name on GitLab), `lane_meaning`, `priorities` (in rank order, each with `role`, `value`,
 `meaning`), `labels` (role to `name`, `color`, `description`), `model_labels` (tier to
-`label`, `color`) and `repos` (each with `name`, `remote`, `clone`, `brief`, `focus`). Use
+`label`, `color`), `batching` (`mode`: `off`, `epics`, `sub-issues` or `labels`, and `size`,
+the most children per parent; `off` and 5 without a Batches section) and `repos` (each with
+`name`, `remote`, `clone`, `brief`, `focus`). With `mode` other than `off`, the batch rules are
+in `references/batches.md`. Use
 those values everywhere; never keep a second copy of a lane, label or repo in a skill, a
 ticket or a comment. Then read the one tracker adapter,
 `references/trackers/<tracker>.md`, in full.
@@ -60,7 +65,9 @@ a GitLab board, and treats the result exactly as if `--project` and `--owner` ha
 Recognized shapes: `https://github.com/users/<owner>/projects/<N>` and
 `https://github.com/orgs/<owner>/projects/<N>` (a `/views/<V>` suffix is ignored),
 `https://<host>/groups/<group path>/-/boards/<id>` and `https://<host>/<project path>/-/boards/<id>`
-(a query string is ignored). Exit 5 means the URL's host differs from the registry's Host:
+(a query string is ignored). On GitLab the registry's `Lanes` mode and lane values still
+apply, so the named board must be of the same kind (label lists or Status lists);
+**capture-board** halts on a mismatch. Exit 5 means the URL's host differs from the registry's Host:
 stop and say so. When the resolved board equals the registry's default board, say so in the
 output so the run does not look narrower than it is.
 

@@ -13,6 +13,14 @@ paid plan's scoped labels, a second assignee, and closing an issue in another pr
 Run the first real queue against a group with `--dry-run`, then one ticket, before
 trusting a wave.
 
+The **status lane mode** (registry Board `Lanes: status`, see Terms) was checked on
+2026-11-13 with `glab` 1.130.0 against a self-managed GitLab 19.5.4-ee (Premium) group
+board whose lists are work item Statuses, spanning projects in subgroups. Its reads
+(**capture-board**, **list-items**, the iid lookup in **set-lane**) ran for real. Its
+write, the status mutation in **set-lane**, ran only against a work item id that does
+not exist, which proves the input types and the error path and changes nothing; that a
+real issue moves is UNVERIFIED until the first `--dry-run` queue's single ticket.
+
 Read this file once, before the first tracker action of a run, and only when the
 registry's tracker is `gitlab`. Run each operation as written below; never improvise a
 command for one. `jq` must be installed. When the installed `glab` rejects a flag, run
@@ -46,6 +54,14 @@ command for one. `jq` must be installed. When the installed `glab` rejects a fla
 - list-open-issues
 - list-open-reviews
 - review-state
+- Batch parents
+- list-parents
+- read-parent
+- create-parent
+- attach-child
+- comment-parent
+- read-parent-item
+- close-parent
 
 ## Terms used in the commands
 
@@ -68,7 +84,13 @@ command for one. `jq` must be installed. When the installed `glab` rejects a fla
   expected as a failure. Quote every URL that contains `?`, or zsh refuses the line.
   `--paginate --output ndjson` works with a query string and prints one object per
   line, flattened across pages.
-- A GitLab board is a set of label lists. **A lane is a label** and moving a card is
+- **Lane mode.** The registry's Board `Lanes` value says which kind of board this is:
+  `labels` (the default, also when the line is absent) or `status`. **Label mode** and
+  **status mode** below each apply to one of them; everything not marked works in both.
+  **capture-board** copies the mode into `tracker_ids.lane_mode`, which is how a worker
+  (which gets `tracker_ids`, not the registry) knows it; a `tracker_ids` without the key
+  is label mode.
+- **Label mode.** The board is a set of label lists. **A lane is a label** and moving a card is
   swapping labels. The lane values in the registry are those labels (typically scoped,
   such as `status::ready`); priority values are labels too (`priority::1`). Scoped
   labels (`scope::value`) only replace one another on a paid plan. On the Free plan
@@ -78,6 +100,28 @@ command for one. `jq` must be installed. When the installed `glab` rejects a fla
   else may add a lane or priority label: **add-label** with one leaves two lanes on the
   issue and **list-items** then reads its lane as null. A paid plan is the same
   commands with the removals as no-ops (UNVERIFIED: no paid account to run on).
+- **Status mode.** The board's lists are the native work item Status (`listType: status`,
+  `label` null; GitLab Premium or Ultimate). **A lane is a Status name** (`Ready`,
+  `In progress`), every issue carries exactly one, and moving a card sets it. The REST API
+  does not show Status: an issue object has no status field, and a status list reads
+  `label: null, list_type: null` on the REST boards call. So **capture-board**, **list-items** and
+  **set-lane** use GraphQL there. Lane labels play no part, nothing removes labels to move
+  a card, and priority is still a label, set by **set-priority** as in label mode.
+  Two Status facts change what a move means (GitLab docs, "Status", read 2026-11-13): a
+  Status in the Done or Canceled category closes the issue, and closing an issue applies
+  the issue type's default closed Status (Done on the checked board; all 100 most recently
+  closed issues there read Done). A new or reopened issue gets the default open Status
+  (Backlog there). UNVERIFIED: that closing through a merge request's closing keyword
+  applies it too (no keyword-closed issue was found to read), and that setting an open
+  Status on a closed issue reopens it.
+- **GraphQL calls** go through `glab api --hostname <host> graphql -f query='<query>'`
+  with each variable as another `-f name=value` (a missing variable is null; a null
+  `$lane` in **list-items** filters nothing). `--paginate` follows
+  `pageInfo { hasNextPage endCursor }` through a `$endCursor` variable and prints one JSON
+  document per page, so read the pages with `jq -s` or a filter that runs per document. An
+  error in the query or a refused mutation comes back as an `errors` list and `glab`
+  exits 1 (checked for an unknown field and an unknown work item id); a mutation's own
+  `errors` field in its payload must also be empty. Numbers (`iid`) come back as strings.
 - **A label name that does not exist is created on the fly** by every command that adds
   labels (`labels=` on create, `add_labels` on edit, `--label` in `glab issue update`),
   with a default color (`#6699cc`) and no error. A typo therefore makes a new label.
@@ -139,18 +183,18 @@ Pick the board whose `name` equals the registry's Board (or whose `id` equals it
 the registry gives a number). The boards call already carries each board's `lists`;
 take each list's `label.name` in `position` order (a separate `.../boards/<id>/lists`
 call returns the same). The board object also has `hide_backlog_list` and
-`hide_closed_list`. `tracker_ids` is:
+`hide_closed_list`. In label mode `tracker_ids` is:
 
 ```json
 {
-  "scope": "groups", "board_path": "<board path>", "board_id": 12,
+  "scope": "groups", "board_path": "<board path>", "board_id": 12, "lane_mode": "labels",
   "list_labels": ["status::ready", "status::in-progress"],
   "priority_labels": ["priority::1", "priority::2"]
 }
 ```
 
-A registry lane value that is not in `list_labels` goes in `missing_lanes`: the board
-has no column for it, so **set-lane** would move the issue off the board. Two roles
+In label mode, a registry lane value that is not in `list_labels` goes in `missing_lanes`:
+the board has no column for it, so **set-lane** would move the issue off the board. Two roles
 have a column without a list. Every board has an **Open** list, which shows each open
 issue that carries none of the other lists' labels, and a **Closed** list, which shows
 every closed issue. The `backlog` role counts as on the board while `hide_backlog_list`
@@ -161,16 +205,54 @@ closed ticket shows in Closed whatever lane label it still carries. Leave those 
 roles out of `missing_lanes` when their built-in list is shown, and list them when it
 is hidden. Any other value without a list is missing.
 
+**Status mode.** Resolve the board id from the boards call above (the REST lists carry no
+status, so ignore them), then read the lists and the issue type's Statuses in one call;
+`<field>` is `group` or `project` as the Board scope says:
+
+```bash
+glab api --hostname <host> graphql -f path="<board path>" -f board="gid://gitlab/Board/<board id>" \
+  -f query='query($path: ID!, $board: BoardID!) {
+  <field>(fullPath: $path) { board(id: $board) { name lists { nodes { listType status { id name } } } } }
+  namespace(fullPath: $path) { workItemTypes(name: ISSUE) { nodes { widgetDefinitions {
+    ... on WorkItemWidgetDefinitionStatus { allowedStatuses { id name } defaultClosedStatus { name } } } } } }
+}' | jq -c '{
+  status_ids: ([.data.<field>.board.lists.nodes[] | select(.listType == "status") | {(.status.name): .status.id}] | add),
+  allowed: [.data.namespace.workItemTypes.nodes[0].widgetDefinitions[] | select(.allowedStatuses) | .allowedStatuses[].name],
+  closed_default: ([.data.namespace.workItemTypes.nodes[0].widgetDefinitions[] | select(.allowedStatuses) | .defaultClosedStatus.name] | .[0])}'
+```
+
+`tracker_ids` is then
+`{"scope", "board_path", "board_id", "lane_mode": "status", "status_ids": {"Ready": "gid://gitlab/WorkItems::Statuses::Custom::Status/9", ...}, "priority_labels"}`.
+A registry lane value that is not a key of `status_ids` (compare names exactly) goes in
+`missing_lanes`; there is no exception for backlog or done, because every Status the
+board shows is a list of its own. A list Status the issue type does not allow (absent
+from `allowed`) counts as missing too, since the mutation would refuse it. When the done
+lane is not `closed_default`, print one warning for the run that names both: closing an
+issue sets the closed default, so closed tickets will not read as done.
+
+The board must match the mode. A board with no `listType == "status"` list (so
+`status_ids` is null) is a label board, and in label mode a list whose `label` is null
+is a Status list. Either mismatch halts the run with a message that names the registry's
+`Lanes` mode and the board's real kind, never a list of missing lanes. This matters when
+`--project`, `--owner` or a pasted URL points the run at another board than the
+registry's: the mode and the lane values still come from the registry. Priority labels come from the labels
+call as in label mode. On the checked board the call returned eight statuses (Backlog,
+Ready, In progress, Blocked, In review, Done, Skip, Duplicate) with `closed_default` Done;
+the board's `hideBacklogList` and `hideClosedList` were both true, and neither matters
+in status mode.
+
 From the labels call, `priority_labels` holds the registry's priority values that exist as a
 label (compare names exactly); the others go in `missing_priorities`, and
 `has_priority` is true when `priority_labels` is not empty. GitLab has no Priority
 field; labels stand in for it. The project labels call lists the project's own labels.
-UNVERIFIED: that the group labels call lists the labels of the group's own projects
-(the one group on the test account has no labels, so the call answered 200 with an
-empty list); a priority label defined only inside one project may be reported missing,
-so define priority labels at the group. The group boards call
-(`groups/<enc>/boards`) answered 200 with an empty list on that group, so no group board
-was read.
+The group labels call does **not** list labels defined inside the group's projects
+(checked 2026-11-13: `P0` to `P3` existed only as project labels of one project, and the
+group call, also with `only_group_labels=false`, returned none of them). So on a group
+board also run **list-labels** for each registry repo on the board, and count a priority
+value as present when it is a group label or a label of any of those repos. Defining
+priority labels at the group avoids the extra calls. The group boards call
+(`groups/<enc>/boards`) answered 200 with an empty list on the first test account; the
+group board on the self-managed host was read (see the status mode note at the top).
 
 ## list-items
 
@@ -179,6 +261,8 @@ Contract: every board item, optionally only those in one lane, as
 Remote form (`owner/repo`). `type` is `issue`, `review` or `other` (a draft item).
 `lane` and `priority` are registry values, or null when unset. `assignees` is a list of logins, empty when unassigned. `number` is null for a
 draft item.
+
+Label mode:
 
 ```bash
 glab api --hostname <host> --paginate --output ndjson \
@@ -206,6 +290,42 @@ reaches done.
 UNVERIFIED: that a group-scoped call includes issues of projects in subgroups; the
 test account's group has no subgroup. If it does not, run the call once per subgroup
 in the registry's repo table.
+
+Status mode, one call for a group or a project board (`namespace` takes either path):
+
+```bash
+glab api --hostname <host> graphql --paginate -f path="<board path>" -f state=opened \
+  [-f lane="<lane value>"] -f query='query($path: ID!, $state: IssuableState, $lane: String, $endCursor: String) {
+  namespace(fullPath: $path) {
+    workItems(state: $state, types: [ISSUE], includeDescendants: true,
+              status: {name: $lane}, first: 100, after: $endCursor) {
+      pageInfo { hasNextPage endCursor }
+      nodes { iid title namespace { fullPath } widgets {
+        ... on WorkItemWidgetStatus { status { name } }
+        ... on WorkItemWidgetLabels { labels { nodes { title } } }
+        ... on WorkItemWidgetAssignees { assignees { nodes { username } } } } }
+    }
+  }
+}' |
+jq -c --argjson lanes '["<every lane value>"]' --argjson prios '["<every priority value>"]' '
+  .data.namespace.workItems.nodes[] |
+  ([.widgets[] | select(has("labels")) | .labels.nodes[].title]) as $labels | {
+  item_ref: null, number: (.iid | tonumber), repo: .namespace.fullPath, type: "issue", title,
+  lane: ([.widgets[] | select(has("status")) | .status.name // empty | select(. as $s | $lanes | index($s))] | .[0]),
+  priority: ([$labels[] | select(. as $l | $prios | index($l))] | .[0]),
+  labels: $labels, assignees: [.widgets[] | select(has("assignees")) | .assignees.nodes[].username]}'
+```
+
+Leave out `-f lane=` to list every lane. Issues come back newest first. A Status that is
+not a registry lane (Skip and Duplicate on the checked board) reads as `lane` null. The
+group form includes projects in subgroups (`includeDescendants`, ignored for a project
+path; checked: the group call returned issues of `rcf/dev-tools/*` projects). Checked on
+the group board: 459 open issues across 12 projects, every one with a Status, in about
+25 seconds; the `Ready` filter returned 25 in 3 seconds, the same 25 the unfiltered call
+put in Ready. The settle step's closed call is the same command with `-f state=closed`,
+run once for each lane other than done with that lane as `-f lane=` (the variable takes
+one value), which keeps it to the few tickets it can act on instead of every closed issue; it found none on the checked board, since closing
+applies Done (see Terms).
 
 ## read-issue
 
@@ -309,6 +429,8 @@ Contract: moves one issue's board item to the lane named by a lane role. The lan
 value comes from the registry's Lanes table for the role. When the value is in
 `missing_lanes`, skip the move, log a warning and carry on; never block on it.
 
+Label mode:
+
 ```bash
 glab api --hostname <host> -X PUT "projects/<enc>/issues/<n>" \
   -f add_labels="<lane value>" -f remove_labels="<every other lane value, comma separated>"
@@ -327,6 +449,34 @@ when a merge closes the issue, so a closed ticket keeps `status::ready` until
 A value is also missing when it is not in `list_labels` (apart from the backlog and
 done roles, see **capture-board**).
 
+Status mode: look up the issue's work item id, then set its Status to the lane's id from
+`tracker_ids.status_ids`:
+
+```bash
+glab api --hostname <host> graphql -f path="<remote>" -f iid="<n>" \
+  -f query='query($path: ID!, $iid: String!) { project(fullPath: $path) { workItems(iids: [$iid], first: 1) { nodes { id } } } }' |
+  jq -e -r '.data.project.workItems.nodes[0].id // error("no such issue")'
+glab api --hostname <host> graphql -f id="<work item id>" -f status="<status id>" \
+  -f query='mutation($id: WorkItemID!, $status: WorkItemsStatusesStatusID!) {
+  workItemUpdate(input: {id: $id, statusWidget: {status: $status}}) {
+    workItem { widgets { ... on WorkItemWidgetStatus { status { name } } } } errors } }' |
+  jq -e '.data.workItemUpdate.errors == [] and
+    ([.data.workItemUpdate.workItem.widgets[] | select(has("status")) | .status.name] == ["<lane value>"])'
+```
+
+The first call prints `gid://gitlab/WorkItem/<id>`; a number that is not an issue in that
+project makes `jq` exit 5, and empty output (a failed `glab`) makes `jq -e` exit 4. Any
+non-zero exit or empty id is a failure; never run the mutation without an id. The second succeeds only when the payload's `errors` is empty
+and the Status read back is the lane value (`jq -e` exits 1 otherwise). The status id
+comes from **capture-board**, not from a name, so a Status renamed since capture fails
+loudly rather than landing elsewhere (the input also takes `name:` in place of `status:`,
+matched case-insensitively; it is not used here for that reason). Setting a Done or
+Canceled category Status closes the issue (see Terms), which is why only
+`daily-grooming` ever sets the done lane. UNVERIFIED: that the mutation moves a real issue;
+it was run only against a nonexistent work item id, where `glab` exited 1 with "The
+resource that you are attempting to access does not exist" and the input types were
+accepted.
+
 ## set-priority
 
 Contract: sets one issue's board item to the priority named by a priority role. Same
@@ -338,7 +488,10 @@ glab api --hostname <host> -X PUT "projects/<enc>/issues/<n>" \
 ```
 
 Checked the same way: the old priority label is gone, the new one is on, other labels
-are untouched, and an issue with no priority label gets just the new one.
+are untouched, and an issue with no priority label gets just the new one. `add_labels`
+creates a missing label on the fly (see Terms), so when the priority value is a project
+label of other repos only (see **capture-board**), run **ensure-label** in this issue's
+repo first, with color `ededed` and description `Priority: <name>`.
 
 ## add-label
 
@@ -349,8 +502,9 @@ glab issue update <n> -R <remote> --label "<name>"
 ```
 
 It prints the issue's URL last. A name that does not exist is created (see Terms), so
-only pass a name **ensure-label** has confirmed. Never use it for a lane or a priority
-label: use **set-lane** or **set-priority**.
+only pass a name **ensure-label** has confirmed. Never use it for a priority label or a
+lane value: use **set-priority** or **set-lane**. In status mode a lane value is a Status
+name, never a label, and adding it as one only creates a stray label.
 
 ## remove-label
 
@@ -413,19 +567,21 @@ glab api --hostname <host> -X POST "projects/<enc>/issues" \
   jq '{number: .iid, url: .web_url, item_ref: null}'
 ```
 
-The title goes in with `-f` so a title such as `2024` stays a string (it did). The
-lane label may be in the label list or set afterwards with **set-lane**; either way it
-is what puts the issue on the board. A body line starting with `/` runs as a quick
+The title goes in with `-f` so a title such as `2024` stays a string (it did). In label
+mode the lane label may be in the label list or set afterwards with **set-lane**; either
+way it is what puts the issue on the board. In status mode the new issue starts in the
+default open Status (Backlog on the checked board); run **set-lane** for any other lane. A body line starting with `/` runs as a quick
 action (see Terms). The `url` ends in `/-/work_items/<n>`.
 
 ## add-to-board
 
 Contract: puts an existing issue on the board and returns its `item_ref`.
 
-On GitLab an issue is on the board when it carries a lane label, so there is nothing to
-run: **set-lane** (or the lane label in **create-issue**'s label list) is the add.
-`item_ref` is null. An issue with a list's label shows in that list; one with no list
-label shows in Open.
+On GitLab there is nothing to run, and `item_ref` is null. In label mode an issue is on
+the board when it carries a lane label: **set-lane** (or the lane label in
+**create-issue**'s label list) is the add. An issue with a list's label shows in that
+list; one with no list label shows in Open. In status mode every open issue of the
+board's group or project already has a Status, so it shows in that Status's list.
 
 ## edit-issue
 
@@ -449,7 +605,7 @@ glab issue close <n> -R <remote>
 
 `glab issue close` has no comment flag, so the comment goes first. Closing an issue
 that is already closed exits 0 with the same message; a number that does not exist
-exits 1.
+exits 1. In status mode closing also applies the default closed Status (see Terms).
 
 **Closing keywords for a commit message.** The keyword closes the issue when the
 commit is merged into, or pushed to, the project's default branch. Run against a
@@ -564,3 +720,157 @@ glab api --hostname <host> "projects/<enc>/merge_requests/<n>" |
 ```
 
 GitLab's states are `opened`, `closed`, `locked` and `merged`; `locked` is the short moment while a merge completes and reads as `open`. A merge request left open printed `open`, one closed unmerged printed `closed`, and one merged printed `merged`. A number that is not a merge request exits 1 with a 404 body. UNVERIFIED: the `locked` state, which is too brief to catch.
+
+## Batch parents
+
+Used only when the registry's Batches `mode` is `epics` (`references/batches.md`). A parent
+is a **group epic** in the board's group, and its children are issues attached to it
+through the epic's hierarchy. On the checked self-managed host an issue cannot be the
+parent of another issue, so an epic is the only native parent. Epics are not issues: the
+REST issues calls and the issue board never show them, they carry no Status (the epic
+type has no status widget), and a merge request's closing keyword does not close one
+(GitLab docs, "Epics" and "Closing issues automatically": keywords close issues only;
+UNVERIFIED by a merge). Every call below is GraphQL (see Terms). `<group>` is the
+registry's Board path (on a project board, its parent group). A batch parent's title starts
+with `Batch: ` (`references/batches.md`, "A batch parent's title"); any other epic, a roadmap
+epic for one, is not a batch parent, and the calls below leave it out or mark it.
+
+Checked 2026-11-13 on the self-managed host: **list-parents**, **read-parent** and
+**read-parent-item** ran for real against the group's one open epic and its six children.
+Each write (**create-parent**, **attach-child**, **comment-parent**, **close-parent**) ran
+only against a namespace or work item that does not exist: GitLab accepted the input
+types and refused the target, so nothing changed. That a write changes a real epic is
+UNVERIFIED until the first batch.
+
+## list-parents
+
+Contract: every open parent whose title starts with `Batch: `, with its children, as
+`{parent_ref, number, repo, title, url, labels, children: [{number, repo, state}]}`. `parent_ref` is the epic's work item id,
+`number` its iid, `repo` the group path; a child's `state` is `open` or `closed`.
+
+```bash
+glab api --hostname <host> graphql --paginate -f path="<group>" \
+  -f query='query($path: ID!, $endCursor: String) { group(fullPath: $path) {
+  workItems(types: [EPIC], state: opened, first: 50, after: $endCursor) {
+    pageInfo { hasNextPage endCursor }
+    nodes { id iid title webUrl widgets {
+      ... on WorkItemWidgetLabels { labels { nodes { title } } }
+      ... on WorkItemWidgetHierarchy { children(first: 100) { nodes {
+        iid state namespace { fullPath } workItemType { name } } } } } } } } }' |
+jq -c '.data.group.workItems.nodes[] | select(.title | startswith("Batch: ")) | {
+  parent_ref: .id, number: (.iid | tonumber), repo: "<group>", title, url: .webUrl,
+  labels: [.widgets[] | select(has("labels")) | .labels.nodes[].title],
+  children: [.widgets[] | select(has("children")) | .children.nodes[] | select(.workItemType.name == "Issue") |
+    {number: (.iid | tonumber), repo: .namespace.fullPath, state: (.state | ascii_downcase)}]}'
+```
+
+Children of any project in the group come back, each with its own `repo`; a child epic
+(sub-epic) is dropped by the `Issue` filter. The checked epic printed six children, five
+`open` and one `closed`. A batch never nears 100 children, so the first page of children
+is all of them. The `startswith("Batch: ")` filter on the title was added after that run; it
+only drops epics from the same output.
+
+## read-parent
+
+Contract: a ticket's parent as `{parent_ref, number, repo, title, url, state, batch}`, or
+null. `batch` is true when the parent's title starts with `Batch: `; a parent with `batch`
+false is not a batch, so the ticket is a single for batching and is never attached to one
+(attaching would re-parent it).
+
+```bash
+glab api --hostname <host> graphql -f path="<remote>" -f iid="<n>" \
+  -f query='query($path: ID!, $iid: String!) { project(fullPath: $path) { workItems(iids: [$iid], first: 1) {
+  nodes { id widgets { ... on WorkItemWidgetHierarchy { parent {
+    id iid title webUrl state namespace { fullPath } } } } } } } }' |
+jq -e -c '.data.project.workItems.nodes[0] // error("no such issue") |
+  [.widgets[] | select(has("parent")) | .parent][0] |
+  if . == null then null else {parent_ref: .id, number: (.iid | tonumber),
+    repo: .namespace.fullPath, title, url: .webUrl, state: (.state | ascii_downcase),
+    batch: (.title | startswith("Batch: "))} end'
+```
+
+`jq -e` exits 1 on the `null` of a ticket with no parent, which is an answer, not a
+failure: read the output, and treat only a missing issue (exit 5) or empty output as a
+failure. Checked: a child of the epic printed it; an issue with no parent printed `null`.
+The `batch` field was added after that run and is computed from the same `title`.
+
+## create-parent
+
+Contract: creates a parent with a title and a body file, and returns `{parent_ref, number,
+url}`. Labels are not set on an epic; the area lives in its title.
+
+```bash
+glab api --hostname <host> graphql -f path="<group>" \
+  -f query='query($path: ID!) { namespace(fullPath: $path) { workItemTypes(name: EPIC) { nodes { id } } } }' |
+  jq -e -r '.data.namespace.workItemTypes.nodes[0].id'
+glab api --hostname <host> graphql -f ns="<group>" -f type="<epic type id>" -f title="<title>" \
+  -f body="$(cat <file>)" -f query='mutation($ns: ID!, $type: WorkItemsTypeID!, $title: String!, $body: String) {
+  workItemCreate(input: {namespacePath: $ns, workItemTypeId: $type, title: $title,
+    descriptionWidget: {description: $body}}) { workItem { id iid webUrl } errors } }' |
+jq -e -c '.data.workItemCreate | select(.errors == []) | .workItem |
+  {parent_ref: .id, number: (.iid | tonumber), url: .webUrl}'
+```
+
+The first call gives the epic type's id once per run (`gid://gitlab/WorkItems::Type/8` on
+the checked host). A body line starting with `/` runs as a quick action (see Terms).
+UNVERIFIED: the create itself (run only against a group that does not exist).
+
+## attach-child
+
+Contract: makes one issue a child of a parent, replacing any parent it had.
+
+```bash
+glab api --hostname <host> graphql -f id="<child work item id>" -f parent="<parent_ref>" \
+  -f query='mutation($id: WorkItemID!, $parent: WorkItemID!) {
+  workItemUpdate(input: {id: $id, hierarchyWidget: {parentId: $parent}}) {
+    workItem { widgets { ... on WorkItemWidgetHierarchy { parent { id } } } } errors } }' |
+jq -e '.data.workItemUpdate.errors == [] and
+  ([.data.workItemUpdate.workItem.widgets[] | select(has("parent")) | .parent.id] == ["<parent_ref>"])'
+```
+
+The child's work item id comes from the iid lookup in **set-lane**. It succeeds only when
+the parent read back is the one asked for. UNVERIFIED: that a child with a parent is moved
+rather than refused, and the attach itself (run only against a work item that does not
+exist).
+
+## comment-parent
+
+Contract: posts text as a new comment on a parent.
+
+```bash
+glab api --hostname <host> graphql -f id="<parent_ref>" -f body="$(cat <file>)" \
+  -f query='mutation($id: NoteableID!, $body: String!) { createNote(input: {noteableId: $id, body: $body}) { note { url } errors } }' |
+jq -e -r '.data.createNote | select(.errors == []) | .note.url'
+```
+
+UNVERIFIED: run only against a work item that does not exist.
+
+## read-parent-item
+
+Contract: `{title, body, state, comments[{created, body}]}` for one parent.
+
+```bash
+glab api --hostname <host> graphql -f path="<group>" -f iid="<number>" \
+  -f query='query($path: ID!, $iid: String!) { namespace(fullPath: $path) { workItem(iid: $iid) {
+  title description state widgets { ... on WorkItemWidgetNotes { discussions(first: 100) { nodes {
+    notes { nodes { system body createdAt } } } } } } } } }' |
+jq -e -c '.data.namespace.workItem // error("no such parent") | {title, body: .description,
+  state: (.state | ascii_downcase),
+  comments: [.widgets[] | select(has("discussions")) | .discussions.nodes[].notes.nodes[] |
+    select(.system | not) | {created: .createdAt, body}]}'
+```
+
+Checked on the group's epic: its title and body came back, with no comments yet.
+
+## close-parent
+
+Contract: closes one parent with a closing comment.
+
+```bash
+# comment first with comment-parent, then:
+glab api --hostname <host> graphql -f id="<parent_ref>" \
+  -f query='mutation($id: WorkItemID!) { workItemUpdate(input: {id: $id, stateEvent: CLOSE}) { workItem { state } errors } }' |
+jq -e '.data.workItemUpdate.errors == [] and .data.workItemUpdate.workItem.state == "CLOSED"'
+```
+
+UNVERIFIED: run only against a work item that does not exist.
