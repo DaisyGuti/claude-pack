@@ -138,11 +138,16 @@ def test_works_for_is_optional_and_read_from_the_tracker_section(filled_registry
 
 def as_gitlab(text: str, lanes_line: str | None) -> str:
     """Switch a filled registry to GitLab, with the Board's Lanes line replaced or removed."""
-    text = text.replace("- Tracker: `github`", "- Tracker: `gitlab`")
-    text = text.replace("- Host: `github.com`", "- Host: `gitlab.com`")
-    text = text.replace("acme/shop-app", "acme-team/shop-app")
-    replacement = "" if lanes_line is None else lanes_line + "\n"
-    return text.replace("- Lanes: `labels`\n", replacement)
+    swaps = {
+        "- Tracker: `github`": "- Tracker: `gitlab`",
+        "- Host: `github.com`": "- Host: `gitlab.com`",
+        "acme/shop-app": "acme-team/shop-app",
+        "- Lanes: `labels`\n": "" if lanes_line is None else lanes_line + "\n",
+    }
+    for old, new in swaps.items():
+        assert old in text, f"the example registry no longer holds {old!r}"
+        text = text.replace(old, new)
+    return text
 
 
 STATUS_LANES = {
@@ -166,14 +171,20 @@ def test_gitlab_lane_mode_defaults_to_labels_when_the_line_is_absent(
     assert reg["lanes"]["ready"] == "status::ready"
 
 
-def test_gitlab_status_mode_reads_status_names_as_lanes(filled_registry: Path) -> None:
+def test_gitlab_status_mode_reads_status_names_as_lanes(
+    filled_registry: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     path = filled_registry / "registry.md"
-    text = as_gitlab(path.read_text(encoding="utf-8"), "- Lanes: `status`")
+    # The mode is matched case-insensitively, as a person may write it.
+    text = as_gitlab(path.read_text(encoding="utf-8"), "- Lanes: `Status`")
     for label, status in STATUS_LANES.items():
         text = text.replace(label, status)
     path.write_text(text, encoding="utf-8")
     code, payload = registry.ensure(filled_registry)
     assert (code, payload["status"]) == (0, "ok")
+    # In process, so the fixture's stand-in for `which` covers glab, which CI does not install.
+    assert registry.main(["show", "--data-dir", str(filled_registry)]) == 0
+    assert json.loads(capsys.readouterr().out)["lane_mode"] == "status"
     reg = registry.parse(text)
     assert reg["lane_mode"] == "status"
     assert reg["lanes"]["in_progress"] == "In progress"

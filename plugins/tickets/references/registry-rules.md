@@ -62,7 +62,9 @@ a GitLab board, and treats the result exactly as if `--project` and `--owner` ha
 Recognized shapes: `https://github.com/users/<owner>/projects/<N>` and
 `https://github.com/orgs/<owner>/projects/<N>` (a `/views/<V>` suffix is ignored),
 `https://<host>/groups/<group path>/-/boards/<id>` and `https://<host>/<project path>/-/boards/<id>`
-(a query string is ignored). Exit 5 means the URL's host differs from the registry's Host:
+(a query string is ignored). On GitLab the registry's `Lanes` mode and lane values still
+apply, so the named board must be of the same kind (label lists or Status lists);
+**capture-board** halts on a mismatch. Exit 5 means the URL's host differs from the registry's Host:
 stop and say so. When the resolved board equals the registry's default board, say so in the
 output so the run does not look narrower than it is.
 

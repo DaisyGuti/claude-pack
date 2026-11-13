@@ -218,9 +218,16 @@ glab api --hostname <host> graphql -f path="<board path>" -f board="gid://gitlab
 A registry lane value that is not a key of `status_ids` (compare names exactly) goes in
 `missing_lanes`; there is no exception for backlog or done, because every Status the
 board shows is a list of its own. A list Status the issue type does not allow (absent
-from `allowed`) counts as missing too, since the mutation would refuse it. A done lane
-that is not `closed_default` is worth a warning: closing an issue sets the closed
-default, so closed tickets will not read as done. Priority labels come from the labels
+from `allowed`) counts as missing too, since the mutation would refuse it. When the done
+lane is not `closed_default`, print one warning for the run that names both: closing an
+issue sets the closed default, so closed tickets will not read as done.
+
+The board must match the mode. A board with no `listType == "status"` list (so
+`status_ids` is null) is a label board, and in label mode a list whose `label` is null
+is a Status list. Either mismatch halts the run with a message that names the registry's
+`Lanes` mode and the board's real kind, never a list of missing lanes. This matters when
+`--project`, `--owner` or a pasted URL points the run at another board than the
+registry's: the mode and the lane values still come from the registry. Priority labels come from the labels
 call as in label mode. On the checked board the call returned eight statuses (Backlog,
 Ready, In progress, Blocked, In review, Done, Skip, Duplicate) with `closed_default` Done;
 the board's `hideBacklogList` and `hideClosedList` were both true, and neither matters
@@ -305,9 +312,9 @@ group form includes projects in subgroups (`includeDescendants`, ignored for a p
 path; checked: the group call returned issues of `rcf/dev-tools/*` projects). Checked on
 the group board: 459 open issues across 12 projects, every one with a Status, in about
 25 seconds; the `Ready` filter returned 25 in 3 seconds, the same 25 the unfiltered call
-put in Ready. The settle step's closed call is the same command with `-f state=closed`
-and one `-f lane=` per lane other than done, which keeps it to the few tickets it can
-act on instead of every closed issue; it found none on the checked board, since closing
+put in Ready. The settle step's closed call is the same command with `-f state=closed`,
+run once for each lane other than done with that lane as `-f lane=` (the variable takes
+one value), which keeps it to the few tickets it can act on instead of every closed issue; it found none on the checked board, since closing
 applies Done (see Terms).
 
 ## read-issue
@@ -438,7 +445,7 @@ Status mode: look up the issue's work item id, then set its Status to the lane's
 ```bash
 glab api --hostname <host> graphql -f path="<remote>" -f iid="<n>" \
   -f query='query($path: ID!, $iid: String!) { project(fullPath: $path) { workItems(iids: [$iid], first: 1) { nodes { id } } } }' |
-  jq -r '.data.project.workItems.nodes[0].id // error("no such issue")'
+  jq -e -r '.data.project.workItems.nodes[0].id // error("no such issue")'
 glab api --hostname <host> graphql -f id="<work item id>" -f status="<status id>" \
   -f query='mutation($id: WorkItemID!, $status: WorkItemsStatusesStatusID!) {
   workItemUpdate(input: {id: $id, statusWidget: {status: $status}}) {
@@ -448,7 +455,8 @@ glab api --hostname <host> graphql -f id="<work item id>" -f status="<status id>
 ```
 
 The first call prints `gid://gitlab/WorkItem/<id>`; a number that is not an issue in that
-project makes `jq` exit 5. The second succeeds only when the payload's `errors` is empty
+project makes `jq` exit 5, and empty output (a failed `glab`) makes `jq -e` exit 4. Any
+non-zero exit or empty id is a failure; never run the mutation without an id. The second succeeds only when the payload's `errors` is empty
 and the Status read back is the lane value (`jq -e` exits 1 otherwise). The status id
 comes from **capture-board**, not from a name, so a Status renamed since capture fails
 loudly rather than landing elsewhere (the input also takes `name:` in place of `status:`,
@@ -481,8 +489,9 @@ glab issue update <n> -R <remote> --label "<name>"
 ```
 
 It prints the issue's URL last. A name that does not exist is created (see Terms), so
-only pass a name **ensure-label** has confirmed. Never use it for a priority label, or in
-label mode for a lane label: use **set-priority** or **set-lane**.
+only pass a name **ensure-label** has confirmed. Never use it for a priority label or a
+lane value: use **set-priority** or **set-lane**. In status mode a lane value is a Status
+name, never a label, and adding it as one only creates a stray label.
 
 ## remove-label
 
