@@ -136,6 +136,74 @@ def test_works_for_is_optional_and_read_from_the_tracker_section(filled_registry
     assert registry.parse(pinned)["works_for"] == "DaisyGuti"
 
 
+def as_gitlab(text: str, lanes_line: str | None) -> str:
+    """Switch a filled registry to GitLab, with the Board's Lanes line replaced or removed."""
+    text = text.replace("- Tracker: `github`", "- Tracker: `gitlab`")
+    text = text.replace("- Host: `github.com`", "- Host: `gitlab.com`")
+    text = text.replace("acme/shop-app", "acme-team/shop-app")
+    replacement = "" if lanes_line is None else lanes_line + "\n"
+    return text.replace("- Lanes: `labels`\n", replacement)
+
+
+STATUS_LANES = {
+    "`status::backlog`": "`Backlog`",
+    "`status::ready`": "`Ready`",
+    "`status::in-progress`": "`In progress`",
+    "`status::blocked`": "`Blocked`",
+    "`status::in-review`": "`In review`",
+    "`status::done`": "`Done`",
+}
+
+
+def test_gitlab_lane_mode_defaults_to_labels_when_the_line_is_absent(
+    filled_registry: Path,
+) -> None:
+    path = filled_registry / "registry.md"
+    path.write_text(as_gitlab(path.read_text(encoding="utf-8"), None), encoding="utf-8")
+    assert registry.ensure(filled_registry)[0] == 0
+    reg = registry.parse(path.read_text(encoding="utf-8"))
+    assert reg["lane_mode"] == "labels"
+    assert reg["lanes"]["ready"] == "status::ready"
+
+
+def test_gitlab_status_mode_reads_status_names_as_lanes(filled_registry: Path) -> None:
+    path = filled_registry / "registry.md"
+    text = as_gitlab(path.read_text(encoding="utf-8"), "- Lanes: `status`")
+    for label, status in STATUS_LANES.items():
+        text = text.replace(label, status)
+    path.write_text(text, encoding="utf-8")
+    code, payload = registry.ensure(filled_registry)
+    assert (code, payload["status"]) == (0, "ok")
+    reg = registry.parse(text)
+    assert reg["lane_mode"] == "status"
+    assert reg["lanes"]["in_progress"] == "In progress"
+    assert reg["priorities"][0]["value"] == "priority::0"
+
+
+def test_gitlab_status_mode_with_label_lanes_is_a_problem(filled_registry: Path) -> None:
+    path = filled_registry / "registry.md"
+    path.write_text(
+        as_gitlab(path.read_text(encoding="utf-8"), "- Lanes: `status`"), encoding="utf-8"
+    )
+    code, payload = registry.ensure(filled_registry)
+    assert code == registry.EXIT_INCOMPLETE
+    assert any("'status::ready'" in p and "Status name" in p for p in payload["problems"])
+
+
+def test_unknown_gitlab_lane_mode_is_a_problem(filled_registry: Path) -> None:
+    path = filled_registry / "registry.md"
+    path.write_text(
+        as_gitlab(path.read_text(encoding="utf-8"), "- Lanes: `columns`"), encoding="utf-8"
+    )
+    _, payload = registry.ensure(filled_registry)
+    assert any("'labels' or 'status'" in p for p in payload["problems"])
+
+
+def test_github_has_no_lane_mode(filled_registry: Path) -> None:
+    reg = registry.parse((filled_registry / "registry.md").read_text(encoding="utf-8"))
+    assert reg["lane_mode"] is None
+
+
 def test_tilde_in_a_clone_path_expands_against_home(tmp_path: Path) -> None:
     text = (PLUGIN / "registry.example.md").read_text(encoding="utf-8")
     reg = registry.parse(text, home=tmp_path)

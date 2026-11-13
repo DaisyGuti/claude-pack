@@ -41,6 +41,8 @@ REQUIRED_LANES = ("backlog", "ready", "in_progress", "blocked", "done")
 REQUIRED_LABELS = ("blocked", "run_worker", "run_solo")
 TIERS = ("fast", "workhorse", "frontier")
 TRACKERS = ("github", "gitlab")
+# How a GitLab board holds its lanes: scoped labels (the default) or the native work item Status.
+GITLAB_LANE_MODES = ("labels", "status")
 # Values that ship in registry.example.md. A board or repo that still holds one was never filled in.
 EXAMPLE_MARKERS = ("your-github-login", "your-group")
 
@@ -154,6 +156,8 @@ def parse(text: str, home: Path | None = None) -> dict[str, Any]:
         "host": tracker_vals.get("host", ""),
         "works_for": tracker_vals.get("works for", ""),
         "board": board,
+        # A registry written before the Lanes key existed keeps label lanes.
+        "lane_mode": board.get("lanes", "labels").lower() if tracker == "gitlab" else None,
         "lanes": lanes,
         "lane_meaning": lane_meaning,
         "priorities": priorities,
@@ -195,6 +199,19 @@ def problems(reg: dict[str, Any], which: Callable[[str], str | None] | None = No
         for key in required_board:
             if not reg["board"].get(key):
                 found.append(f"Board has no '{key}' value for the {reg['tracker']} tracker")
+    if reg["tracker"] == "gitlab" and reg["lane_mode"] not in GITLAB_LANE_MODES:
+        found.append(
+            f"Board has Lanes '{reg['lane_mode']}' for the gitlab tracker; "
+            "it must be 'labels' or 'status'"
+        )
+    if reg["tracker"] == "gitlab" and reg["lane_mode"] == "status":
+        # The usual slip when a board moves to Status: the mode flips but the column keeps labels.
+        for role, value in reg["lanes"].items():
+            if "::" in value:
+                found.append(
+                    f"lane '{role}' is '{value}', a scoped label, but the GitLab board's Lanes "
+                    "is 'status'; write the Status name the board shows (for example 'Ready')"
+                )
     for role in REQUIRED_LANES:
         if not reg["lanes"].get(role):
             found.append(

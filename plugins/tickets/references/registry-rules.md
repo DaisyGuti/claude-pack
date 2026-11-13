@@ -36,8 +36,10 @@ it in. Run this as step 0 of every skill:
 <scripts>/registry.py show --data-dir <data>
 ```
 
-prints the registry as JSON: `tracker`, `host`, `board`, `lanes` (role to the value for the
-registry's tracker), `lane_meaning`, `priorities` (in rank order, each with `role`, `value`,
+prints the registry as JSON: `tracker`, `host`, `board`, `lane_mode` (on GitLab, `labels`
+when the board's lists are labels or `status` when they are the native work item Status;
+null on GitHub), `lanes` (role to the value for the registry's tracker: a Status option on
+GitHub, a label or a Status name on GitLab), `lane_meaning`, `priorities` (in rank order, each with `role`, `value`,
 `meaning`), `labels` (role to `name`, `color`, `description`), `model_labels` (tier to
 `label`, `color`) and `repos` (each with `name`, `remote`, `clone`, `brief`, `focus`). Use
 those values everywhere; never keep a second copy of a lane, label or repo in a skill, a
