@@ -121,6 +121,22 @@ The labels `model:fast`, `model:workhorse`, `model:frontier` and the dated
 `model:claude-haiku-*`, `model:claude-sonnet-*`, `model:claude-opus-*` forms resolve to
 the same three tiers when a ticket carries one the table does not list.
 
+## Batches
+
+A batch is one parent with a few child tickets that ship together: one worker, one
+branch, one pull or merge request. It keeps the board from filling with small tickets
+that each need their own review and CI run. `daily-grooming` forms batches, and the plan
+lives on the parent. The rules are in the plugin's `references/batches.md`.
+
+- Batching: `off`
+- Batch size: `5`
+
+`Batching` is `off` (every ticket is worked alone; the default without this section),
+`epics` (GitLab: a group epic in the board's group is the parent), `sub-issues` (GitHub:
+an issue whose sub-issues are the children) or `labels` (either tracker: the tickets
+sharing a `batch:<area>` label, led by a parent issue titled `Batch: <area>`).
+`Batch size` is the most children one parent holds.
+
 ## Repos
 
 | Name | Remote | Local clone | Product brief | Focus |

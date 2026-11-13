@@ -45,7 +45,9 @@ Paths used below (read them as `<scripts>` and `<data>`):
    [gitlab.md](${CLAUDE_PLUGIN_ROOT}/references/trackers/gitlab.md). Every tracker action below
    is a named operation shown in bold; run each as the adapter writes it.
 4. Read [plan-one-ticket.md](${CLAUDE_PLUGIN_ROOT}/references/plan-one-ticket.md) and
-   [ticket-labels.md](${CLAUDE_PLUGIN_ROOT}/references/ticket-labels.md).
+   [ticket-labels.md](${CLAUDE_PLUGIN_ROOT}/references/ticket-labels.md). When `registry.py
+   show` prints a `batching` `mode` other than `off`, read
+   [batches.md](${CLAUDE_PLUGIN_ROOT}/references/batches.md) too.
 
 ## 1. Pick the ticket
 
@@ -66,7 +68,9 @@ anyway; the report says a worker may already have it.
 Sort by the Priority table's rank, highest first, unset last, stable. Walk that list: resolve
 each ticket's repo per the registry rules (skip one that does not resolve, and name it in the
 report), run **read-issue**, and the first ticket with no `### Final Plan` comment is the
-pick. The model and run labels are not filters; this skill assigns them.
+pick. When batching is on, run **read-parent** too: a child counts as planned when its
+parent's plan or an addendum has a section for it. The model and run labels are not filters;
+this skill assigns them.
 
 When nothing is left, say so with the counts that explain it (how many Ready tickets belong to
 others or to nobody, when `--all` would have found one), and point to
@@ -78,10 +82,12 @@ others or to nobody, when `--all` would have found one), and point to
 Follow `plan-one-ticket.md` for the picked ticket: load a lean context, write one terse plan,
 post it, set the labels (judged per `ticket-labels.md`) and move a planned ticket with no open
 blocker to the ready lane. It holds the 200-word cap and the list
-of what a plan may not contain. Do not add to either. `--dry-run` means read-only operations
-only: print the pick, the plan and the labels it would set, and change nothing. Carry the
-procedure through to its returned line without stopping to ask; if a fact is missing, plan from
-the brief and say what you assumed.
+of what a plan may not contain. Do not add to either. When batching is on: a ticket with a
+parent is planned with its whole batch, on the parent, and a ticket without one is planned
+with **Joining a parent**; both are in that file's "Batches" section. `--dry-run` means
+read-only operations only: print the pick, the plan and the labels it would set, and change
+nothing. Carry the procedure through to its returned line without stopping to ask; if a fact
+is missing, plan from the brief and say what you assumed.
 
 ## 3. Report
 
@@ -99,4 +105,6 @@ Then add only what applies:
   another lane (in progress, blocked, done) that a worker or a person put it in;
 - the run label is run-solo: `work-tickets` never dispatches it, because it needs a person;
 - the ticket was held instead of planned, and why, and what unblocks it;
+- with batching on, the parent it was planned under and every child the plan covers, or that
+  it stayed single;
 - tickets skipped because their repo did not resolve.

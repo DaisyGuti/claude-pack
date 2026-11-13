@@ -54,6 +54,14 @@ command for one. `jq` must be installed. When the installed `glab` rejects a fla
 - list-open-issues
 - list-open-reviews
 - review-state
+- Batch parents
+- list-parents
+- read-parent
+- create-parent
+- attach-child
+- comment-parent
+- read-parent-item
+- close-parent
 
 ## Terms used in the commands
 
@@ -712,3 +720,149 @@ glab api --hostname <host> "projects/<enc>/merge_requests/<n>" |
 ```
 
 GitLab's states are `opened`, `closed`, `locked` and `merged`; `locked` is the short moment while a merge completes and reads as `open`. A merge request left open printed `open`, one closed unmerged printed `closed`, and one merged printed `merged`. A number that is not a merge request exits 1 with a 404 body. UNVERIFIED: the `locked` state, which is too brief to catch.
+
+## Batch parents
+
+Used only when the registry's Batches `mode` is `epics` (`references/batches.md`). A parent
+is a **group epic** in the board's group, and its children are issues attached to it
+through the epic's hierarchy. On the checked self-managed host an issue cannot be the
+parent of another issue, so an epic is the only native parent. Epics are not issues: the
+REST issues calls and the issue board never show them, they carry no Status (the epic
+type has no status widget), and a merge request's closing keyword does not close one
+(GitLab docs, "Epics" and "Closing issues automatically": keywords close issues only;
+UNVERIFIED by a merge). Every call below is GraphQL (see Terms). `<group>` is the
+registry's Board path (on a project board, its parent group).
+
+Checked 2026-11-13 on the self-managed host: **list-parents**, **read-parent** and
+**read-parent-item** ran for real against the group's one open epic and its six children.
+Each write (**create-parent**, **attach-child**, **comment-parent**, **close-parent**) ran
+only against a namespace or work item that does not exist: GitLab accepted the input
+types and refused the target, so nothing changed. That a write changes a real epic is
+UNVERIFIED until the first batch.
+
+## list-parents
+
+Contract: every open parent with its children, as `{parent_ref, number, repo, title, url,
+labels, children: [{number, repo, state}]}`. `parent_ref` is the epic's work item id,
+`number` its iid, `repo` the group path; a child's `state` is `open` or `closed`.
+
+```bash
+glab api --hostname <host> graphql --paginate -f path="<group>" \
+  -f query='query($path: ID!, $endCursor: String) { group(fullPath: $path) {
+  workItems(types: [EPIC], state: opened, first: 50, after: $endCursor) {
+    pageInfo { hasNextPage endCursor }
+    nodes { id iid title webUrl widgets {
+      ... on WorkItemWidgetLabels { labels { nodes { title } } }
+      ... on WorkItemWidgetHierarchy { children(first: 100) { nodes {
+        iid state namespace { fullPath } workItemType { name } } } } } } } } }' |
+jq -c '.data.group.workItems.nodes[] | {
+  parent_ref: .id, number: (.iid | tonumber), repo: "<group>", title, url: .webUrl,
+  labels: [.widgets[] | select(has("labels")) | .labels.nodes[].title],
+  children: [.widgets[] | select(has("children")) | .children.nodes[] | select(.workItemType.name == "Issue") |
+    {number: (.iid | tonumber), repo: .namespace.fullPath, state: (.state | ascii_downcase)}]}'
+```
+
+Children of any project in the group come back, each with its own `repo`; a child epic
+(sub-epic) is dropped by the `Issue` filter. The checked epic printed six children, five
+`open` and one `closed`. A batch never nears 100 children, so the first page of children
+is all of them.
+
+## read-parent
+
+Contract: a ticket's parent as `{parent_ref, number, repo, title, url, state}`, or null.
+
+```bash
+glab api --hostname <host> graphql -f path="<remote>" -f iid="<n>" \
+  -f query='query($path: ID!, $iid: String!) { project(fullPath: $path) { workItems(iids: [$iid], first: 1) {
+  nodes { id widgets { ... on WorkItemWidgetHierarchy { parent {
+    id iid title webUrl state namespace { fullPath } } } } } } } }' |
+jq -e -c '.data.project.workItems.nodes[0] // error("no such issue") |
+  [.widgets[] | select(has("parent")) | .parent][0] |
+  if . == null then null else {parent_ref: .id, number: (.iid | tonumber),
+    repo: .namespace.fullPath, title, url: .webUrl, state: (.state | ascii_downcase)} end'
+```
+
+`jq -e` exits 1 on the `null` of a ticket with no parent, which is an answer, not a
+failure: read the output, and treat only a missing issue (exit 5) or empty output as a
+failure. Checked: a child of the epic printed it; an issue with no parent printed `null`.
+
+## create-parent
+
+Contract: creates a parent with a title and a body file, and returns `{parent_ref, number,
+url}`. Labels are not set on an epic; the area lives in its title.
+
+```bash
+glab api --hostname <host> graphql -f path="<group>" \
+  -f query='query($path: ID!) { namespace(fullPath: $path) { workItemTypes(name: EPIC) { nodes { id } } } }' |
+  jq -e -r '.data.namespace.workItemTypes.nodes[0].id'
+glab api --hostname <host> graphql -f ns="<group>" -f type="<epic type id>" -f title="<title>" \
+  -f body="$(cat <file>)" -f query='mutation($ns: ID!, $type: WorkItemsTypeID!, $title: String!, $body: String) {
+  workItemCreate(input: {namespacePath: $ns, workItemTypeId: $type, title: $title,
+    descriptionWidget: {description: $body}}) { workItem { id iid webUrl } errors } }' |
+jq -e -c '.data.workItemCreate | select(.errors == []) | .workItem |
+  {parent_ref: .id, number: (.iid | tonumber), url: .webUrl}'
+```
+
+The first call gives the epic type's id once per run (`gid://gitlab/WorkItems::Type/8` on
+the checked host). A body line starting with `/` runs as a quick action (see Terms).
+UNVERIFIED: the create itself (run only against a group that does not exist).
+
+## attach-child
+
+Contract: makes one issue a child of a parent, replacing any parent it had.
+
+```bash
+glab api --hostname <host> graphql -f id="<child work item id>" -f parent="<parent_ref>" \
+  -f query='mutation($id: WorkItemID!, $parent: WorkItemID!) {
+  workItemUpdate(input: {id: $id, hierarchyWidget: {parentId: $parent}}) {
+    workItem { widgets { ... on WorkItemWidgetHierarchy { parent { id } } } } errors } }' |
+jq -e '.data.workItemUpdate.errors == [] and
+  ([.data.workItemUpdate.workItem.widgets[] | select(has("parent")) | .parent.id] == ["<parent_ref>"])'
+```
+
+The child's work item id comes from the iid lookup in **set-lane**. It succeeds only when
+the parent read back is the one asked for. UNVERIFIED: that a child with a parent is moved
+rather than refused, and the attach itself (run only against a work item that does not
+exist).
+
+## comment-parent
+
+Contract: posts text as a new comment on a parent.
+
+```bash
+glab api --hostname <host> graphql -f id="<parent_ref>" -f body="$(cat <file>)" \
+  -f query='mutation($id: NoteableID!, $body: String!) { createNote(input: {noteableId: $id, body: $body}) { note { url } errors } }' |
+jq -e -r '.data.createNote | select(.errors == []) | .note.url'
+```
+
+UNVERIFIED: run only against a work item that does not exist.
+
+## read-parent-item
+
+Contract: `{title, body, state, comments[{created, body}]}` for one parent.
+
+```bash
+glab api --hostname <host> graphql -f path="<group>" -f iid="<number>" \
+  -f query='query($path: ID!, $iid: String!) { namespace(fullPath: $path) { workItem(iid: $iid) {
+  title description state widgets { ... on WorkItemWidgetNotes { discussions(first: 100) { nodes {
+    notes { nodes { system body createdAt } } } } } } } } }' |
+jq -e -c '.data.namespace.workItem // error("no such parent") | {title, body: .description,
+  state: (.state | ascii_downcase),
+  comments: [.widgets[] | select(has("discussions")) | .discussions.nodes[].notes.nodes[] |
+    select(.system | not) | {created: .createdAt, body}]}'
+```
+
+Checked on the group's epic: its title and body came back, with no comments yet.
+
+## close-parent
+
+Contract: closes one parent with a closing comment.
+
+```bash
+# comment first with comment-parent, then:
+glab api --hostname <host> graphql -f id="<parent_ref>" \
+  -f query='mutation($id: WorkItemID!) { workItemUpdate(input: {id: $id, stateEvent: CLOSE}) { workItem { state } errors } }' |
+jq -e '.data.workItemUpdate.errors == [] and .data.workItemUpdate.workItem.state == "CLOSED"'
+```
+
+UNVERIFIED: run only against a work item that does not exist.

@@ -242,3 +242,86 @@ def test_parallel_writers_lose_no_update(tmp_path: Path) -> None:
     assert [p.wait(timeout=30) for p in procs] == [0] * 6
     numbers = sorted(e["ticket_number"] for e in state_of(tmp_path)["active"])  # type: ignore[attr-defined]
     assert numbers == [1, 2, 3, 4, 5, 6]
+
+
+def batch(
+    children: list[int], parent: str = "341", slot_id: str = "slot-1", repo: str = "shop-app"
+) -> str:
+    """A batch slot: the first child names it, and it claims every child and its parent."""
+    return json.dumps(
+        {
+            "slot_id": slot_id,
+            "ticket_number": children[0],
+            "ticket_repo": repo,
+            "parent": {"ref": parent, "repo": repo},
+            "children": [{"ticket_number": n, "ticket_repo": repo} for n in children],
+        }
+    )
+
+
+def test_a_batch_slot_claims_every_child(tmp_path: Path) -> None:
+    assert run(tmp_path, "begin", "--json", batch([7, 8, 9])).returncode == 0
+    proc = run(tmp_path, "begin", "--json", slot(8, slot_id="slot-2"))
+    assert proc.returncode == ticket_state.EXIT_REFUSED
+    assert "shop-app#8 is already in active" in proc.stderr
+
+
+def test_a_batch_slot_is_refused_when_a_child_is_already_tracked(tmp_path: Path) -> None:
+    run(tmp_path, "begin", "--json", slot(9))
+    proc = run(tmp_path, "begin", "--json", batch([7, 9], slot_id="slot-2"))
+    assert proc.returncode == ticket_state.EXIT_REFUSED
+    assert "shop-app#9 is already in active" in proc.stderr
+    assert len(state_of(tmp_path)["active"]) == 1  # type: ignore[arg-type]
+
+
+def test_one_active_slot_per_parent_and_a_finished_parent_takes_a_later_batch(
+    tmp_path: Path,
+) -> None:
+    run(tmp_path, "begin", "--json", batch([7, 8]))
+    proc = run(tmp_path, "begin", "--json", batch([9], slot_id="slot-2"))
+    assert proc.returncode == ticket_state.EXIT_REFUSED
+    assert "batch parent 341 is already in active slot slot-1" in proc.stderr
+    finish = json.dumps({"slot_id": "slot-1", "status": "review_opened"})
+    assert run(tmp_path, "finish", "--json", finish).returncode == 0
+    assert run(tmp_path, "begin", "--json", batch([9], slot_id="slot-2")).returncode == 0
+
+
+def test_finish_keeps_the_children_a_batch_slot_began_with(tmp_path: Path) -> None:
+    """The worker's per-child outcome rides along; what the slot claims does not change."""
+    run(tmp_path, "begin", "--json", batch([7, 8]))
+    outcome = [
+        {"ticket_number": 7, "ticket_repo": "shop-app", "status": "review_opened"},
+        {"ticket_number": 8, "ticket_repo": "shop-app", "status": "blocked_tests_failed"},
+    ]
+    finish = json.dumps(
+        {"slot_id": "slot-1", "status": "review_opened", "children": [], "children_status": outcome}
+    )
+    assert run(tmp_path, "finish", "--json", finish).returncode == 0
+    entry = state_of(tmp_path)["completed"][0]  # type: ignore[index]
+    assert [c["ticket_number"] for c in entry["children"]] == [7, 8]
+    assert entry["children_status"] == outcome
+    assert run(tmp_path, "begin", "--json", slot(8, slot_id="slot-2")).returncode == 3
+
+
+def test_forget_frees_one_child_and_drops_the_slot_with_its_last(tmp_path: Path) -> None:
+    run(tmp_path, "begin", "--json", batch([7, 8]))
+    run(tmp_path, "finish", "--json", json.dumps({"slot_id": "slot-1", "status": "review_opened"}))
+    run(tmp_path, "forget", "--number", "8", "--repo", "shop-app")
+    completed = state_of(tmp_path)["completed"]
+    assert [c["ticket_number"] for c in completed[0]["children"]] == [7]  # type: ignore[index]
+    assert run(tmp_path, "begin", "--json", slot(8, slot_id="slot-2")).returncode == 0
+    run(tmp_path, "forget", "--number", "7", "--repo", "shop-app")
+    assert state_of(tmp_path)["completed"] == []
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"slot_id": "slot-1", "ticket_number": 7, "ticket_repo": "r", "children": []},
+        {"slot_id": "slot-1", "ticket_number": 7, "ticket_repo": "r", "children": [{"x": 1}]},
+        {"slot_id": "slot-1", "ticket_number": 7, "ticket_repo": "r", "parent": {"ref": "1"}},
+    ],
+)
+def test_a_malformed_batch_slot_is_bad_input(tmp_path: Path, payload: dict[str, object]) -> None:
+    assert run(tmp_path, "begin", "--json", json.dumps(payload)).returncode == 2
+    assert state_of(tmp_path)["active"] == []

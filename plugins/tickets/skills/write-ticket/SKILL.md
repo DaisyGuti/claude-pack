@@ -45,6 +45,8 @@ Paths used below (read them as `<scripts>` and `<data>`):
 4. Read [ticket-labels.md](${CLAUDE_PLUGIN_ROOT}/references/ticket-labels.md) for the judgment
    behind each label, and
    [model-selection.md](${CLAUDE_PLUGIN_ROOT}/references/model-selection.md) for the tiers.
+   When `registry.py show` prints a `batching` `mode` other than `off`, read
+   [batches.md](${CLAUDE_PLUGIN_ROOT}/references/batches.md) too.
 
 ## 1. Resolve the repo
 
@@ -123,6 +125,12 @@ command or asked for a ticket in chat has asked for it, so file without a furthe
 3. **set-priority**, then **set-lane**. When the ticket is blocked, **comment** with the
    `Blocked: dependency` comment.
 4. **assign** when `--assignee` was given.
+5. **Join a batch**, when batching is on and this is a new ticket (not `--ticket`): run
+   **list-parents** for the repo and **attach-child** to an open parent that fits it, as
+   batches.md says ("Joining a batch"; never create a parent). A ticket that joins belongs in
+   the backlog lane even with `--ready`, since its parent's plan does not cover it yet:
+   **set-lane** it there. No parent fits: it stays single until the next grooming pass.
+   `--dry-run` names the parent it would join.
 
 `--ticket N`: run **read-issue** first and keep the old body. Stop and say so if the issue is
 closed or its lane is in progress or done (find the lane with **list-items**). Otherwise
@@ -142,5 +150,6 @@ In plain language, outcome first. If step 2 stopped the work, lead with that fin
 evidence (already built, already ticketed, superseded, window passed). Otherwise lead with the
 URL and title, then each assignment with a clause of reasoning, the assumptions you made, and
 any `TBD:` bullets. If step 2 found something short of a stop, such as a related ticket, add
-it. For `--ticket`, say what the old body held so nothing is lost silently. When the ticket is
+it. For `--ticket`, say what the old body held so nothing is lost silently. With batching on,
+say which parent it joined, or that it stayed single. When the ticket is
 unassigned, say that `/tickets:work-tickets` will not pick it up until someone is assigned.

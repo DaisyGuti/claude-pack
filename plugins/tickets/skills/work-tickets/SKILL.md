@@ -66,6 +66,11 @@ Paths used below and in the procedure (read them as `<scripts>` and `<data>`):
   done.
 - A worker moves its card to In progress when it starts and to the review lane when its review
   opens (if the board has one).
+- **Batches, when batching is on** (`registry.py show` prints a `batching` `mode` other than
+  `off`; read [batches.md](${CLAUDE_PLUGIN_ROOT}/references/batches.md)): Ready tickets are
+  grouped by parent, and each parent with Ready children is one slot and one worker, on the
+  strongest model and highest effort its children's labels name, working them in the plan's
+  order on one branch with one review. A ticket with no parent is a single slot, as before.
 - Finish the queue and wait for every running worker, then report with the counts first: how many tickets are in review, blocked
   and not dispatched, and what needs the user.
 - `--dry-run` has no side effects beyond capturing the board's fields. It prints each ticket's

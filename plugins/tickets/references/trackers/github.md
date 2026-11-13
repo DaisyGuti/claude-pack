@@ -38,6 +38,13 @@ improvise a command for one. When the installed `gh` rejects a flag, run
 - list-open-issues
 - list-open-reviews
 - review-state
+- list-parents
+- read-parent
+- create-parent
+- attach-child
+- comment-parent
+- read-parent-item
+- close-parent
 
 ## Terms used in the commands
 
@@ -379,3 +386,135 @@ Contract: `open`, `merged` or `closed` for one review (a closed review that was 
 ```bash
 gh pr view <n> --repo <remote> --json state --jq '.state | ascii_downcase'
 ```
+
+## Batch parents
+
+A batch is one parent with child tickets, worked in one branch and one pull request. On
+GitHub the parent is an ordinary issue in the same repo and the children are its native
+sub-issues. A parent is not a ticket, so it is never on the board. Docs read 2026-11-13:
+https://docs.github.com/en/rest/issues/sub-issues,
+https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/adding-sub-issues,
+and the GraphQL schema by introspection (`__type(name: "Issue")`).
+
+Limits, from the docs: up to 100 sub-issues per parent, up to eight levels of nesting.
+The REST page requires the sub-issue to belong to the same repository **owner** as the
+parent, so a child may live in another repo of the same owner; it states no same-repo
+rule. `parent_ref` is the parent's issue number (as a string). A parent's children
+carry their own `repo`, which is the parent's repo for a same-repo batch.
+
+## list-parents
+
+Contract: every open issue in one repo that has sub-issues, with its children, as
+`{parent_ref, number, repo, title, url, labels, children: [{number, repo, state}]}`, at
+most 100 parents. `parent_ref` is the parent's issue number; `labels` is a list of names;
+`state` is `open` or `closed`.
+
+```bash
+gh api graphql --paginate -f query='query($endCursor:String){ repository(owner:"<owner>",name:"<repo>"){
+  issues(states:OPEN,first:100,after:$endCursor){ pageInfo{hasNextPage endCursor}
+    nodes{ number title url repository{nameWithOwner} labels(first:50){nodes{name}}
+      subIssuesSummary{total} subIssues(first:100){nodes{number state repository{nameWithOwner}}} } } } }' \
+  --jq '.data.repository.issues.nodes[] | select(.subIssuesSummary.total > 0) | {
+    parent_ref: (.number | tostring), number, repo: .repository.nameWithOwner, title, url,
+    labels: [.labels.nodes[].name],
+    children: [.subIssues.nodes[] | {number, repo: .repository.nameWithOwner, state: (.state | ascii_downcase)}]}'
+```
+
+`<owner>` and `<repo>` are the two halves of `<remote>`. GraphQL cannot filter issues by
+"has sub-issues" (a `has:sub-issues` search qualifier is silently ignored and returns every
+issue), so the query pages through every open issue, 100 per call, and keeps those whose
+`subIssuesSummary.total` is above zero; `--paginate` follows the cursor. `subIssues(first:100)`
+covers the 100-per-parent limit in one page. Keep the first 100 parents printed. Ran on
+RedCellPartners/quarterdeck: 367 open issues, 21 parents, for example parent 341 with
+`labels: ["project:quarterdeck","P2","req:REQ-30","batch:cui"]` and children
+`{"number":177,"repo":"RedCellPartners/quarterdeck","state":"closed"}`. The jq output is one
+JSON object per parent, not an array.
+
+## read-parent
+
+Contract: a ticket's parent as `{parent_ref, number, repo, title, url, state}`, or null
+when it has none. `state` is `open` or `closed`.
+
+```bash
+gh api graphql -f query='{repository(owner:"<owner>",name:"<repo>"){issue(number:<n>){
+  parent{number title url state repository{nameWithOwner}}}}}' \
+  --jq '.data.repository.issue.parent | if . == null then null else {
+    parent_ref: (.number | tostring), number, repo: .repository.nameWithOwner, title, url,
+    state: (.state | ascii_downcase)} end'
+```
+
+An issue with no parent prints `null`. REST has the same read,
+`gh api repos/<owner>/<repo>/issues/<n>/parent`, but it answers HTTP 404 "No parent issue
+found" (non-zero exit) when there is none, and returns the full REST issue object (`number`,
+`title`, `html_url`, `state`, `id`), so use the GraphQL form. Ran both on
+RedCellPartners/quarterdeck: issue 117 gives parent 341 "CUI-ready production", open;
+issue 4235 gives `null` (GraphQL, exit 0) and the 404 (REST).
+
+## create-parent
+
+Contract: creates the parent issue with a title, a body and labels (each label already
+ensured). It is not added to the board. Returns `{parent_ref, number, url}`.
+
+```bash
+gh issue create --repo <remote> --title "<title>" --body-file <file> --label "<a>" --label "<b>"
+```
+
+This is **create-issue** without **add-to-board**. It prints the issue's URL; the number is
+the last path segment, and `parent_ref` is that number.
+
+UNVERIFIED: not run, because the check was read-only; the command is the one **create-issue**
+documents, and nothing in it is specific to a parent.
+
+## attach-child
+
+Contract: makes one issue a sub-issue of a parent, replacing any parent it had.
+
+```bash
+gh api repos/<owner>/<repo>/issues/<parent>/sub_issues -X POST \
+  -F sub_issue_id=<child id> -F replace_parent=true
+```
+
+`<child id>` is the child's numeric database `id`, not its issue number. Get it with:
+
+```bash
+gh api repos/<child owner>/<child repo>/issues/<child n> --jq .id
+```
+
+`-F` sends the values as an integer and a boolean; `-f` would send strings and fail. The
+call answers 201 with the parent issue. A 422 is a validation failure or spam detection; 403,
+404 and 410 are permission, missing or gone. Creating or removing sub-issues too fast can hit
+secondary rate limits, so attach children one at a time. Limits are in **Batch parents**
+above (100 per parent, eight levels, same owner). To detach, `DELETE
+repos/<owner>/<repo>/issues/<parent>/sub_issue` with `sub_issue_id`. GraphQL has an
+alternative, the `addSubIssue` mutation (`issueId` the parent's node id, `subIssueId` or
+`subIssueUrl`, `replaceParent`); it is not needed.
+
+Ran the id lookup on RedCellPartners/quarterdeck: issue 117 has `id` 5836175230 and node id
+`I_kwDOT9Bmv88AAAABW9z3fg`. REST list of a parent's children
+(`gh api repos/<owner>/<repo>/issues/<parent>/sub_issues`, `per_page` up to 100) returned 7
+for parent 341, matching the GraphQL list.
+
+UNVERIFIED: the POST itself was not run (read-only check). The path, body fields and
+`replace_parent` come from the REST docs; the `addSubIssue` input fields were confirmed by
+schema introspection (`issueId`, `subIssueId`, `subIssueUrl`, `replaceParent`). Verify an
+attach with **read-parent** on the child.
+
+## comment-parent
+
+Contract: posts text as a new comment on the parent. On GitHub it is **comment** on the
+parent's number.
+
+## read-parent-item
+
+Contract: the parent's title, body, state and comments. On GitHub it is **read-issue** on
+the parent's number.
+
+## close-parent
+
+Contract: closes the parent with a closing comment. On GitHub it is **close-issue** on the
+parent's number. A pull request body line `Closes #<parent>` closes the parent when the
+pull request merges, like any issue (see **close-issue** for the keywords).
+
+UNVERIFIED: not run for a parent. Closing a parent is documented here only as the ordinary
+issue close; the docs read do not say that closing a parent changes its sub-issues, so close
+each child separately.

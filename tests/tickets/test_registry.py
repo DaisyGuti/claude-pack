@@ -215,6 +215,52 @@ def test_github_has_no_lane_mode(filled_registry: Path) -> None:
     assert reg["lane_mode"] is None
 
 
+def test_batching_is_off_with_the_default_size_when_the_section_is_absent(
+    filled_registry: Path,
+) -> None:
+    text = (filled_registry / "registry.md").read_text(encoding="utf-8")
+    assert "- Batching: `off`" in text
+    without = text.replace("- Batching: `off`\n", "").replace("- Batch size: `5`\n", "")
+    assert registry.parse(without)["batching"] == {"mode": "off", "size": 5}
+
+
+@pytest.mark.parametrize(
+    ("tracker", "mode", "ok"),
+    [
+        ("github", "sub-issues", True),
+        ("github", "labels", True),
+        ("github", "epics", False),
+        ("gitlab", "epics", True),
+        ("gitlab", "sub-issues", False),
+        ("gitlab", "Labels", True),
+    ],
+)
+def test_batching_mode_must_exist_on_the_tracker(
+    filled_registry: Path, tracker: str, mode: str, ok: bool
+) -> None:
+    path = filled_registry / "registry.md"
+    text = path.read_text(encoding="utf-8").replace("- Batching: `off`", f"- Batching: `{mode}`")
+    if tracker == "gitlab":
+        text = as_gitlab(text, "- Lanes: `labels`")
+    path.write_text(text, encoding="utf-8")
+    code, payload = registry.ensure(filled_registry)
+    assert (code == 0) is ok, payload
+    if ok:
+        assert registry.parse(text)["batching"]["mode"] == mode.lower()
+    else:
+        assert any(f"'{mode}' does not exist" in p for p in payload["problems"])
+
+
+@pytest.mark.parametrize("value", ["`zero`", "`0`", "`many`"])
+def test_bad_batch_size_or_mode_is_a_problem(filled_registry: Path, value: str) -> None:
+    path = filled_registry / "registry.md"
+    text = path.read_text(encoding="utf-8").replace("- Batch size: `5`", f"- Batch size: {value}")
+    path.write_text(text.replace("- Batching: `off`", "- Batching: `piles`"), encoding="utf-8")
+    _, payload = registry.ensure(filled_registry)
+    assert any("Batch size is" in p for p in payload["problems"])
+    assert any("Batching is 'piles'" in p for p in payload["problems"])
+
+
 def test_tilde_in_a_clone_path_expands_against_home(tmp_path: Path) -> None:
     text = (PLUGIN / "registry.example.md").read_text(encoding="utf-8")
     reg = registry.parse(text, home=tmp_path)

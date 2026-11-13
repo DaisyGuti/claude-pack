@@ -41,7 +41,10 @@ when the board's lists are labels or `status` when they are the native work item
 null on GitHub), `lanes` (role to the value for the registry's tracker: a Status option on
 GitHub, a label or a Status name on GitLab), `lane_meaning`, `priorities` (in rank order, each with `role`, `value`,
 `meaning`), `labels` (role to `name`, `color`, `description`), `model_labels` (tier to
-`label`, `color`) and `repos` (each with `name`, `remote`, `clone`, `brief`, `focus`). Use
+`label`, `color`), `batching` (`mode`: `off`, `epics`, `sub-issues` or `labels`, and `size`,
+the most children per parent; `off` and 5 without a Batches section) and `repos` (each with
+`name`, `remote`, `clone`, `brief`, `focus`). With `mode` other than `off`, the batch rules are
+in `references/batches.md`. Use
 those values everywhere; never keep a second copy of a lane, label or repo in a skill, a
 ticket or a comment. Then read the one tracker adapter,
 `references/trackers/<tracker>.md`, in full.

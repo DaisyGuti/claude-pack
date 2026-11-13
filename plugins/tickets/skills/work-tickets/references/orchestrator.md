@@ -90,6 +90,8 @@ through.
 `ticket-labels.md` has the full rule for both labels.
 Concurrency safety is a per-ticket property decided when the ticket is groomed (the
 run-worker label means self-contained), so there is no pairwise conflict check here.
+With batching on, each child of a batch is checked here like any ticket; a child that fails
+is not dispatched and its batch goes without it.
 
 ## Mechanics
 
@@ -147,9 +149,15 @@ run-worker label means self-contained), so there is no pairwise conflict check h
 ```
 
 A worker's `RESULT` line goes to `finish --json` as it is (it already carries `slot_id` and
-`status`). `active` holds slots that have started and not returned, `completed` holds
-`review_opened` tickets with their review links, `blocked` holds every other finished status,
-`skipped` is a record of what was not dispatched and why, re-evaluated on every run.
+`status`). A batch slot (when batching is on) names its first child as `ticket_number` and
+`ticket_repo`, and adds `"parent": {"ref", "number", "repo", "title", "area"}` and
+`"children": [{"ticket_number", "ticket_repo", "item_ref"}, ...]` in the plan's order. `begin`
+claims every child and refuses the slot (exit 3) when one is already tracked or another active
+slot holds the parent; `finish` keeps the children it began with and records the worker's
+`children_status` as sent. `active` holds slots that have started and not returned,
+`completed` holds `review_opened` tickets with their review links, `blocked` holds every
+other finished status, `skipped` is a record of what was not dispatched and why, re-evaluated
+on every run.
 
 ## Phase 1: capture the board
 
@@ -185,7 +193,8 @@ Apply the defaults above. On `--clear-skipped`, run `ticket_state.py clear-skipp
 
 A non-empty `active` list in the record is a run that did not finish cleanly. Treat those
 slots as the first workers of the pool and dispatch each again with the same `slot_id`, after
-resolving its model again (step 4). The worker finds its branch on the remote and continues
+resolving its model again (step 4); a batch slot keeps its parent and children. The worker
+finds its branch on the remote and continues
 from what was pushed; work that never reached the remote is redone. This first batch may exceed
 `--max-parallel`; log a warning.
 
@@ -232,11 +241,23 @@ earlier run is resolved again from the labels the ticket carries now. Any non-ze
 with the resolver's error as the reason; the ticket is not enqueued. Show any problem the
 resolver prints on that ticket's dry-run and report line.
 
+**Batches, when batching is on.** **read-parent** for each ticket left (or one
+**list-parents** per repo, which gives the same mapping in fewer calls), and group the tickets
+by parent; a ticket with no parent stays a single. For each parent, **read-parent-item**: its
+`### Final Plan` and addenda give the children's order (`### #<n>` sections in turn, then the
+addenda). A Ready child the plan does not cover is not dispatched: `skip` with
+`reason="not in its batch plan: run plan-ticket or daily-grooming"`. The batch's model is the
+strongest `resolved_tier` among its children (frontier over workhorse over fast) and its effort
+the highest `resolved_effort` (`low` < `medium` < `high` < `xhigh` < `max`; null when none
+has one). `parent.area` is the `<area>` of its `batch:<area>` label, else the slug of its
+title's text before the colon; `parent.number` is its number (an epic's iid).
+
 ### 5. Sort, then cap
 
 Sort by priority in the rank order of the registry's Priority table (P0 first by default),
 then unset, stable within a priority, except that a flaky-test or CI ticket (judged from its
-title and labels) goes ahead of the rest of its priority, then keep the first `--limit`.
+title and labels) goes ahead of the rest of its priority, then keep the first `--limit`. With
+batching on, a batch sorts and counts as one item, at its highest child's priority.
 
 ### 6. Dry run
 
@@ -252,6 +273,8 @@ Ready queue: board <board key> for <login> (max-parallel=<M>, limit=<L>, to-proc
 Left alone: <A> Ready tickets assigned to others, <U> unassigned
 Held (carry the blocked label, not dispatched): <H>
   #71 <repo>: Blocked: dependency
+Batches (with batching on, one slot each): <B>
+  parent <ref> "title" repos=[<repo>] children=#183,#184 frontier opus P1
 In review (opened by earlier runs, still open): <R>
   #120 <repo>: <review URL>
 Not dispatched:
@@ -286,6 +309,9 @@ worker's agent file, `agents/ticket-worker.md`: `mode`
 `files.check_ticket` (`<scripts>/check_ticket.py`) as absolute paths, `model` (the resolved
 model), `validate_plan_first: true` and `context_files` (the owning repo's brief, or the
 `--context` files), plus `resume_worktrees` for a slot resumed after a locked signing key (7c).
+A batch slot also sends its `parent`, its ordered `children` and `files.batches` (the plugin's
+`references/batches.md`), and its model and effort are the batch's; a single sends none of
+them.
 
 Then, in one message, make one Agent call per slot just begun or resumed: `subagent_type` `tickets:ticket-worker`,
 `model` set to the slot's resolved model, `effort` set to the slot's resolved effort when it
@@ -320,13 +346,16 @@ not wait for the others. The worker's last line is `RESULT {...}`:
   the key, naming every ticket stopped this way; stops that arrive before they answer join the
   same ask. Do not ask per worker. When the user says it is unlocked, that is the person
   clearing the hold: resume all of those workers together. For each, **remove-label** the
-  blocked label, **comment** `Unblocked: signing key unlocked.`, run `ticket_state.py forget`,
+  blocked label, **comment** `Unblocked: signing key unlocked.`, run `ticket_state.py forget`
+  (a batch slot: these three on each child it held),
   `begin` it again with the same `slot_id`, and dispatch it as in 7b with `resume_worktrees`
   set from its `worktree_paths`, all in one message. A stop that arrives after that asks again.
 - `status == "review_opened"`: the worker built and tested the ticket and opened a review;
   this is successful work. Run `finish` with the RESULT JSON. The branch is on the
   remote, so nothing is lost. The issue stays open until the review merges. Any
-  `follow_up_refs` ride along in the record; the worker already filed those tickets. Once
+  `follow_up_refs` ride along in the record; the worker already filed those tickets. A batch
+  slot opens one review for every finished child; its `children_status` names each child that
+  was left out and held, and those count as blocked in the report. Once
   `finish` has recorded it, clean up that worker's worktrees (**Cleanup**, below).
 - No `RESULT` line, or a status that is not one of those: the worker ended without finishing
   (a turn limit or a crash). Leave the slot in `active` so the next run resumes it, log a
@@ -406,6 +435,7 @@ and **Cleanup** commands. Run `git -C <clone> worktree prune` in every registry 
 === work-tickets complete: board <board key> for <login> ===
 In review: <R>
   #190 <repo>: <review URL> (slot-2, workhorse sonnet, merging closes the issue)
+  parent <ref> <repo>: <review URL> (slot-3, frontier opus, closes #183 #184; #185 blocked)
 Follow-ups: <F>
   #201 <repo>: <title> (from #190; a `not_filed` item is listed with its error)
 Blocked: <M>
@@ -443,6 +473,7 @@ up).
 - **Full restart for one board and login:** delete its file under `<data>/state/`, then
   `git worktree prune` in each registry clone and remove
   `<data>/worktrees/<board key>-<login>/`.
-- **Retry** a completed or blocked ticket with `ticket_state.py forget --number N --repo R`.
+- **Retry** a completed or blocked ticket with `ticket_state.py forget --number N --repo R`
+  (a batch child is forgotten alone; its slot goes with its last child).
   The orchestrator never retries a blocker by itself.
 - `skipped` persists across runs; `--clear-skipped` empties it.
