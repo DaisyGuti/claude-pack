@@ -237,12 +237,14 @@ From the labels call, `priority_labels` holds the registry's priority values tha
 label (compare names exactly); the others go in `missing_priorities`, and
 `has_priority` is true when `priority_labels` is not empty. GitLab has no Priority
 field; labels stand in for it. The project labels call lists the project's own labels.
-UNVERIFIED: that the group labels call lists the labels of the group's own projects
-(the one group on the test account has no labels, so the call answered 200 with an
-empty list); a priority label defined only inside one project may be reported missing,
-so define priority labels at the group. The group boards call
-(`groups/<enc>/boards`) answered 200 with an empty list on that group, so no group board
-was read.
+The group labels call does **not** list labels defined inside the group's projects
+(checked 2026-11-13: `P0` to `P3` existed only as project labels of one project, and the
+group call, also with `only_group_labels=false`, returned none of them). So on a group
+board also run **list-labels** for each registry repo on the board, and count a priority
+value as present when it is a group label or a label of any of those repos. Defining
+priority labels at the group avoids the extra calls. The group boards call
+(`groups/<enc>/boards`) answered 200 with an empty list on the first test account; the
+group board on the self-managed host was read (see the status mode note at the top).
 
 ## list-items
 
@@ -478,7 +480,10 @@ glab api --hostname <host> -X PUT "projects/<enc>/issues/<n>" \
 ```
 
 Checked the same way: the old priority label is gone, the new one is on, other labels
-are untouched, and an issue with no priority label gets just the new one.
+are untouched, and an issue with no priority label gets just the new one. `add_labels`
+creates a missing label on the fly (see Terms), so when the priority value is a project
+label of other repos only (see **capture-board**), run **ensure-label** in this issue's
+repo first, with color `ededed` and description `Priority: <name>`.
 
 ## add-label
 
