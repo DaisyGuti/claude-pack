@@ -23,7 +23,9 @@ Commands:
     skip --number N --repo R --reason T
     clear-skipped
     forget --number N --repo R    drop a ticket from completed/blocked so it can be retried
-                                  (a batch child leaves its slot; the slot goes with its last child)
+                                  (a batch child leaves its slot, whose ticket_number and
+                                  ticket_repo move to its first child left; the slot goes
+                                  with its last child)
 
 Exit codes: 0 ok, 2 bad input or a state file this script does not understand, 3 refused
 (duplicate ticket, or the file belongs to another board or login).
@@ -254,6 +256,10 @@ def apply(state: dict[str, Any], command: str, args: argparse.Namespace) -> Any:
                 if "children" in entry:
                     entry["children"] = [c for c in entry["children"] if key_of(c) != target]
                     if entry["children"]:
+                        # The first child left names the slot, as the first child did at begin.
+                        first = entry["children"][0]
+                        entry["ticket_number"] = first["ticket_number"]
+                        entry["ticket_repo"] = first["ticket_repo"]
                         kept.append(entry)
                 elif key_of(entry) != target:
                     kept.append(entry)

@@ -134,7 +134,8 @@ lives on the parent. The rules are in the plugin's `references/batches.md`.
 `Batching` is `off` (every ticket is worked alone; the default without this section),
 `epics` (GitLab: a group epic in the board's group is the parent), `sub-issues` (GitHub:
 an issue whose sub-issues are the children) or `labels` (either tracker: the tickets
-sharing a `batch:<area>` label, led by a parent issue titled `Batch: <area>`).
+sharing a `batch:<area>` label, led by a parent issue titled `Batch: <area>`). In every mode
+a batch parent's title starts with `Batch: `; other parents are left out of batching.
 `Batch size` is the most children one parent holds.
 
 ## Repos

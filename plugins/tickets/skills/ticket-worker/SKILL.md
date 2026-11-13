@@ -67,12 +67,16 @@ Paths used below (read them as `<scripts>` and `<data>`):
    A closed issue or one carrying the blocked label also stops here, with that fact.
 4. **Batch**, when `registry.py show` prints a `batching` `mode` other than `off` (read
    [batches.md](${CLAUDE_PLUGIN_ROOT}/references/batches.md), "Working a batch"): run
-   **read-parent**. An issue with a parent is worked with its whole batch, and the report says
-   so: **list-parents** gives the parent's children and **read-parent-item** its plan, and the
-   batch is every open child assigned to the current user, without the blocked label, that the
-   plan covers, in the plan's order (the issue named is one of them, or this step stops and
-   says why). Children left out are named in the report. There is no flag for one child alone:
-   to work it by itself, detach it from its parent first. An issue with no parent is a single.
+   **read-parent**. An issue with a batch parent (`batch` true: its title starts with
+   `Batch: `) is worked with its whole batch, and the report says so: **list-parents** gives
+   the parent's children and **read-parent-item** its plan, and the batch is every open child
+   assigned to the current user, without the blocked label, that the plan covers, in the
+   plan's order, at most the registry's Batch size of them and all in the first child's repo
+   (the issue named is one of them, or this step stops and says why). Children left out are
+   named in the report. There is no flag for one child alone: to work it by itself, detach it
+   from its parent first. An issue with no parent, or a parent with `batch` false, is a
+   single. The batch branch is `batch/<parent number>-<area>-solo`, and a direct run never
+   sets `resumed`, so a batch never starts from a branch already on the remote.
 
 ## 3. Choose the model
 

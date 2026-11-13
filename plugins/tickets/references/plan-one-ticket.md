@@ -163,7 +163,9 @@ never planned alone: planning any child plans its whole batch.
    <words> words)`, or `held` and `could not plan` lines per child as in step 5.
 
 **Joining a parent** (only when the caller asks: `plan-ticket` does, grooming does not). A
-ticket with no parent, planned by step 3 and not held, may join an open parent that fits it
+ticket with no parent (**read-parent** prints null; one under a non-batch parent never joins,
+since attaching would re-parent it), planned by step 3 and not held, may join an open parent
+that fits it
 (batches.md, "Joining a batch"; attach only, never create a parent). Before posting, run
 **list-parents** for its repo and judge the fit with the plan's files. One fits:
 **attach-child**, then post the plan on the parent as this child's addendum (or, when the

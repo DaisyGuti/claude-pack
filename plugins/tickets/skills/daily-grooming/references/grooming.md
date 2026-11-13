@@ -8,7 +8,7 @@ tracker. Read that one file once and run each operation as written. `<scripts>` 
 are the two paths printed at the top of SKILL.md.
 
 The board is shared. Grooming never changes an assignee, never closes or deletes an
-issue (the one exception: with batching on, a batch parent whose children are all closed),
+issue (the one exception: with batching on, a batch parent that has children, all closed),
 and never moves a ticket that a worker or a person put somewhere (step 4 lists them).
 
 **Batching.** `registry.py show` prints `batching` (`mode`, `size`). With `mode` `off`, skip
@@ -54,7 +54,11 @@ registry's table, and with `--repo` any item outside the named repos: a repo mis
 from the table is invisible by design.
 
 **Parents, when batching is on.** Run **list-parents** (per repo, or once for the board's
-group, as the adapter says) and keep each parent with its children. With
+group, as the adapter says) and keep each parent with its children. It returns batch parents
+only (titles starting with `Batch: `; batches.md, "A batch parent's title"): any other parent,
+a roadmap epic or a tracking issue, is not touched by the batch steps, and one that is on the
+board is an ordinary item. In `labels` mode, list each `batch:<area>` label that has children
+but no parent issue under Needs Attention; step 3b makes its parent. With
 `--convert-batch-labels`, convert the labels now (batches.md, "Converting `batch:<area>`
 labels"; in `labels` mode it changes nothing and says so), and treat the parents it made or
 would make as parents for the rest of the pass. Then drop every parent from the items before
@@ -77,9 +81,9 @@ while its issue is closed and shipped. For each registry repo on the board:
    GitLab does), also run it for closed issues as the adapter describes, and move
    each one still in a lane other than done.
 
-5. When batching is on, after the items are settled: **close-parent** every open parent
-   whose children are all closed, and every one with no children left (batches.md,
-   "Settling a batch").
+5. When batching is on, after the items are settled: **close-parent** every open batch
+   parent that has at least one child and whose children are all closed (batches.md,
+   "Settling a batch"). A parent with no children is left open.
 
 A finished item is done and goes no further: no audit, no priority, no triage, and
 above all no plan. Planning shipped work fills the ticket with a plan for something
@@ -155,8 +159,12 @@ Now that every ticket has its priority, form batches as batches.md says ("Formin
 batches"): attach each fitting unparented candidate to an open parent, else form new
 parents from candidates that fit each other, never a batch of one. The singles rules there
 hold. The labels are already fetched; run **read-issue** for a candidate's plan only when
-its labels give no area signal. Here you only decide: step 6 runs **create-parent** and
-**attach-child**, and from now on a ticket you attach counts as that parent's child.
+its labels give no area signal. In `epics` and `sub-issues` mode run **read-parent** on each
+candidate first: one with any parent (a non-batch one, `batch` false) is not a candidate,
+since attaching it would re-parent it. In `labels` mode, also decide a `Batch: <area>`
+parent for each `batch:<area>` label step 1 listed without one. Here you only decide: step 6
+runs **create-parent** and **attach-child** (a `--dry-run` lists them), and from now on a
+ticket you attach counts as that parent's child.
 
 ## 4. Triage the lanes
 

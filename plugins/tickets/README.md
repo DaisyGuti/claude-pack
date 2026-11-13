@@ -67,8 +67,10 @@ priorities at most one rank apart; migrations, security work and blocked tickets
 and closes a parent once its children are closed; `write-ticket` and `plan-ticket` join a new
 ticket to a fitting parent. The plan lives on the parent, the children move between lanes
 together, and `work-tickets` gives each parent one worker that works the children in the plan's
-order on `batch/<parent>-<area>` and closes each finished one from the review. A ticket with no
-parent works exactly as above. The rules are in `references/batches.md`;
+order on `batch/<parent>-<area>-<slot>` and closes each finished one from the review. A batch
+parent's title starts with `Batch: `; any other parent (a roadmap epic, a tracking issue) is
+left out of batching. A ticket with no parent works exactly as above. The rules are in
+`references/batches.md`;
 `daily-grooming --convert-batch-labels` turns existing `batch:<area>` labels into parents once.
 
 Cleanup is part of each ticket: a worker stops what it started and drops its own test databases

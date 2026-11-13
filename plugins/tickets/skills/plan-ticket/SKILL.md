@@ -68,8 +68,9 @@ anyway; the report says a worker may already have it.
 Sort by the Priority table's rank, highest first, unset last, stable. Walk that list: resolve
 each ticket's repo per the registry rules (skip one that does not resolve, and name it in the
 report), run **read-issue**, and the first ticket with no `### Final Plan` comment is the
-pick. When batching is on, run **read-parent** too: a child counts as planned when its
-parent's plan or an addendum has a section for it. The model and run labels are not filters;
+pick. When batching is on, run **read-parent** too: a child of a batch parent (`batch` true)
+counts as planned when its parent's plan or an addendum has a section for it; a ticket under
+any other parent is a single. The model and run labels are not filters;
 this skill assigns them.
 
 When nothing is left, say so with the counts that explain it (how many Ready tickets belong to

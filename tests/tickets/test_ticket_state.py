@@ -325,3 +325,43 @@ def test_forget_frees_one_child_and_drops_the_slot_with_its_last(tmp_path: Path)
 def test_a_malformed_batch_slot_is_bad_input(tmp_path: Path, payload: dict[str, object]) -> None:
     assert run(tmp_path, "begin", "--json", json.dumps(payload)).returncode == 2
     assert state_of(tmp_path)["active"] == []
+
+
+def test_forgetting_the_first_child_moves_the_slot_to_the_next_child(tmp_path: Path) -> None:
+    run(tmp_path, "begin", "--json", batch([7, 8, 9]))
+    run(tmp_path, "finish", "--json", json.dumps({"slot_id": "slot-1", "status": "review_opened"}))
+    assert run(tmp_path, "forget", "--number", "7", "--repo", "shop-app").returncode == 0
+    entry = state_of(tmp_path)["completed"][0]  # type: ignore[index]
+    assert (entry["ticket_number"], entry["ticket_repo"]) == (8, "shop-app")
+    assert [c["ticket_number"] for c in entry["children"]] == [8, 9]
+    assert run(tmp_path, "begin", "--json", slot(7, slot_id="slot-2")).returncode == 0
+    # Forgetting the next child frees it in turn, though it now names the slot.
+    assert run(tmp_path, "forget", "--number", "8", "--repo", "shop-app").returncode == 0
+    entry = state_of(tmp_path)["completed"][0]  # type: ignore[index]
+    assert entry["ticket_number"] == 9
+    assert run(tmp_path, "begin", "--json", slot(8, slot_id="slot-3")).returncode == 0
+
+
+def test_forgetting_every_child_lets_the_same_slot_begin_again(tmp_path: Path) -> None:
+    """The signing-key resume: forget each child, then begin the slot under its own id."""
+    run(tmp_path, "begin", "--json", batch([7, 8]))
+    stop = {"slot_id": "slot-1", "status": "blocked_sandbox", "reason": "signing key locked"}
+    assert run(tmp_path, "finish", "--json", json.dumps(stop)).returncode == 0
+    for number in ("7", "8"):
+        assert run(tmp_path, "forget", "--number", number, "--repo", "shop-app").returncode == 0
+    assert state_of(tmp_path)["blocked"] == []
+    assert run(tmp_path, "begin", "--json", batch([7, 8])).returncode == 0
+    active = state_of(tmp_path)["active"]
+    assert [(e["slot_id"], e["ticket_number"]) for e in active] == [("slot-1", 7)]  # type: ignore[index]
+
+
+def test_a_batch_slot_is_refused_only_for_its_active_parent(tmp_path: Path) -> None:
+    """No child is shared: the refusal names the parent's active slot, and nothing is added."""
+    run(tmp_path, "begin", "--json", batch([7, 8]))
+    proc = run(tmp_path, "begin", "--json", batch([9, 10], slot_id="slot-2"))
+    assert proc.returncode == ticket_state.EXIT_REFUSED
+    assert "batch parent 341 is already in active slot slot-1" in proc.stderr
+    assert "shop-app#" not in proc.stderr  # no child is named: none is tracked
+    assert [e["slot_id"] for e in state_of(tmp_path)["active"]] == ["slot-1"]  # type: ignore[index]
+    # The same children under another parent begin: only the parent was in the way.
+    assert run(tmp_path, "begin", "--json", batch([9, 10], "342", "slot-2")).returncode == 0

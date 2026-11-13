@@ -731,7 +731,9 @@ REST issues calls and the issue board never show them, they carry no Status (the
 type has no status widget), and a merge request's closing keyword does not close one
 (GitLab docs, "Epics" and "Closing issues automatically": keywords close issues only;
 UNVERIFIED by a merge). Every call below is GraphQL (see Terms). `<group>` is the
-registry's Board path (on a project board, its parent group).
+registry's Board path (on a project board, its parent group). A batch parent's title starts
+with `Batch: ` (`references/batches.md`, "A batch parent's title"); any other epic, a roadmap
+epic for one, is not a batch parent, and the calls below leave it out or mark it.
 
 Checked 2026-11-13 on the self-managed host: **list-parents**, **read-parent** and
 **read-parent-item** ran for real against the group's one open epic and its six children.
@@ -742,8 +744,8 @@ UNVERIFIED until the first batch.
 
 ## list-parents
 
-Contract: every open parent with its children, as `{parent_ref, number, repo, title, url,
-labels, children: [{number, repo, state}]}`. `parent_ref` is the epic's work item id,
+Contract: every open parent whose title starts with `Batch: `, with its children, as
+`{parent_ref, number, repo, title, url, labels, children: [{number, repo, state}]}`. `parent_ref` is the epic's work item id,
 `number` its iid, `repo` the group path; a child's `state` is `open` or `closed`.
 
 ```bash
@@ -755,7 +757,7 @@ glab api --hostname <host> graphql --paginate -f path="<group>" \
       ... on WorkItemWidgetLabels { labels { nodes { title } } }
       ... on WorkItemWidgetHierarchy { children(first: 100) { nodes {
         iid state namespace { fullPath } workItemType { name } } } } } } } } }' |
-jq -c '.data.group.workItems.nodes[] | {
+jq -c '.data.group.workItems.nodes[] | select(.title | startswith("Batch: ")) | {
   parent_ref: .id, number: (.iid | tonumber), repo: "<group>", title, url: .webUrl,
   labels: [.widgets[] | select(has("labels")) | .labels.nodes[].title],
   children: [.widgets[] | select(has("children")) | .children.nodes[] | select(.workItemType.name == "Issue") |
@@ -765,11 +767,15 @@ jq -c '.data.group.workItems.nodes[] | {
 Children of any project in the group come back, each with its own `repo`; a child epic
 (sub-epic) is dropped by the `Issue` filter. The checked epic printed six children, five
 `open` and one `closed`. A batch never nears 100 children, so the first page of children
-is all of them.
+is all of them. The `startswith("Batch: ")` filter on the title was added after that run; it
+only drops epics from the same output.
 
 ## read-parent
 
-Contract: a ticket's parent as `{parent_ref, number, repo, title, url, state}`, or null.
+Contract: a ticket's parent as `{parent_ref, number, repo, title, url, state, batch}`, or
+null. `batch` is true when the parent's title starts with `Batch: `; a parent with `batch`
+false is not a batch, so the ticket is a single for batching and is never attached to one
+(attaching would re-parent it).
 
 ```bash
 glab api --hostname <host> graphql -f path="<remote>" -f iid="<n>" \
@@ -779,12 +785,14 @@ glab api --hostname <host> graphql -f path="<remote>" -f iid="<n>" \
 jq -e -c '.data.project.workItems.nodes[0] // error("no such issue") |
   [.widgets[] | select(has("parent")) | .parent][0] |
   if . == null then null else {parent_ref: .id, number: (.iid | tonumber),
-    repo: .namespace.fullPath, title, url: .webUrl, state: (.state | ascii_downcase)} end'
+    repo: .namespace.fullPath, title, url: .webUrl, state: (.state | ascii_downcase),
+    batch: (.title | startswith("Batch: "))} end'
 ```
 
 `jq -e` exits 1 on the `null` of a ticket with no parent, which is an answer, not a
 failure: read the output, and treat only a missing issue (exit 5) or empty output as a
 failure. Checked: a child of the epic printed it; an issue with no parent printed `null`.
+The `batch` field was added after that run and is computed from the same `title`.
 
 ## create-parent
 

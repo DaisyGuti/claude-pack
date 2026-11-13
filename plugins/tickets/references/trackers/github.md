@@ -391,7 +391,9 @@ gh pr view <n> --repo <remote> --json state --jq '.state | ascii_downcase'
 
 A batch is one parent with child tickets, worked in one branch and one pull request. On
 GitHub the parent is an ordinary issue in the same repo and the children are its native
-sub-issues. A parent is not a ticket, so it is never on the board. Docs read 2026-11-13:
+sub-issues. A batch parent's title starts with `Batch: ` (`references/batches.md`, "A batch
+parent's title"); any other issue with sub-issues is not a batch parent. A parent is not a
+ticket, so it is never on the board. Docs read 2026-11-13:
 https://docs.github.com/en/rest/issues/sub-issues,
 https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/adding-sub-issues,
 and the GraphQL schema by introspection (`__type(name: "Issue")`).
@@ -404,7 +406,8 @@ carry their own `repo`, which is the parent's repo for a same-repo batch.
 
 ## list-parents
 
-Contract: every open issue in one repo that has sub-issues, with its children, as
+Contract: every open issue in one repo that has sub-issues and a title starting with
+`Batch: `, with its children, as
 `{parent_ref, number, repo, title, url, labels, children: [{number, repo, state}]}`, at
 most 100 parents. `parent_ref` is the parent's issue number; `labels` is a list of names;
 `state` is `open` or `closed`.
@@ -414,7 +417,8 @@ gh api graphql --paginate -f query='query($endCursor:String){ repository(owner:"
   issues(states:OPEN,first:100,after:$endCursor){ pageInfo{hasNextPage endCursor}
     nodes{ number title url repository{nameWithOwner} labels(first:50){nodes{name}}
       subIssuesSummary{total} subIssues(first:100){nodes{number state repository{nameWithOwner}}} } } } }' \
-  --jq '.data.repository.issues.nodes[] | select(.subIssuesSummary.total > 0) | {
+  --jq '.data.repository.issues.nodes[] | select(.subIssuesSummary.total > 0) |
+    select(.title | startswith("Batch: ")) | {
     parent_ref: (.number | tostring), number, repo: .repository.nameWithOwner, title, url,
     labels: [.labels.nodes[].name],
     children: [.subIssues.nodes[] | {number, repo: .repository.nameWithOwner, state: (.state | ascii_downcase)}]}'
@@ -423,32 +427,38 @@ gh api graphql --paginate -f query='query($endCursor:String){ repository(owner:"
 `<owner>` and `<repo>` are the two halves of `<remote>`. GraphQL cannot filter issues by
 "has sub-issues" (a `has:sub-issues` search qualifier is silently ignored and returns every
 issue), so the query pages through every open issue, 100 per call, and keeps those whose
-`subIssuesSummary.total` is above zero; `--paginate` follows the cursor. `subIssues(first:100)`
-covers the 100-per-parent limit in one page. Keep the first 100 parents printed. Ran on
-RedCellPartners/quarterdeck: 367 open issues, 21 parents, for example parent 341 with
-`labels: ["project:quarterdeck","P2","req:REQ-30","batch:cui"]` and children
-`{"number":177,"repo":"RedCellPartners/quarterdeck","state":"closed"}`. The jq output is one
+`subIssuesSummary.total` is above zero and whose title starts with `Batch: `; `--paginate`
+follows the cursor. `subIssues(first:100)` covers the 100-per-parent limit in one page. Keep
+the first 100 parents printed. Ran on RedCellPartners/quarterdeck: 367 open issues, 21 with
+sub-issues, of which 18 are titled `Batch: ` and printed, for example parent 4040
+"Batch: Assess: evidence mode correctness" with
+`labels: ["project:quarterdeck","P2","req:REQ-15","batch:assess-evidence"]` and children
+such as `{"number":3939,"repo":"RedCellPartners/quarterdeck","state":"closed"}`; the three
+left out (341 "CUI-ready production", 342 and 4055) are not batches. The jq output is one
 JSON object per parent, not an array.
 
 ## read-parent
 
-Contract: a ticket's parent as `{parent_ref, number, repo, title, url, state}`, or null
-when it has none. `state` is `open` or `closed`.
+Contract: a ticket's parent as `{parent_ref, number, repo, title, url, state, batch}`, or
+null when it has none. `state` is `open` or `closed`. `batch` is true when the parent's title
+starts with `Batch: `; a parent with `batch` false is not a batch, so the ticket is a single
+for batching and is never attached to one (attaching would re-parent it).
 
 ```bash
 gh api graphql -f query='{repository(owner:"<owner>",name:"<repo>"){issue(number:<n>){
   parent{number title url state repository{nameWithOwner}}}}}' \
   --jq '.data.repository.issue.parent | if . == null then null else {
     parent_ref: (.number | tostring), number, repo: .repository.nameWithOwner, title, url,
-    state: (.state | ascii_downcase)} end'
+    state: (.state | ascii_downcase), batch: (.title | startswith("Batch: "))} end'
 ```
 
 An issue with no parent prints `null`. REST has the same read,
 `gh api repos/<owner>/<repo>/issues/<n>/parent`, but it answers HTTP 404 "No parent issue
 found" (non-zero exit) when there is none, and returns the full REST issue object (`number`,
 `title`, `html_url`, `state`, `id`), so use the GraphQL form. Ran both on
-RedCellPartners/quarterdeck: issue 117 gives parent 341 "CUI-ready production", open;
-issue 4235 gives `null` (GraphQL, exit 0) and the 404 (REST).
+RedCellPartners/quarterdeck: issue 117 gives parent 341 "CUI-ready production", open,
+`batch` false; issue 3936 gives parent 4040, `batch` true; issue 4235 gives `null` (GraphQL,
+exit 0) and the 404 (REST).
 
 ## create-parent
 

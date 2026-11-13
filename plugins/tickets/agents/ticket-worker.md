@@ -85,11 +85,13 @@ is missing, stop with `status=blocked_state_incomplete`, `reason="the dispatch m
 incomplete"`. `ticket_repo` is the owning repo; `repos` lists every repo the ticket touches,
 owning repo first. `model` is informational. `resume_worktrees` is optional: a map from repo
 to the worktree path of an earlier `blocked_sandbox` stop on a locked signing key (section 7);
-section 3 says how a run with it starts. `parent` and `children` are present only for a batch
-(section 11): `parent` is `{"ref", "number", "repo", "title", "area"}` and `children` the
-children to work, in order, each `{"ticket_number", "ticket_repo", "item_ref"}`, the first of
-them also named by `ticket_number` and `ticket_repo`; a batch also carries `files.batches`,
-the plugin's batch rules. A single has none of the three.
+section 3 says how a run with it starts. `resumed` is optional: `true` when `work-tickets`
+re-dispatches a slot under the same `slot_id` it had before (an unfinished slot, or a resume
+after a locked signing key). `parent` and `children` are present only for a batch
+(section 11): `parent` is `{"ref", "number", "repo", "title", "area", "url"}` and `children`
+the children to work, in order, each `{"ticket_number", "ticket_repo", "item_ref"}`, the first
+of them also named by `ticket_number` and `ticket_repo`; a batch also carries
+`files.batches`, the plugin's batch rules. A single has none of the three.
 
 **Tracker operations.** Every action on the tracker below is a named operation, shown in bold
 (**set-lane**, **comment**, ...). Read `files.adapter` in full before your first step and run
@@ -151,9 +153,9 @@ worktree from a cut-off run holds the branch locally, append `-r2` (then `-r3`) 
 everywhere below; the `RESULT` line reports the name you used.
 
 When the branch already exists on `origin` (a run that was cut off after pushing), start from it
-instead of the default branch. For another repo, make the worktree with
-`git -C <clone> worktree add <path> -b <branch> origin/<branch>`. For your own worktree, run
-`git -C $WT fetch origin <branch>` and `git -C $WT switch -C <branch> origin/<branch>`. Then
+instead of the default branch (a batch: only when `resumed` is true; section 11). For another
+repo, make the worktree with `git -C <clone> worktree add <path> -b <branch> origin/<branch>`.
+For your own worktree, run `git -C $WT fetch origin <branch>` and `git -C $WT switch -C <branch> origin/<branch>`. Then
 continue from what is there: look at `git log`, `git status` and **list-open-reviews** to see which
 steps already happened, and do only the ones that did not.
 
@@ -584,11 +586,16 @@ except for what follows. A single has neither field, and nothing here applies to
 - **Checks.** Run section 2's assignment and open checks on each child. A child that fails
   one is left out: not worked, not touched, and named in the report. When every child fails,
   stop as section 2 says for the first.
-- **Branch.** `batch/<parent.number>-<parent.area>` in every repo, in place of
-  `<slot_id>-ticket-<n>`, with the same `-r2` rule and the same resume from `origin`. A
-  resumed batch reads which children are already committed from `git log` (each child's
-  commit says `Refs #<child>`) and goes on from the next one; after a locked signing key it
-  commits the staged change first.
+- **Branch.** `batch/<parent.number>-<parent.area>-<slot_id>` in every repo, in place of
+  `<slot_id>-ticket-<n>`, with the same `-r2` rule. Resume from `origin` only when the
+  dispatch message has `resumed` true (this slot, under this `slot_id`, ran before). Without
+  it, a branch of that name already on `origin` belongs to an earlier slot: never start from
+  it, and take the next `-r2` (then `-r3`) name that `origin` does not have. A resumed batch
+  reads which children are already done from `git log` and the tracker: a child is done only
+  when a commit says `Refs #<child>`, no later commit reverts it (`This reverts commit
+  <sha>` naming that commit), and **read-issue** shows no blocked label on it. It works every
+  other child again, in order; after a locked signing key it commits the staged change
+  first.
 - **Plan.** The plan is on the parent: **read-parent-item**, and take each child's
   `### #<n>` section of the `### Final Plan`, or its `### Final Plan addendum: #<n>`. Section
   5's drift check runs per section, and a replan goes on the parent with **comment-parent**.
@@ -616,10 +623,11 @@ except for what follows. A single has neither field, and nothing here applies to
 - **The review.** One per repo from the batch branch, titled with the parent's title. On the
   owning repo the body lists every child of the dispatch as a checklist, ticked for each one
   it closes, and has a closing line per finished child (`Closes #<child>`, or `Fixes` for a
-  `bug` label) in the adapter's syntax. The parent gets `Refs <parent.ref>`, unless
-  **list-parents** shows that every open child of the parent closes in this review and the
-  parent is an issue in this repo (`sub-issues` or `labels` mode): then `Closes
-  #<parent.number>`. A GitLab epic is never closed by a keyword; grooming closes it.
+  `bug` label) in the adapter's syntax. The parent line depends on what the parent is. An
+  issue (GitHub, or `labels` mode on either tracker): `Refs #<parent.number>`, or
+  `Closes #<parent.number>` when **list-parents** shows that every open child of the parent
+  closes in this review and the parent is in this repo. A GitLab epic (`epics` mode):
+  `Refs <parent.url>`, never a closing keyword; grooming closes it.
 - **After it opens.** Section 7's steps 4 and 5 run for each finished child (its comment
   names the batch review), then **comment-parent** once: the review link, the children it
   closes and each child held. File follow-ups as for a single; a model-fit note goes on the
