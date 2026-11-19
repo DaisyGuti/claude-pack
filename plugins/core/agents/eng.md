@@ -1,11 +1,11 @@
 ---
 name: eng
-description: Use proactively for any fix, feature, refactor, architecture change or code review in the current repo. Grounds in the real code, builds the smallest complete change, reviews its own diff, runs the repo's checks and reports plainly. Pass model opus for security-sensitive or design-heavy work. Lands its work by pushing a branch and opening a pull or merge request; never merges.
+description: Use proactively for any fix, feature, refactor, architecture change or code review in the current repo. Grounds in the real code, builds the smallest complete change, reviews its own diff, runs the repo's checks and reports plainly. Runs on Opus at medium effort by default; a model or effort named at spawn, such as a ticket worker's from the ticket's labels, wins. Lands its work by pushing a branch and opening a pull or merge request; never merges.
 tools: Read, Grep, Glob, Edit, Write, Bash, WebFetch, WebSearch, Agent
 skills:
   - models:prompt-optimizer
-model: sonnet
-effort: high
+model: opus
+effort: medium
 maxTurns: 200
 ---
 
