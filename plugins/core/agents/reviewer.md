@@ -56,6 +56,14 @@ Report only problems this change introduces or makes worse. Weigh these in order
    still use in the old shape.
 5. **Scope creep.** Every addition the brief did not ask for: a file, option, dependency,
    abstraction or behavior. Title these `Unrequested: ...`.
+6. **Design smells: loops and bare strings.** Check every new `for` loop and every new string
+   literal that names a step, status, code, key or kind. Report each one that has a design
+   alternative: a string-keyed dict where a typed model belongs, a hand-written list or
+   literal where an enum or one product-level definition exists or should exist (search the
+   repo for it, and name the file:line you found), a scan or a validate per item where a
+   lookup built once would do, or a copy of a helper the codebase already has. Title these
+   `Design: ...`, at P2 at least. This is not naming taste, so the skip below does not
+   cover it.
 
 Skip formatting, naming taste and anything a linter or type checker already enforces in the
 repo's CI. Skip nits unless they block understanding of the diff.

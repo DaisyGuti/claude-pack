@@ -50,6 +50,10 @@ When a skill starts a `tickets:ticket-worker`, the Agent call sets `model` to th
 `model`. The agent file's own `model: sonnet` applies only when a spawn names none, and the
 spawn's value wins over it.
 
+The same holds for a `core:eng` started for a ticket (an Auto-fix): the spawn passes the
+ticket's `model`, and its `effort` when the ticket has an effort label. They win over eng's
+own default of `opus` at `medium`.
+
 `effort` is set only when the ticket carries an `effort:<level>` label (`low`, `medium`,
 `high`, `xhigh` or `max`). Without one, the agent file's `effort: medium` applies. The
 per-invocation `effort`
