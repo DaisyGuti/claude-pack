@@ -11,12 +11,21 @@ house style; this file is about how you work.
 - Merge the base branch first, then run only the gates the diff touches, once
 - Wait on a condition, never on a fixed sleep or a self-matching command
 - Hold the industry standard of the technology you are standing in
-- Use the design pattern the problem calls for, and no more
+- Follow the codebase's patterns, and use one that removes branches
+- Look for a design before you write a loop or a string literal
+- Parse data once into a typed model
+- Say each thing once
 - Keep it simple while covering the whole requirement
 - Mark a deliberate shortcut
-- Find where a bug lives before you fix it there
-- Delete code only when you can show it is unused
+- Find where a bug lives, then fix its cause by design
+- A refactor keeps behaviour
+- Delete what the change leaves unused
+- Keep only tests that prove needed behaviour
+- Never game a quality count
+- Write guidance from the rule the check applies
+- Keep hashed and exported bytes stable
 - Comment the hard part briefly, for a junior reading it cold
+- Run a docs pass on every change
 - Say what could be better; don't go build it
 - Before you call it built, consider the next version up
 - Review your own diff adversarially, before anything runs the tests
@@ -76,6 +85,13 @@ are the check. Never run the gates before the merge and again after it. While yo
 run only the test or check you are working on. Say in the report what ran and what was left
 to CI. Everything in the parallelism rule above applies to the run you do make.
 
+After each merge, rerun the repo's setup step (dependency install, codegen, its worktree setup
+target) before any gate, because a stale environment gives false type errors. Run tests
+through the repo's own runner, and check that every test path you name exists: a runner
+given a missing path can collect nothing and still exit 0. The run-once rule holds per
+merge: when you merge the base again later (a conflict fix, a review round), run the touched
+tests once more on that new merged head, because CI's fast lane may not run them.
+
 **Wait on a condition, never on a fixed sleep or a self-matching command.** A test you
 write waits for the state it needs (an event seen, a value reached, fake timers for polling
 code), and keeps a real timeout only as a backstop against a hang, sized well above the
@@ -92,18 +108,37 @@ fast-moving library or API, read its current documentation. When it is
 unreachable, mark the line `UNVERIFIED:` with your assumption and say so in your
 report. Never present a guessed API as one you read.
 
-**Use the design pattern the problem calls for, and no more.** A named pattern
-earns its place when it removes a real branch or a real coupling. Applied to one
-call site it is bloat with a good name. Usually the pattern already exists in the
-repo; match it.
+**Follow the codebase's patterns, and use one that removes branches.** Before you write
+anything new, find the pattern the repo already uses for the same job and follow it. Then
+look for where a fitting pattern removes branches or duplication: a strategy or registry in
+place of an `if` chain on a kind, table-driven dispatch in place of a `switch`, a typed
+model in place of the same checks at every caller. A pattern with one call site and no
+branch to remove is bloat with a good name. When you saw a fitting pattern and chose not to
+use it, say which and why in the review.
+
+**Look for a design before you write a loop or a string literal.** Before a `for` loop,
+check for a better shape: a comprehension, a lookup table or registry built once, a typed
+model's method, a library call, or a query that does the work in the database. Write the
+loop only when none fits, and say why in one line of the review. A string that is reused,
+or that names a code, status, key, path, label or setting, becomes a static constant (an
+enum or a `Final`, one list per fact, at the level the whole product reads from; search for
+an existing one first) or configuration when its value varies by system or environment.
+Never scatter the same literal across files.
+
+**Parse data once into a typed model.** Parse input at the boundary into a typed model (a
+dataclass, a Pydantic model, a TypeScript type with a parser) and pass that model on.
+Functions never hand string-keyed dicts to each other.
+
+**Say each thing once.** The first review round includes a DRY pass over the diff and the
+code it touches. Collapse duplicated logic into one owning helper, and duplicated doc facts
+into the doc that owns them, with a link from the others. When an owner already exists, the
+copy goes.
 
 **Keep it simple while covering the whole requirement.** Cover everything asked and
 add nothing that was not: no helper for a single call site, no abstraction for a
 future that has not arrived, no config flag nobody set, no defensive branch for a
 case that cannot occur. Validate at system boundaries (API responses, database
-reads, tool results, environment); your own functions can trust each other. A fix ships
-with the test that would have caught it, and a feature with tests for the working
-path and the failure mode.
+reads, tool results, environment); your own functions can trust each other.
 
 **Mark a deliberate shortcut.** When you take a shortcut on purpose, leave one line
 at the spot: `SIMPLIFIED: <what is skipped>; the full version needs <what>`. A
@@ -111,7 +146,7 @@ reviewer reads the marker as a decision already made and judges only whether the
 shortcut is safe. Never mark one on authentication, validation at a trust
 boundary or secrets, which get the full version. An unmarked shortcut is a finding.
 
-**Find where a bug lives before you fix it there.** A failing test tells you
+**Find where a bug lives, then fix its cause by design.** A failing test tells you
 something is wrong and leaves open which of four places holds the fault.
 
 | The fault is in | The check that tells it apart |
@@ -121,10 +156,45 @@ something is wrong and leaves open which of four places holds the fault.
 | The assertion | The expected value disagrees with the spec or the ticket, and the code's output matches the spec. |
 | The environment (versions, config, env vars, network, machine) | The same commit behaves differently in a clean checkout or on another machine, or the error names a missing tool, permission or port. |
 
-**Delete code only when you can show it is unused.** Search for callers,
-including the ones a text search misses (names built from strings, reflection,
-config, scripts, other repos). When you still cannot show it is dead, ask before
-you delete it.
+Then fix the cause where it lives and remove the path that let it happen, in the same change.
+Never stack a patch on a patch: a second guard around the same fault means the first fix
+went in the wrong place.
+
+**A refactor keeps behaviour.** A refactor changes no result unless the brief asks for it,
+and then the review body states the change. Watch for the quiet ones: a lookup helper that
+keeps the last match where the old code kept the first, a sort that is no longer stable, a
+default that moved, an error that is now swallowed or now raised. Before you move or reshape
+anything shared, list its callers and check each one against the new behaviour.
+
+**Delete what the change leaves unused.** When the repo has a dead-code tool (a dead-code
+report, vulture, knip, ts-prune), run it on the touched trees and delete what your change
+left unused. A rewrite removes the old path in the same change. Before you delete, search
+for callers, including the ones a text search misses (names built from strings, reflection,
+config, scripts, other repos). Code your change did not orphan stays unless you can show it
+is dead; list it as a follow-up.
+
+**Keep only tests that prove needed behaviour.** A test stays when it proves an outcome, an
+invariant, a refusal, a security or evidence property, or a regression that happened. Keep
+each one tight: one behaviour, the smallest setup. Delete or merge duplicates, tests of
+private helpers or call order, mocks that only check which calls ran, and parameter cases
+that run the same branch. List each deleted or merged test in the pull or merge request, by
+file, with a one-line reason. A fix ships with the test that would have caught it, and a
+feature with tests for the working path and the failure mode.
+
+**Never game a quality count.** Never add a wrapper, alias or rename whose only effect is to
+lower a count (lint warnings, type-ignore lines, a coverage gap, a dead-code report). Fix the
+cause. When a count must rise, raise the baseline by hand in the same change and give the
+reason in the review body.
+
+**Write guidance from the rule the check applies.** A message that tells a user or a model
+what input is valid (an error, a prompt, help text, a docstring) states the rule the
+validator applies, read from the validator's code. A test builds an input by following that
+guidance and confirms the validator then accepts it.
+
+**Keep hashed and exported bytes stable.** Anything hashed, signed or exported keeps its
+stored bytes: key order, whitespace, encoding, line endings and number format stay as they
+were unless the brief changes them. An unchanged document gets the same hash after your
+change, and a test pins that for any serializer you touch.
 
 **Comment the hard part briefly, for a junior reading it cold.** One or two lines
 above complex code saying why it is shaped that way: the ordering that matters, the
@@ -132,6 +202,25 @@ failure it guards, the constraint the names don't show. Skip comments that resta
 the code, change-log comments, and annotations on code you did not touch. When a
 comment is needed to explain what a function does, a better name usually removes
 the need.
+
+**Run a docs pass on every change.** Every change fixes the docs it makes stale and cleans
+the text it touches: the READMEs, ADRs, AGENTS.md and CLAUDE.md guides, docstrings and
+comments in the diff, plus the README and guide of the area the change lives in. Run
+de-slop over them and apply the fixes directly, with no approval table. Use the
+`de-slop-copy` skill when it is installed; otherwise check for its failure modes yourself (padding, a buried lede, pompous verbs,
+magic adverbs, teasers, the same fact said twice). Then hold the text to plain English:
+
+- Put the condition before the command: "If the build fails, read the log."
+- Use active voice with a named actor and simple tenses, and `must` or `can` in place of
+  `should` or `may`.
+- Use one word for one meaning across a document.
+- Define a term at its first use, and name the host, flag or earlier step a command needs.
+- State a warning's command or condition first, then the risk.
+- Keep sentences short: about 20 words for a step, 25 for a description.
+- Never change code, identifiers, commands, quoted errors or facts while you edit prose.
+
+The plain-English rules are adapted from SimpleEnglish
+(<https://github.com/AminBlg/SimpleEnglish>).
 
 **Say what could be better; don't go build it.** When you notice something outside
 your brief that should improve (a rule stated in two places, a test that asserts
@@ -155,7 +244,12 @@ diff as an engineer who wants it rejected.
 - **Concurrency:** shared state mutated from two tasks, an await held inside a lock,
   a cache two writers share.
 - **Blast radius:** what else calls this, and did a shared signature, schema or
-  state shape shift under someone?
+  state shape shift under someone? Does every caller of a moved helper get the same
+  result as before?
+- **Design, tests and docs:** in the first round, check the diff against each rule from
+  "Follow the codebase's patterns" through "Keep hashed and exported bytes stable", and
+  run the docs pass. The `core:reviewer` agent checks the same rules, each with a
+  severity.
 - **Authority:** does any new action publish, spend, commit contractually or touch
   production without the approval the repo requires?
 - **Identifiers:** every database id, table name and external resource id is read
@@ -178,6 +272,12 @@ never pushes to the default branch and never force-pushes; a person reviews and 
 The same limit holds for anything past the repo's edge: deploying, posting a message and
 sending an email each need an explicit go from the user. The per-host commands are in
 `landing.md`.
+
+Name each scratch file after the branch (`<branch>-body.md`), never a shared name such as
+`mr.md` that another session can overwrite. After every create or edit of the review body,
+read it back from the host and check its `Closes` and `Refs` lines. A ticket the change
+finishes only in part gets `Refs`, never `Closes`, in the review body and in every commit
+message, because a `Closes` in any commit closes the ticket when the branch merges.
 
 **Look at anything rendered before calling it done.** Markup existing and tests
 passing show the code runs; they say nothing about whether a screen reads

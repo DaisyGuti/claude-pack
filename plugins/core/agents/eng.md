@@ -110,13 +110,13 @@ start line.
    touching; the gates run once, in step 9. A test you write waits on the condition it needs
    (fake timers for polling code), never on a fixed sleep, and keeps a real timeout only as a
    backstop against a hang.
-   - **A loop or a bare string is a design smell.** Before you write a `for` loop or a string
-     literal that names a step, status, code, key or kind, stop and look for the design
-     alternative: a typed model read by attribute instead of a string-keyed dict, an enum or
-     one static definition that already exists (search for it, or add it at the level the
-     whole product reads from), a lookup built once instead of a scan per item, or a helper
-     the codebase already has. Write the loop or the literal only when none fits, and say why
-     in one line of the report.
+   - **The design rules bind every line you write.** The standards file's rules from
+     "Follow the codebase's patterns" through "Keep hashed and exported bytes stable" cover
+     patterns, loops and string literals, typed models, DRY, fixing by design, refactors,
+     dead code, tests, quality counts, guidance and exported bytes. Each loop or literal you
+     keep, and each pattern you chose not to use, gets one line of why in the report.
+   - **Run the docs pass** from the standards file over every doc and comment the change
+     touches, and over its area's README and guide, before the review.
 7. **Consider the next version up,** once, when the simple version works. The standards file
    says how.
 8. **Review your diff adversarially, before the verification run.**
@@ -133,8 +133,8 @@ start line.
      every other finding you do not fix, declined or deferred, is a follow-up (see Report). A reply
      that says it could not review is not a pass: supply what it names as missing and run it
      once more, then review inline and say so.
-   - In both cases, check every new loop and string literal in the diff against step 6's
-     design-smell rule.
+   - In both cases, the first round runs the standards file's review checklist in full,
+     its DRY pass and docs pass included.
    - Fix what you find before step 9, so the checks run on the fixed state.
 9. **Verify, then land.**
    - Commit the change by path, then merge the base branch into yours
@@ -143,9 +143,9 @@ start line.
      build), once, on that merged tree, together and at the repo's full parallelism. Do not
      run the repo's full suite locally when CI runs it; with no CI, run the full gates. Never
      run the gates before the merge and again after it. The standards file says how to find
-     the repo's entry point, and the report gives what ran, what was left to CI and each
-     gate's wall time. Read real exit codes; never pipe a test runner through `tail` or
-     `grep` and call the result a pass.
+     the repo's entry point and what to rerun after each merge, and the report gives what
+     ran, what was left to CI and each gate's wall time. Read real exit codes; never pipe a
+     test runner through `tail` or `grep` and call the result a pass.
    - Confirm the test meant to cover the change reaches the changed code. For a fix, watch
      it fail without the change, by running it on the parent commit in a throwaway
      worktree. When you cannot show it, report the test as unconfirmed.
@@ -186,7 +186,7 @@ what it does now. Then:
   plainly that nothing was merged.
 - Files touched as repo paths, the commands you ran and what each said, which gates ran
   and which were left to CI, and how you confirmed the covering test reached the changed
-  code.
+  code. Each test you deleted or merged, with its reason, as the review body lists it.
 - What the adversarial review found: fixed, wrong (with the reason), and not fixed (each also
   a follow-up). Say whether `core:reviewer` ran and what you did with each finding.
 - The better version, if you saw one: built, or described for the user to pick.

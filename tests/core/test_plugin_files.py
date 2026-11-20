@@ -34,7 +34,7 @@ def tools(path: Path) -> set[str]:
 
 def test_the_plugin_ships_the_expected_agents_and_skills():
     assert [p.stem for p in AGENTS] == ["eng", "forward-tester", "reviewer"]
-    assert [p.parent.name for p in SKILLS] == ["eng", "project-setup"]
+    assert [p.parent.name for p in SKILLS] == ["eng", "engineering-standards", "project-setup"]
 
 
 @pytest.mark.parametrize("path", AGENTS, ids=lambda p: p.stem)
@@ -217,7 +217,7 @@ def grader_texts(case: Path) -> list[str]:
     return [g.read_text(encoding="utf-8") for g in graders]
 
 
-@pytest.mark.parametrize("skill", ["eng", "project-setup"])
+@pytest.mark.parametrize("skill", ["eng", "engineering-standards", "project-setup"])
 def test_each_skill_has_trigger_and_near_miss_evals(skill):
     cases = eval_cases(f"{skill}-skill")
     assert len(cases) >= 3
@@ -231,3 +231,26 @@ def test_each_skill_has_trigger_and_near_miss_evals(skill):
 def test_each_agent_has_a_delegation_eval(agent):
     texts = [t for c in eval_cases(f"{agent}-agent") for t in grader_texts(c)]
     assert any("tool: Agent" in t and f"core:{agent}" in t and "min: 0" not in t for t in texts)
+
+
+def test_every_rule_the_reviewer_checks_is_a_rule_in_the_standards():
+    # The reviewer quotes rule titles; a renamed rule would leave it checking nothing.
+    standards = _flat(PLUGIN / "skills" / "eng" / "references" / "engineering-standards.md")
+    reviewer = (PLUGIN / "agents" / "reviewer.md").read_text(encoding="utf-8")
+    titles = re.findall(r'^\s*\| "([^"]+)" \|', reviewer, re.M)
+    assert len(titles) >= 12
+    for title in titles:
+        assert f"- {title}" in standards, title
+        assert f"**{title}.**" in standards, title
+
+
+def test_the_ticket_worker_reaches_the_shared_standards():
+    # The worker is in another plugin, so it preloads the skill that names the one copy.
+    worker = (PLUGIN.parent / "tickets" / "agents" / "ticket-worker.md").read_text(encoding="utf-8")
+    assert "  - core:engineering-standards" in worker.split("\n---", 1)[0]
+    skill = (PLUGIN / "skills" / "engineering-standards" / "SKILL.md").read_text(encoding="utf-8")
+    assert "${CLAUDE_PLUGIN_ROOT}/skills/eng/references/engineering-standards.md" in skill
+    assert (
+        frontmatter(PLUGIN / "skills" / "engineering-standards" / "SKILL.md")["user-invocable"]
+        == "false"
+    )

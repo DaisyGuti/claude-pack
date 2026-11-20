@@ -48,6 +48,7 @@ carry their own dry-run or confirmation step.
 | `/core:eng` | Slash entry that hands a task to the `eng` agent |
 | `@agent-core:reviewer` | A fast, read-only review of one diff, branch or pull request, with ranked findings and a file and line for each |
 | `@agent-core:forward-tester` | Runs a finished change the way a user would (a command, a local server, a page) and reports what happened. Never edits code |
+| `core:engineering-standards` | The shared rules for building, reviewing and planning a change: patterns, loops and literals, typed models, DRY, dead code, tests, the docs pass and landing. The `eng`, `reviewer` and ticket-worker agents follow it; Claude loads it on its own, so it has no slash command |
 | `/core:project-setup` | Writes or refreshes a repo's CLAUDE.md from its real build, test and lint commands plus the team's rules |
 
 ### tickets

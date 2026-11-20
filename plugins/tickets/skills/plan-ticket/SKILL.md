@@ -106,6 +106,8 @@ Then add only what applies:
   another lane (in progress, blocked, done) that a worker or a person put it in;
 - the run label is run-solo: `work-tickets` never dispatches it, because it needs a person;
 - the ticket was held instead of planned, and why, and what unblocks it;
-- with batching on, the parent it was planned under and every child the plan covers, or that
-  it stayed single;
+- with batching on, the parent it was planned under and every child the plan covers, a new
+  batch it proposes, or that it stayed single;
+- the notes on the returned line: the parent attached or suggested, duplicates and close
+  candidates (for a person to close), no assignee;
 - tickets skipped because their repo did not resolve.

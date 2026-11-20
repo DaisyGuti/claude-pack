@@ -95,8 +95,9 @@ leaves exactly this backlog behind.)
 
 ## 2. Flag duplicates
 
-Flag open tickets with near-identical titles or bodies, within a repo or across repos.
-Never close or merge them. List each group under Duplicates to Review.
+Flag open tickets with near-identical titles or bodies, within a repo or across repos,
+and close candidates: tickets that merged work or another ticket already settles. Never close
+or merge them. List each group under Duplicates to Review.
 
 ## 3. Audit each open ticket
 
@@ -285,7 +286,9 @@ parent's ref and each child's Remote and number. The labels-only mode stays per 
   under Needs Attention with the child's reason.
 
 Tickets that come back `held` or `could not plan` go under Needs Attention with the
-reason. In a `--dry-run` this step only lists the tickets that would be planned or
+reason. The notes on a `planned` line go in the summary too: duplicates and close candidates
+under Duplicates to Review, a proposed batch under Batches, and a suggested parent or no
+assignee under Needs Attention. In a `--dry-run` this step only lists the tickets that would be planned or
 labelled.
 
 ## 8. Print the summary

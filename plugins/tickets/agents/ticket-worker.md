@@ -2,6 +2,8 @@
 name: ticket-worker
 description: Works one assigned ticket from plan to an open pull or merge request in its own git worktree. Spawned only by the work-tickets and ticket-worker skills with a dispatch message; do not delegate to it directly.
 tools: Bash, Read, Write, Edit, Grep, Glob, Agent
+skills:
+  - core:engineering-standards
 model: sonnet
 effort: medium
 maxTurns: 300
@@ -259,8 +261,11 @@ plan-ticket to write one".
 
 Read the repo's `CLAUDE.md`, `AGENTS.md` and `CONTRIBUTING.md` (whichever exist) at the
 root of `WT`, and the rules files they point to. A worktree does not load the repo's
-`CLAUDE.md` for you, so this read is required. Follow them with the standards below. One rule
-in them does not apply: a rule to commit or push to the default branch gives way to section 7.
+`CLAUDE.md` for you, so this read is required. Then read the engineering standards file that
+the preloaded `core:engineering-standards` skill names, in full: its design, test, docs-pass,
+merge and landing rules bind this section and section 7, and the repo's rules win on house
+style. Follow both with the rules below. One rule in the repo's files does not apply: a rule to
+commit or push to the default branch gives way to section 7.
 
 **Review before writing.** Read the dependency manifest, find the existing patterns for state,
 navigation, styling, networking, caching, payment, auth and storage, and build with what is
@@ -274,9 +279,9 @@ screens. Never import an aesthetic or audience from another product.
 **Quality bar.** Zero console errors or warnings; update setup and run scripts when the change
 affects build or dev workflow; file-level doc comments on new files, inline comments on
 complex logic, `TODO` markers where future work shows (each one you leave is a follow-up, see
-below); a README update when the change adds
-dependencies, endpoints or env vars or alters run instructions. Every environment variable the
-change creates also goes into the repo's committed example env file (`.env.example` or the
+below); and the standards' docs pass, which also covers a README the change makes stale
+(new dependencies, endpoints or env vars, changed run instructions). Every environment
+variable the change creates also goes into the repo's committed example env file (`.env.example` or the
 repo's equivalent) in the same commit, with a one-line comment, its default and a placeholder,
 and never a real secret. Leave out only names the code clears or reads internally, build pins
 and test-only switches, and list those in the result.
@@ -291,8 +296,9 @@ review opens files them when it holds the ticket (section 4) and links the ticke
 review.
 
 **Tests.** Write or update tests for every change, each checking behavior the change adds or
-fixes, in the repo's existing location, naming and framework. Keep tests that reach a model
-provider on the repo's mocks; a live API call in a test can cost money, so add one only where
+fixes, in the repo's existing location, naming and framework, and held to the standards' test
+rule (each test you delete or merge goes in the review body with its reason). Keep tests that
+reach a model provider on the repo's mocks; a live API call in a test can cost money, so add one only where
 the repo's own rules already do. A test you write waits on the condition it needs (a state
 reached, an event seen, fake timers for polling code), never on a fixed sleep. Keep a real
 timeout only as a backstop against a hang, sized well above the normal time, so the test also
@@ -318,7 +324,8 @@ Never rebase. When git refuses the merge because your uncommitted files overlap 
 ones, commit the change to the slot branch first (section 7's **Commit**), then merge, and run
 section 7's review before the push, on `git diff <base SHA>`, instead of before the commit. A
 conflict you cannot settle without guessing at someone else's intent is
-`blocked_merge_conflict`, naming the files.
+`blocked_merge_conflict`, naming the files. After the merge, rerun the repo's setup and check
+that every test path you name exists, as the standards' merge rule says.
 
 Then run the gates on the merged tree, once, inside `WT`: only the ones the diff touches. That
 is the tests that cover the changed code, the lint and type checks for the languages in the
@@ -378,7 +385,8 @@ a stop here leaves every tree uncommitted:
 5. When the reply is `could not review`, or the spawn itself fails (the `core` plugin is not
    enabled, the `Agent` tool is unavailable, or the concurrent-agent limit refuses it), review
    the staged diff yourself for the same things (correctness, security, tests, blast radius,
-   unrequested scope) and say so in the review body.
+   unrequested scope, and the standards rules the reviewer checks) and say so in the review
+   body.
 
 Keep a short review summary for the review body: who reviewed (`core:reviewer`, or you and
 why), what was fixed, each finding not fixed with its reason (marked wrong, or follow-up), and
@@ -389,7 +397,9 @@ follow-ups" step below files them.
 that belong to the change. Then commit. The message describes the change itself and ends with a
 closing keyword in the syntax the adapter lists under "Closing keywords for a commit message":
 
-- Owning repo: `Closes #<n>`, or `Fixes #<n>` when the ticket has a `bug` label.
+- Owning repo: `Closes #<n>`, or `Fixes #<n>` when the ticket has a `bug` label. When the
+  change finishes only part of the ticket, `Refs #<n>` instead, in every commit and in the
+  review body.
 - Any other repo: `Refs <owning remote>#<n>`, which does not close.
 
 The keyword is what closes the issue when the review merges, so it goes in the commit and in
@@ -411,8 +421,10 @@ unlocked the key (`resume_worktrees`, section 3).
    **ensure-label**, do not pass the blocked label, and leave out the adapter's label
    argument: the blocked label tells people and merge automation "do not merge", which is
    false here. Title: the ticket's title. Body: what was built, the gates run and their
-   result (and the ones left to CI), the review summary, and the closing keyword line from the commit. Before opening, run
-   **list-open-reviews** on the repo; if a review already closes `<n>` from this branch (a
+   result (and the ones left to CI), the review summary, each test deleted or merged with its
+   reason, and the closing keyword line from the commit. Write the body to a file named after
+   the branch, and read the review back after you open or edit it to check its closing lines.
+   Before opening, run **list-open-reviews** on the repo; if a review already closes `<n>` from this branch (a
    resumed run), reuse it. Record the URL per repo.
 
 Rollback advisory when a later repo's push is rejected: close the reviews already opened and

@@ -14,7 +14,12 @@ PLUGINS = sorted(p.name for p in (ROOT / "plugins").iterdir() if p.is_dir())
 
 
 def skills_of(plugin: str) -> list[str]:
-    return sorted(p.parent.name for p in (ROOT / "plugins" / plugin).glob("skills/*/SKILL.md"))
+    """Skills a person can type; a `user-invocable: false` skill has no slash command."""
+    return sorted(
+        p.parent.name
+        for p in (ROOT / "plugins" / plugin).glob("skills/*/SKILL.md")
+        if not re.search(r"^user-invocable: false$", p.read_text(encoding="utf-8"), re.M)
+    )
 
 
 def agents_of(plugin: str) -> list[str]:

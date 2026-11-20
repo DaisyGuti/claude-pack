@@ -17,7 +17,9 @@ Optional: `--context FILE`, and, when batching is on, the ticket's parent and wh
 one (see "Batches"). The registry and the tracker adapter file for the registry's
 tracker are already read; if you were handed this file in a subagent brief, read both before
 the first step. Tracker actions are the named operations in bold; run them as the adapter
-file writes them.
+file writes them. Load the `core:engineering-standards` skill once: its design and test
+rules shape **Pattern to reuse** and **Watch out for** (a pattern that removes branches, an
+old path to delete, a test to cut).
 
 ## Contents
 
@@ -45,9 +47,22 @@ file writes them.
      `requirements.txt`, `go.mod`, `Cargo.toml`: whichever exists);
    - **one** targeted search for the primary symbol or file the ticket names.
 
-   That is all. Do not survey the repo, and do not research other tickets.
+   That is all. Do not survey the repo. Other tickets are read only in item 6.
 5. For each issue the body names on a `Depends on:`, `Blocked by:` or `Blocked on:` line,
    run **issue-state**.
+6. **Parent, neighbours and duplicates.** Run **search-issues** in the ticket's repo on two
+   or three keywords from its title and primary symbol (a grooming pass already holds the
+   board's items: use those). From that, and **read-parent** when batching is on, find:
+   - **Its parent**, when it has none: an open epic or parent the ticket body names (a link,
+     a `Parent:` line). Step 4 attaches it only in `epics` or `sub-issues` mode and only when
+     the plan's **Batch** line says `single`, because **attach-child** replaces a parent and a
+     non-batch parent keeps the ticket out of batches. In any other case, or when you cannot
+     name the parent for certain, it goes in the returned line.
+   - **Batch partners**, when batching is on: open tickets in the same area or files, judged
+     by batches.md, "Forming batches".
+   - **Duplicates and close candidates**: a ticket that repeats this one, or one that this
+     ticket or merged work already settles. Name each in the returned line. Never close or
+     merge one.
 
 ## 2. Hold it instead, when there is nothing sound to plan
 
@@ -77,6 +92,9 @@ About 200 words and about five minutes of work. One paragraph per section at mos
 - **Acceptance**: the one or two checks that mean done.
 - **Blockers / dependencies**: only if real and current.
 - **Watch out for**: only the non-obvious traps.
+- **Batch**, when batching is on: one line. Name the batch the ticket joins and its
+  members, or propose a new batch (`propose batch <area>: #12, #15`) when two or more open
+  tickets fit it and no parent does, or write `single`.
 
 The comment starts with the heading `### Final Plan` on a line of its own, exactly, because
 workers look for that heading. When the ticket already has a `### Final Plan` comment (you
@@ -88,7 +106,8 @@ were asked to re-plan it), put one line under the heading first:
 - iteration loops or an iterations footer ("Iterations: 2, round 1 added X");
 - tradeoff tables;
 - risk registers;
-- "cross-ticket coordination" sections that re-list other tickets;
+- "cross-ticket coordination" sections that re-list other tickets (the **Batch** line is the
+  one place another ticket appears);
 - restating the brief: link to it.
 
 A fourth section, a table or a third paragraph in one section means stop and cut. If the plan
@@ -117,6 +136,15 @@ In a dry run, print the plan, the labels and the lane move below, run no write o
    **set-lane** with role `ready` when it sits in the backlog lane. A ticket already in the
    ready lane stays. A ticket in any other lane stays where it is, because a worker or a person
    put it there.
+5. **Groom what the plan touches.**
+   - **Parent:** **attach-child** to the parent item 6 of step 1 named, under the conditions
+     it gives.
+   - **Priority:** in a `plan-ticket` run only (grooming syncs priority itself and tells its
+     planners to change none): none set, judge one and **set-priority**, as
+     [ticket-labels.md](ticket-labels.md) "Priority" says.
+   - **Team label:** when the repo uses team labels (`team:<name>` or the like, from
+     **list-labels**) and the ticket has none, **add-label** the existing one that owns the plan's files. Never invent a label.
+   - **Assignee:** never change one. Name an unassigned ticket in the returned line.
 
 **ensure-label** can lose a race when several planners run at once. A failure to create a
 label that now exists is success: run it again to confirm, and carry on.
@@ -124,13 +152,16 @@ label that now exists is success: run it again to confirm, and carry on.
 ## 5. Return one line
 
 ```text
-planned <repo>#<n>: <model label>, <run label>, <comment URL, when printed>, <word count> words
+planned <repo>#<n>: <model label>, <run label>, <comment URL, when printed>, <word count> words[; <notes>]
 replanned <repo>#<n>: <same fields>
 held <repo>#<n>: <kind>: <what it waits on>
 could not plan <repo>#<n>: <reason>
 ```
 
-The caller reads this line and nothing else; it does not need the plan text back.
+`<notes>` lists, comma-separated, what step 1's item 6 and step 4's item 5 found for a
+person: the parent attached or suggested, the batch joined or proposed, duplicates and close
+candidates, no assignee. The caller reads this line and nothing else; it
+does not need the plan text back.
 
 ## Labels only, when the plan already exists
 
