@@ -344,13 +344,12 @@ def test_model_label_is_sized_to_the_plans_scope() -> None:
     assert "Size it to the plan's scope" in planning
 
 
-def test_grooming_reports_ready_in_waves_that_share_no_file() -> None:
+def test_grooming_cuts_ready_waves_with_the_script() -> None:
     grooming = flat(PLUGIN / "skills" / "daily-grooming" / "references" / "grooming.md")
     summary = grooming[grooming.index("- **Ready (in waves)**") : grooming.index("- **Backlog")]
-    assert "touch no file in common" in summary
-    assert "at most the pool size" in summary
-    assert "Flaky-test and CI tickets come first" in summary
-    assert "adds a migration gets a wave to itself" in summary
+    # The rules live in waves.py (tests/tickets/test_waves.py); the summary must run it.
+    assert "`<scripts>/waves.py <file> --pool <N>`" in summary
+    assert (PLUGIN / "scripts" / "waves.py").is_file()
 
 
 def test_ticket_worker_skill_turns_on_auto_fix_for_an_opened_review() -> None:
