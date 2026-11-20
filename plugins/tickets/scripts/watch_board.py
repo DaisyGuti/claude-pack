@@ -6,7 +6,7 @@ registry repo, then prints a line for each event it has not printed before. It o
 tracker; nothing here moves a card, labels an issue or merges a review. The event contract
 (names, fields and when each fires) is `references/board-watcher.md`.
 
-What it has printed is kept in `<data dir>/state/board-watcher-<board>.json`, so a restart
+What it has printed is kept in `<data dir>/state/board-watcher-<board>-<hash>.json`, so a restart
 does not print the same events again.
 
 Usage:

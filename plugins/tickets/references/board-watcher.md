@@ -62,7 +62,8 @@ deleted, fires nothing.
 
 ## Memory and failures
 
-What has fired is kept in `<data>/state/board-watcher-<board>.json`. A restart reads it, so it
+What has fired is kept in `<data>/state/board-watcher-<board>-<hash>.json` (`<hash>` is a short
+hash of the board's exact path and id, so two boards never share a file). A restart reads it, so it
 prints nothing for events already printed; delete the file and the next tick prints every
 current event once. The first tick of a fresh watcher prints every event that holds now. A line
 is printed before the memory is saved, so a crash between the two prints that event again on

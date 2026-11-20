@@ -197,6 +197,19 @@ def test_unknown_gitlab_lane_mode_is_a_problem(filled_registry: Path) -> None:
     assert any("'labels' or 'status'" in p for p in payload["problems"])
 
 
+@pytest.mark.parametrize(("written", "code"), [("Group", 0), ("team", registry.EXIT_INCOMPLETE)])
+def test_gitlab_scope_is_read_in_any_case_and_an_unknown_one_is_a_problem(
+    filled_registry: Path, written: str, code: int
+) -> None:
+    path = filled_registry / "registry.md"
+    text = as_gitlab(path.read_text(encoding="utf-8"), None)
+    path.write_text(text.replace("- Scope: `group`", f"- Scope: `{written}`"), encoding="utf-8")
+    found, payload, _ = registry.ensure(filled_registry)
+    assert found == code
+    if code:
+        assert any("Scope 'team'" in p for p in payload["problems"])
+
+
 def test_github_has_no_lane_mode(filled_registry: Path) -> None:
     reg = registry.parse((filled_registry / "registry.md").read_text(encoding="utf-8"))
     assert reg["lane_mode"] is None

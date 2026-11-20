@@ -23,7 +23,7 @@ import re
 import shutil
 import sys
 from collections.abc import Callable
-from dataclasses import MISSING, asdict, dataclass, fields
+from dataclasses import MISSING, asdict, dataclass, fields, replace
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, ClassVar
@@ -42,6 +42,11 @@ EXIT_HOST_MISMATCH = 5
 REQUIRED_LANES = ("backlog", "ready", "in_progress", "blocked", "done")
 REQUIRED_LABELS = ("blocked", "run_worker", "run_solo")
 TIERS = ("fast", "workhorse", "frontier")
+
+
+class Tracker(StrEnum):
+    GITHUB = "github"
+    GITLAB = "gitlab"
 
 
 class Scope(StrEnum):
@@ -98,11 +103,16 @@ Board = GitHubBoard | GitLabBoard
 
 # Each tracker's board model; any other tracker name reads the GitLab subsection, and
 # problems() refuses it.
-BOARDS: dict[str, type[Board]] = {"github": GitHubBoard, "gitlab": GitLabBoard}
-TRACKERS = tuple(BOARDS)
+BOARDS: dict[str, type[Board]] = {Tracker.GITHUB: GitHubBoard, Tracker.GITLAB: GitLabBoard}
+TRACKERS = tuple(Tracker)
 # Where batch parents live: a GitLab group epic, a GitHub sub-issue parent, a shared
 # `batch:<area>` label on either tracker, or no batches at all (every ticket a single).
-BATCH_MODES = {"off": TRACKERS, "epics": ("gitlab",), "sub-issues": ("github",), "labels": TRACKERS}
+BATCH_MODES = {
+    "off": TRACKERS,
+    "epics": (Tracker.GITLAB,),
+    "sub-issues": (Tracker.GITHUB,),
+    "labels": TRACKERS,
+}
 DEFAULT_BATCH_SIZE = 5
 # Values that ship in registry.example.md. A board or repo that still holds one was never filled in.
 EXAMPLE_MARKERS = ("your-github-login", "your-group")
@@ -190,6 +200,9 @@ def parse(text: str, home: Path | None = None) -> dict[str, Any]:
     board_sections = sections("## Board\n" + top.get("Board", ""), 3)
     board_type = BOARDS.get(tracker, GitLabBoard)
     board = read_board(board_type, key_values(board_sections.get(board_type.heading, "")))
+    if isinstance(board, GitLabBoard):
+        # Scope and Lanes are matched as lower case, however the user wrote them.
+        board = replace(board, scope=board.scope.lower(), lanes=board.lanes.lower())
 
     lanes: dict[str, str] = {}
     lane_meaning: dict[str, str] = {}
@@ -235,7 +248,7 @@ def parse(text: str, home: Path | None = None) -> dict[str, Any]:
         "host": tracker_vals.get("host", ""),
         "works_for": tracker_vals.get("works for", ""),
         "board": board,
-        "lane_mode": board.lanes.lower() if isinstance(board, GitLabBoard) else None,
+        "lane_mode": board.lanes if isinstance(board, GitLabBoard) else None,
         # Without a Batches section every ticket stays a single, as before batching existed.
         "batching": {
             "mode": batch_vals.get("batching", "off").lower(),
@@ -272,21 +285,23 @@ def problems(reg: dict[str, Any], which: Callable[[str], str | None] | None = No
                 "replace it with your own"
             )
     if reg["tracker"] not in TRACKERS:
-        found.append(f"Tracker is '{reg['tracker']}'; it must be 'github' or 'gitlab'")
+        found.append(f"Tracker is '{reg['tracker']}'; it must be {one_of(Tracker)}")
     if not reg["host"]:
         found.append("Host is empty; write github.com, gitlab.com or your server's host")
     if reg["tracker"] in TRACKERS:
         for key in missing_board_keys(reg["board"]):
             found.append(f"Board has no '{key}' value for the {reg['tracker']} tracker")
     board = reg["board"]
-    if reg["tracker"] == "gitlab" and board.scope not in tuple(Scope):
-        found.append(f"Board has Scope '{board.scope}'; it must be 'group' or 'project'")
-    if reg["tracker"] == "gitlab" and reg["lane_mode"] not in tuple(LaneMode):
+    gitlab = reg["tracker"] == Tracker.GITLAB
+    # An empty Scope is already named as a missing key above.
+    if gitlab and board.scope and board.scope not in tuple(Scope):
+        found.append(f"Board has Scope '{board.scope}'; it must be {one_of(Scope)}")
+    if gitlab and reg["lane_mode"] not in tuple(LaneMode):
         found.append(
             f"Board has Lanes '{reg['lane_mode']}' for the gitlab tracker; "
-            "it must be 'labels' or 'status'"
+            f"it must be {one_of(LaneMode)}"
         )
-    if reg["tracker"] == "gitlab" and reg["lane_mode"] == LaneMode.STATUS:
+    if gitlab and reg["lane_mode"] == LaneMode.STATUS:
         # The usual slip when a board moves to Status: the mode flips but the column keeps labels.
         for role, value in reg["lanes"].items():
             if "::" in value:
@@ -327,14 +342,19 @@ def problems(reg: dict[str, Any], which: Callable[[str], str | None] | None = No
     return found
 
 
+def one_of(choices: type[StrEnum]) -> str:
+    """An enum's values for a message: 'a' or 'b'."""
+    return " or ".join(f"'{choice}'" for choice in choices)
+
+
 def tools_needed(tracker: str) -> list[tuple[str, str]]:
     """The command-line tools a tracker needs, each with how to install it."""
     needed = [("git", "install git 2.31 or newer")]
-    if tracker == "github":
+    if tracker == Tracker.GITHUB:
         needed.append(
             ("gh", "install the GitHub CLI (https://cli.github.com), then run 'gh auth login'")
         )
-    elif tracker == "gitlab":
+    elif tracker == Tracker.GITLAB:
         needed.append(
             (
                 "glab",

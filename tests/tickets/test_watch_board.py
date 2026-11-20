@@ -8,30 +8,14 @@ and paths, names and the host replaced with placeholders."""
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 from collections.abc import Sequence
 from pathlib import Path
-from types import ModuleType
 
 import pytest
+from tickets_helpers import load_script
 
-PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "tickets"
-SCRIPTS = PLUGIN / "scripts"
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "watch_board"
-
-
-def load_script(name: str) -> ModuleType:
-    """Import plugins/tickets/scripts/<name>.py (the scripts are not a package)."""
-    if str(SCRIPTS) not in sys.path:
-        sys.path.insert(0, str(SCRIPTS))
-    spec = importlib.util.spec_from_file_location(f"tickets_{name}", SCRIPTS / f"{name}.py")
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[f"tickets_{name}"] = module
-    spec.loader.exec_module(module)
-    return module
 
 
 watch = load_script("watch_board")
@@ -75,6 +59,13 @@ def config(tracker: str, lane_mode: str = LANE_LABELS, ready: str = "Ready") -> 
 def github_memory(data_dir: Path) -> Path:
     """The memory file of the board in the `filled_registry` fixture."""
     return watch.memory_path(data_dir, config("github").board)
+
+
+def test_boards_whose_keys_differ_only_in_separators_keep_separate_memory(tmp_path: Path) -> None:
+    def board(path: str) -> object:
+        return watch.registry.GitLabBoard(scope="group", path=path, board="4")
+
+    assert watch.memory_path(tmp_path, board("a/b")) != watch.memory_path(tmp_path, board("a-b"))
 
 
 def tracker_error(text: str, path: str = "user") -> object:
@@ -308,7 +299,7 @@ def test_a_second_watcher_on_the_same_board_is_refused(
     assert code == watch.EXIT_ALREADY_WATCHING
     out = capsys.readouterr()
     assert out.out == "" and "another watcher already watches board acme/1" in out.err
-    assert not any("graphql" in call for call in cli.calls)
+    assert cli.calls == []  # refused before it signs in
 
 
 @pytest.mark.parametrize(
