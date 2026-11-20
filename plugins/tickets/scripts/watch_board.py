@@ -13,9 +13,10 @@ Usage:
     watch_board.py --data-dir DIR [--interval SECONDS] [--once]
 
 Exit codes: 0 stopped (after one tick with --once, or by Ctrl-C), 1 the tick failed (--once
-only; a long-running watcher reports the failure and tries again next tick), 2 bad input or an
-unreadable memory file, 3 the registry is missing or incomplete, 4 the tracker CLI is not
-signed in or its login was rejected.
+only; a long-running watcher reports the failure and tries again next tick), 2 bad input, an
+unreadable memory file or the plugin's registry example missing, 3 the registry is missing or
+incomplete, 4 the tracker CLI is not signed in or its login was rejected, 5 another watcher
+already watches this board from this data folder.
 """
 
 from __future__ import annotations
@@ -37,12 +38,13 @@ if sys.version_info < (3, 11):  # noqa: UP036  (a clear message on an older pyth
     sys.exit("watch_board.py needs Python 3.11 or newer; install it and run this again")
 
 import registry  # noqa: E402  (after the version check, like the other scripts' imports)
-from ticket_state import safe_name, save  # noqa: E402
+from ticket_state import LockHeld, locked, safe_name, save  # noqa: E402
 
 EXIT_TICK_FAILED = 1
 EXIT_BAD_INPUT = 2
 EXIT_REGISTRY = 3
 EXIT_AUTH = 4
+EXIT_ALREADY_WATCHING = 5
 DEFAULT_INTERVAL = 60
 # Every worker and session on the machine shares the tracker's rate limit.
 MIN_INTERVAL = 10
@@ -50,8 +52,8 @@ MEMORY_SCHEMA = 1
 # SIMPLIFIED: a GraphQL list reads one page (100 Ready tickets; 100 open pull requests per
 # GitHub repo) and says so on stderr when there are more. The full version pages through it.
 PAGE = 100
-# How gh and glab report a rejected or missing login, and a missing object, in their errors.
-# UNVERIFIED: glab's exact 401 wording; both CLIs print the HTTP status code, which this reads.
+# How gh and glab report a rejected or missing login, and a missing object, in their errors
+# (glab prints `glab: 401 Unauthorized (HTTP 401)` and `glab: 404 Not found (HTTP 404)`).
 AUTH_FAILURE = re.compile(r"\b401\b|Bad credentials|not been authenticated|not logged in")
 NOT_FOUND = re.compile(r"\b404\b")
 
@@ -218,7 +220,7 @@ class Config:
 
     tracker: str
     host: str
-    board: dict[str, str]
+    board: registry.Board
     ready_lane: str
     lane_mode: str | None
     blocked_label: str
@@ -292,10 +294,6 @@ class Tracker:
                 return ReviewState.CLOSED
             raise
 
-    @property
-    def board_key(self) -> str:
-        raise NotImplementedError
-
     def read_login(self) -> str:
         raise NotImplementedError
 
@@ -312,10 +310,6 @@ class GitHub(Tracker):
 
     cli = "gh"
 
-    @property
-    def board_key(self) -> str:
-        return f"{self.config.board['owner']}/{self.config.board['number']}"
-
     def read_login(self) -> str:
         return str(parse_json(self.api("user"))["login"])
 
@@ -324,9 +318,9 @@ class GitHub(Tracker):
         aliases = [(f"r{index}", remote) for index, remote in enumerate(self.config.repos)]
         declarations = ["$owner: String!", "$number: Int!", "$filter: String!"]
         fields = [
-            "-f", f"owner={self.config.board['owner']}",
-            "-F", f"number={self.config.board['number']}",
-            "-f", f'filter=is:issue is:open status:"{self.config.ready_lane}"',
+            "-f", f"owner={self.config.board.owner}",
+            "-F", f"number={self.config.board.number}",
+            "-f", f"filter=is:issue is:open status:{filter_value(self.config.ready_lane)}",
         ]  # fmt: skip
         selections = []
         for alias, remote in aliases:
@@ -352,7 +346,9 @@ class GitHub(Tracker):
         data = parse_json(self.api("graphql", "-f", f"query={query}", *fields))["data"]
         project = (data["owner"] or {}).get("projectV2")
         if project is None:
-            raise TrackerError(f"board {self.board_key} was not found or this login cannot read it")
+            raise TrackerError(
+                f"board {self.config.board.key} was not found or this login cannot read it"
+            )
         if project["items"]["pageInfo"]["hasNextPage"]:
             warn_truncated(f"the {self.config.ready_lane} lane")
         ready = tuple(
@@ -401,6 +397,23 @@ class GitHub(Tracker):
         return ReviewState(pull["state"])
 
 
+def filter_value(value: str) -> str:
+    """A value quoted for GitHub's project filter. The filter has no escape character (a
+    backslash is literal) but takes double or single quotes, so a value holding one kind is
+    wrapped in the other."""
+    # UNVERIFIED: that a single-quoted value holding a double quote matches; only plain
+    # single-quoted values were checked against a live board.
+    if '"' not in value:
+        return f'"{value}"'
+    if "'" not in value:
+        return f"'{value}'"
+    raise WatchError(
+        f"the lane {value!r} holds both a double and a single quote, which GitHub's project "
+        "filter cannot express; rename the Status option and the registry's lane",
+        EXIT_BAD_INPUT,
+    )
+
+
 def github_author(node: dict[str, Any]) -> str | None:
     """A GraphQL node's author login; null for a deleted account."""
     return node["author"]["login"] if node["author"] else None
@@ -411,10 +424,6 @@ class GitLab(Tracker):
     REST for label lanes and merge requests (every page), one GraphQL query for Status lanes."""
 
     cli = "glab"
-
-    @property
-    def board_key(self) -> str:
-        return f"{self.config.board['path']}/{self.config.board['board']}"
 
     def read_login(self) -> str:
         return str(parse_json(self.api("user"))["username"])
@@ -444,10 +453,10 @@ class GitLab(Tracker):
     def ready(self) -> tuple[Item, ...]:
         board = self.config.board
         if self.config.lane_mode == GITLAB_LANE_STATUS:
-            return self.ready_by_status(board["path"])
-        scope = f"{board['scope']}s"  # the registry's group or project, which it checks
+            return self.ready_by_status(board.path)
+        scope = f"{board.scope}s"  # the registry's group or project, which it checks
         issues = self.ndjson(
-            f"{scope}/{encode(board['path'])}/issues?state=opened&per_page={PAGE}"
+            f"{scope}/{encode(board.path)}/issues?state=opened&per_page={PAGE}"
             f"&labels={encode(self.config.ready_lane)}"
         )
         return tuple(
@@ -550,15 +559,30 @@ def event_line(event: Event, item: Item) -> str:
     return f"{event} {json.dumps(asdict(item), ensure_ascii=False)}"
 
 
-def memory_path(data_dir: Path, tracker: Tracker) -> Path:
-    return data_dir / "state" / f"board-watcher-{safe_name(tracker.board_key)}.json"
+def memory_path(data_dir: Path, board: registry.Board) -> Path:
+    return data_dir / "state" / f"board-watcher-{safe_name(board.key)}.json"
 
 
 def watch(
     tracker: Tracker, path: Path, interval: int, once: bool, sleep: Callable[[float], None]
 ) -> int:
+    """Hold the memory file's lock for the whole run, so a second watcher on the same board and
+    data folder is refused instead of printing every event a second time."""
+    try:
+        with locked(path, wait=False):
+            return loop(tracker, path, interval, once, sleep)
+    except LockHeld as err:
+        raise WatchError(
+            f"another watcher already watches board {tracker.config.board.key} from this data "
+            f"folder ({err}); read its output, or stop it before starting this one",
+            EXIT_ALREADY_WATCHING,
+        ) from err
+
+
+def loop(
+    tracker: Tracker, path: Path, interval: int, once: bool, sleep: Callable[[float], None]
+) -> int:
     memory = Memory.load(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
     while True:
         try:
             events, after = tick(tracker, memory)
@@ -598,17 +622,17 @@ def main(argv: list[str], run: Run = run_cli, sleep: Callable[[float], None] = t
         return EXIT_BAD_INPUT
     data_dir = args.data_dir.expanduser()
 
-    code, payload = registry.ensure(data_dir)
-    if code != 0:
+    code, payload, reg = registry.ensure(data_dir)
+    if reg is None:
         print(json.dumps(payload, indent=2), file=sys.stderr)
-        return EXIT_REGISTRY
-    config = Config.from_registry(
-        registry.parse(registry.registry_path(data_dir).read_text(encoding="utf-8"))
-    )
+        # registry.py's bad input (its example file missing from the plugin) stays bad input.
+        return EXIT_BAD_INPUT if code == registry.EXIT_BAD_INPUT else EXIT_REGISTRY
+    config = Config.from_registry(reg)
     tracker = TRACKERS[config.tracker](config, run)
     try:
         tracker.sign_in()
-        return watch(tracker, memory_path(data_dir, tracker), args.interval, args.once, sleep)
+        path = memory_path(data_dir, config.board)
+        return watch(tracker, path, args.interval, args.once, sleep)
     except WatchError as err:
         print(err if err.code == EXIT_AUTH else f"error: {err}", file=sys.stderr)
         return err.code

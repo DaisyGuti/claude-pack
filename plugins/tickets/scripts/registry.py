@@ -23,6 +23,7 @@ import re
 import shutil
 import sys
 from collections.abc import Callable
+from dataclasses import MISSING, asdict, dataclass, fields
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +50,56 @@ BATCH_MODES = {"off": TRACKERS, "epics": ("gitlab",), "sub-issues": ("github",),
 DEFAULT_BATCH_SIZE = 5
 # Values that ship in registry.example.md. A board or repo that still holds one was never filled in.
 EXAMPLE_MARKERS = ("your-github-login", "your-group")
+
+
+# The Board section's `Key: value` lines, one model per tracker. A field's name is its key in
+# lower case; a field with no default is required, and `problems()` names it when it is empty.
+@dataclass(frozen=True)
+class GitHubBoard:
+    """A GitHub Projects (v2) board: the owning user or organization and the project number."""
+
+    owner: str
+    number: str
+    name: str = ""
+
+    @property
+    def key(self) -> str:
+        return f"{self.owner}/{self.number}"
+
+
+@dataclass(frozen=True)
+class GitLabBoard:
+    """A GitLab issue board: its group or project, and its name or id."""
+
+    scope: str
+    path: str
+    board: str
+    name: str = ""
+    # A registry written before the Lanes key existed keeps label lanes.
+    lanes: str = "labels"
+
+    @property
+    def key(self) -> str:
+        return f"{self.path}/{self.board}"
+
+
+Board = GitHubBoard | GitLabBoard
+
+
+def read_board(cls: type[Board], values: dict[str, str]) -> Board:
+    """Build a board from its `Key: value` lines. A missing required key reads as empty (for
+    `problems()` to name); a missing optional one takes its default; unknown keys are dropped."""
+    given = {
+        f.name: values.get(f.name, "")
+        for f in fields(cls)
+        if f.name in values or f.default is MISSING
+    }
+    return cls(**given)
+
+
+def missing_board_keys(board: Board) -> list[str]:
+    """The required board keys with no value."""
+    return [f.name for f in fields(board) if f.default is MISSING and not getattr(board, f.name)]
 
 
 def sections(text: str, level: int) -> dict[str, str]:
@@ -115,8 +166,9 @@ def parse(text: str, home: Path | None = None) -> dict[str, Any]:
     tracker_vals = key_values(top.get("Tracker", ""))
     tracker = tracker_vals.get("tracker", "").lower()
     board_sections = sections("## Board\n" + top.get("Board", ""), 3)
-    wanted = "GitHub" if tracker == "github" else "GitLab"
-    board = key_values(board_sections.get(wanted, ""))
+    # Any tracker but github reads the GitLab subsection; problems() refuses an unknown tracker.
+    wanted, board_type = ("GitHub", GitHubBoard) if tracker == "github" else ("GitLab", GitLabBoard)
+    board = read_board(board_type, key_values(board_sections.get(wanted, "")))
 
     lanes: dict[str, str] = {}
     lane_meaning: dict[str, str] = {}
@@ -162,8 +214,7 @@ def parse(text: str, home: Path | None = None) -> dict[str, Any]:
         "host": tracker_vals.get("host", ""),
         "works_for": tracker_vals.get("works for", ""),
         "board": board,
-        # A registry written before the Lanes key existed keeps label lanes.
-        "lane_mode": board.get("lanes", "labels").lower() if tracker == "gitlab" else None,
+        "lane_mode": board.lanes.lower() if isinstance(board, GitLabBoard) else None,
         # Without a Batches section every ticket stays a single, as before batching existed.
         "batching": {
             "mode": batch_vals.get("batching", "off").lower(),
@@ -192,7 +243,7 @@ def problems(reg: dict[str, Any], which: Callable[[str], str | None] | None = No
     """
     which = which or shutil.which
     found: list[str] = []
-    in_use = [*reg["board"].values(), *(repo["remote"] for repo in reg["repos"])]
+    in_use = [*asdict(reg["board"]).values(), *(repo["remote"] for repo in reg["repos"])]
     for marker in EXAMPLE_MARKERS:
         if any(marker in value for value in in_use):
             found.append(
@@ -204,12 +255,8 @@ def problems(reg: dict[str, Any], which: Callable[[str], str | None] | None = No
     if not reg["host"]:
         found.append("Host is empty; write github.com, gitlab.com or your server's host")
     if reg["tracker"] in TRACKERS:
-        required_board = (
-            ("owner", "number") if reg["tracker"] == "github" else ("scope", "path", "board")
-        )
-        for key in required_board:
-            if not reg["board"].get(key):
-                found.append(f"Board has no '{key}' value for the {reg['tracker']} tracker")
+        for key in missing_board_keys(reg["board"]):
+            found.append(f"Board has no '{key}' value for the {reg['tracker']} tracker")
     if reg["tracker"] == "gitlab" and reg["lane_mode"] not in GITLAB_LANE_MODES:
         found.append(
             f"Board has Lanes '{reg['lane_mode']}' for the gitlab tracker; "
@@ -278,31 +325,47 @@ def registry_path(data_dir: Path) -> Path:
     return data_dir / REGISTRY_NAME
 
 
-def ensure(data_dir: Path) -> tuple[int, dict[str, Any]]:
-    """Create the registry on first run, then check it. Returns (exit code, JSON payload)."""
+def to_json(reg: dict[str, Any]) -> dict[str, Any]:
+    """The parsed registry as `show` prints it: the board model becomes its key-value object."""
+    return {**reg, "board": asdict(reg["board"])}
+
+
+def ensure(data_dir: Path) -> tuple[int, dict[str, Any], dict[str, Any] | None]:
+    """Create the registry on first run, then check it.
+
+    Returns (exit code, JSON payload, the parsed registry); the registry is None unless the
+    code is 0, so a caller reads and parses the file once."""
     path = registry_path(data_dir)
     if not path.exists():
         if not EXAMPLE.is_file():
-            return EXIT_BAD_INPUT, {
-                "status": "error",
-                "message": f"{EXAMPLE} is missing from the plugin; reinstall the plugin",
-            }
+            return (
+                EXIT_BAD_INPUT,
+                {
+                    "status": "error",
+                    "message": f"{EXAMPLE} is missing from the plugin; reinstall the plugin",
+                },
+                None,
+            )
         data_dir.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(EXAMPLE, path)
-        return EXIT_CREATED, {
-            "status": "created",
-            "path": str(path),
-            "message": (
-                "Created your registry from the example. Open it and fill in the Tracker, "
-                "Board, Lanes, Priority, Labels, Model labels and Repos for your team, then "
-                "run the command again."
-            ),
-        }
-    text = path.read_text(encoding="utf-8")
-    found = problems(parse(text))
+        return (
+            EXIT_CREATED,
+            {
+                "status": "created",
+                "path": str(path),
+                "message": (
+                    "Created your registry from the example. Open it and fill in the Tracker, "
+                    "Board, Lanes, Priority, Labels, Model labels and Repos for your team, then "
+                    "run the command again."
+                ),
+            },
+            None,
+        )
+    reg = parse(path.read_text(encoding="utf-8"))
+    found = problems(reg)
     if found:
-        return EXIT_INCOMPLETE, {"status": "incomplete", "path": str(path), "problems": found}
-    return 0, {"status": "ok", "path": str(path)}
+        return EXIT_INCOMPLETE, {"status": "incomplete", "path": str(path), "problems": found}, None
+    return 0, {"status": "ok", "path": str(path)}, reg
 
 
 def board_url(url: str, reg: dict[str, Any]) -> tuple[int, dict[str, Any]]:
@@ -349,16 +412,15 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     data_dir = Path(args.data_dir).expanduser()
 
-    code, payload = ensure(data_dir)
-    if code != 0:
+    code, payload, reg = ensure(data_dir)
+    if reg is None:
         print(json.dumps(payload, indent=2))
         return code
     if args.command == "ensure":
         print(json.dumps(payload, indent=2))
         return 0
-    reg = parse(registry_path(data_dir).read_text(encoding="utf-8"))
     if args.command == "show":
-        print(json.dumps(reg, indent=2))
+        print(json.dumps(to_json(reg), indent=2))
         return 0
     code, payload = board_url(args.url, reg)
     print(json.dumps(payload, indent=2))

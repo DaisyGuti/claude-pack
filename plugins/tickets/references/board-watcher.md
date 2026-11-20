@@ -66,12 +66,14 @@ What has fired is kept in `<data>/state/board-watcher-<board>.json`. A restart r
 prints nothing for events already printed; delete the file and the next tick prints every
 current event once. The first tick of a fresh watcher prints every event that holds now. A line
 is printed before the memory is saved, so a crash between the two prints that event again on
-restart rather than losing it.
+restart rather than losing it. A watcher holds a lock on its memory file while it runs, so a second
+watcher on the same board and data folder exits 5 instead of printing every event again.
 
 | Exit | Meaning |
 | --- | --- |
 | 0 | Stopped: after one tick with `--once`, or by Ctrl-C |
 | 1 | The tick failed, with `--once` (a running watcher prints the error on stderr and tries again next tick) |
-| 2 | Bad input, or a memory file it cannot read |
+| 2 | Bad input (an `--interval` under 10, a GitHub `ready` lane holding both a double and a single quote, which GitHub's filter cannot express, or the plugin's `registry.example.md` missing), or a memory file it cannot read |
 | 3 | The registry is missing or incomplete; the JSON on stderr names what to fill in |
 | 4 | `gh` or `glab` is not signed in to the registry's host at start, or a tick's call was refused with a 401; stderr names the login command. Any other failed tick (the network, a rate limit, a server error) is printed on stderr and retried |
+| 5 | Another watcher already watches this board from this data folder; read its output, or stop it first |
