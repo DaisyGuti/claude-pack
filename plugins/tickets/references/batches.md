@@ -186,6 +186,8 @@ merge request:
   worked again.
 - It moves each child to in progress when it starts that child, and every finished child
   to review when the request opens.
+- Children whose plan sections name no shared file may be built in parallel by sub-workers in
+  worktrees of their own; each child still lands as its own commit on the batch branch.
 - A child's commits say `Refs #<child>`; closing keywords go only in the request body,
   so a child dropped late is never closed by a commit already on the branch. Each finished
   child gets `Closes #<child>` there (the same form a single uses).

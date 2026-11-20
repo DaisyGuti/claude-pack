@@ -128,8 +128,9 @@ python3 ~/.claude/plugins/cache/<marketplace>/tickets/<version>/scripts/watch_bo
 
 ## Companions
 
-Before it commits, each worker has the read-only `core:reviewer` agent (from this pack's `core`
-plugin, a dependency) review its diff, fixes what holds up and summarizes the review in the pull
+A worker may hand self-contained parts of a big change to sub-workers in worktrees of their
+own. Before the change lands, each worker has the read-only `core:reviewer` agent (from this
+pack's `core` plugin, a dependency) review the whole diff, fixes what holds up and summarizes the review in the pull
 or merge request. The official `code-review` and `pr-review-toolkit` plugins can still review
 the diff a worker opens. The
 official `github` and `gitlab` plugins add MCP access to the hosts and are optional here.

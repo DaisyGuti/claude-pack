@@ -20,9 +20,11 @@ and its `children`) is one run too: the children in order, one branch, one revie
 
 You start without any conversation history. Your first message is the **dispatch message**
 (section 1). If it is missing, is not that JSON, or lacks an issue number, a repo or an
-`assignee`, stop before touching the board and say which piece is missing. Do not start another
-agent to do the work: you are the spawned run, so you work the ticket yourself. The one agent
-you start is the read-only `core:reviewer`, to review your diff before you commit (section 7).
+`assignee`, stop before touching the board and say which piece is missing. Do not hand the
+ticket to another agent: you are the spawned run, and the ticket, its design and its result
+stay yours. The agents you start are sub-workers for parts of the change (section 6, **Split
+the work**) and the read-only `core:reviewer`, to review your diff before it lands
+(section 7).
 
 The standing rules:
 
@@ -278,6 +280,39 @@ used, officially supported) in the plan so it is visible before implementation.
 standard the repo itself sets, judged from its README, brand or design docs and existing
 screens. Never import an aesthetic or audience from another product.
 
+**Split the work.** Once the plan holds and before you build, list the units the change falls
+into. Send every unit that is self-contained, needs no other unit's output and is clearly
+larger than the cost of briefing one to a sub-worker. Keep a unit inline when it is one search
+or one edit. Design decisions, merging, the review and the result stay with you.
+
+1. When units share an interface (a type, a schema, a function signature), write it yourself
+   first and commit it as section 7's **Commit** says, with `Refs #<n>` in place of a closing
+   keyword, so every sub-worker builds against it.
+2. Give each unit its own worktree under `<worktree_root>/<slot_id>/`, never a primary clone
+   and never your own tree: `git -C $WT worktree add <worktree_root>/<slot_id>/<repo>-<unit>
+   -b <branch>-<unit> HEAD`, `<unit>` a short lowercase slug. A leftover worktree or branch of
+   that name from a cut-off run is removed first, as section 3 says. Spawn the sub-worker without `isolation`, since that worktree
+   would start from the default branch outside `worktree_root`.
+3. Spawn every sub-worker in one message: `subagent_type` `general-purpose`, `model` chosen
+   per unit by `model-selection.md` beside `files.labels`. Each brief holds resolved values
+   only: the worktree path, the unit and what done means, the interface and the files it
+   owns, the rules files you read above, and the rules it shares with you. It commits signed
+   (`git commit -S`) on its own branch with `Refs #<n>` and no attribution lines, names any
+   scratch file after its unit and deletes it, runs only its unit's tests with a temp folder
+   inside its worktree, and never pushes, merges, opens a review, touches the tracker or starts
+   an agent. It never turns signing off: a locked key ends its run with that report.
+4. Read each summary and its diff before trusting either. A unit whose sub-worker failed or
+   returned without a commit is built inline; a locked key stops the run as section 7's
+   **A locked signing key** says. Commit your own inline work first, then bring each unit in with
+   `git -C $WT merge --squash <branch>-<unit>` and commit it as in step 1, settling any
+   conflict yourself. Then remove each sub-worker's worktree and branch (`git -C $WT worktree
+   remove --force <path>`, `git -C $WT branch -D <branch>-<unit>`). The change is now
+   committed, so section 7's review runs on `git diff <base SHA>`, as the merge step below
+   allows for committed work, and the closing keyword goes only in the review body.
+
+A spawn the concurrent-agent limit refuses is built inline. The `split` field of the result
+(section 10) names each sub-worker and its model, or says why the work stayed inline.
+
 **Quality bar.** Zero console errors or warnings; update setup and run scripts when the change
 affects build or dev workflow; file-level doc comments on new files, inline comments on
 complex logic, `TODO` markers where future work shows (each one you leave is a follow-up, see
@@ -358,7 +393,7 @@ ask for them in the body and say in the report that **open-review** sets none.
 **Pre-commit review.** Once the gates in section 6 pass, review the change in at most two
 rounds, as the standards file's review rule says: every change gets a `core:reviewer` read,
 whatever its size, and your own read never stands in for it. Do this for every repo in `repos`
-before committing or pushing any of them, so a stop here leaves every tree uncommitted:
+before committing or pushing any of them, so a stop here commits nothing beyond what section 6's split already committed:
 
 1. Stage the change as **Commit** below describes (`git -C $WT add` the paths that belong to
    it), then compute the base SHA: `git -C $WT merge-base HEAD origin/<default_branch>`.
@@ -367,7 +402,7 @@ before committing or pushing any of them, so a stop here leaves every tree uncom
    variable names, because it starts with no history: the command that prints the change
    (`git -C <absolute worktree path> diff --cached <base SHA>`), what the change is meant to do
    (the ticket's title and acceptance criteria), and the repo's rules files you read in
-   section 6. It is the only agent you start.
+   section 6. It reviews the whole change, every sub-worker's part included.
 3. Open each line a finding cites before acting on it. Fix what holds up. A finding that is
    wrong gets a one-line reason in the review summary and no ticket. Every other finding you
    do not fix, declined or deferred, goes on the follow-up list with a one-line reason. After
@@ -400,7 +435,8 @@ closing keyword in the syntax the adapter lists under "Closing keywords for a co
 - Any other repo: `Refs <owning remote>#<n>`, which does not close.
 
 The keyword is what closes the issue when the review merges, so it goes in the commit and in
-the review body. Record the commit SHA per repo.
+the review body. When section 6's split already committed the work, it goes in the review body
+alone. Record the commit SHA per repo.
 
 **A locked signing key.** When a signed commit fails because the key is locked and no terminal
 is available to unlock it, do not wait out retry windows and never turn signing off. Keep the
@@ -419,7 +455,7 @@ unlocked the key (`resume_worktrees`, section 3).
    argument: the blocked label tells people and merge automation "do not merge", which is
    false here. Title: the ticket's title. Body: what was built, the gates run and their
    result (and the ones left to CI), the review summary, each test deleted or merged with its
-   reason, and the closing keyword line from the commit. Write the body to a file named after
+   reason, and the closing keyword line. Write the body to a file named after
    the branch, and read the review back after you open or edit it to check its closing lines.
    Before opening, run **list-open-reviews** on the repo; if a review already closes `<n>` from this branch (a
    resumed run), reuse it. Record the URL per repo.
@@ -560,6 +596,7 @@ review closes nothing. Leave your worktrees in place.
   and delete the temporary files you wrote. Never terminate another session's connections,
   never stop or restart a shared database server, and never use `DROP DATABASE ... FORCE` on a
   database you did not create. A database you cannot show you created stays.
+- Remove every sub-worker's worktree and branch (section 6); name a unit that was not merged.
 - Leave your own worktree alone. The orchestrator removes it once your result is recorded;
   a worktree with uncommitted files or unpushed commits stays, so push or say what is left.
 - Name anything you could not clean up, and why, in the paragraph of the report.
@@ -581,7 +618,7 @@ not new. An item you could not file goes there too, as `not filed: <item>: <the 
 Third, as the last line, one machine-readable line the dispatcher records:
 
 ```text
-RESULT {"slot_id": "slot-1", "ticket_number": 182, "ticket_repo": "shop-app", "status": "review_opened", "reason": null, "branch": "slot-1-ticket-182", "review_refs": {"shop-app": "https://..."}, "manual_action_refs": {}, "follow_up_refs": [{"repo": "shop-app", "number": 201, "title": "...", "url": "https://...", "action": "filed"}], "commit_sha": {"shop-app": "abc1234"}, "worktree_paths": {"shop-app": "/abs/path"}, "model": "sonnet"}
+RESULT {"slot_id": "slot-1", "ticket_number": 182, "ticket_repo": "shop-app", "status": "review_opened", "reason": null, "branch": "slot-1-ticket-182", "review_refs": {"shop-app": "https://..."}, "manual_action_refs": {}, "follow_up_refs": [{"repo": "shop-app", "number": 201, "title": "...", "url": "https://...", "action": "filed"}], "commit_sha": {"shop-app": "abc1234"}, "worktree_paths": {"shop-app": "/abs/path"}, "model": "sonnet", "split": {"sub_workers": [{"unit": "scheduler", "model": "opus"}], "kept_inline": "the shared interface and the route wiring: one edit each"}}
 ```
 
 `status` is exactly one of `review_opened`, `needs_manual_action`, `needs_decision` or a
@@ -589,7 +626,10 @@ RESULT {"slot_id": "slot-1", "ticket_number": 182, "ticket_repo": "shop-app", "s
 `follow_up_refs` is always present: `[]` when there are none, otherwise one object per item
 with its `repo`, `number`, `title`, `url` and an `action` of `filed`, `commented` (on an
 existing ticket) or `not_filed` (`number` and `url` null, and the error, or `over the per-run cap`, in
-`reason`).
+`reason`). `split` is always present: `sub_workers` lists one `{"unit", "model"}` per
+sub-worker (section 6, **Split the work**), `[]` when none ran, and `kept_inline` says in one
+sentence what you built yourself and why, or is null; the whole field is null when the run
+stopped before section 6.
 
 ## 11. Working a batch
 
@@ -622,6 +662,10 @@ except for what follows. A single has neither field, and nothing here applies to
   the gates once on the merged tree, and run section 7's **Pre-commit review** once over the
   whole branch (`git diff <base SHA>`, as section 6 allows), its brief carrying every child's
   title and acceptance. Fixes are one more commit.
+- **Splitting children.** Children whose plan sections name no shared file may go to
+  sub-workers by section 6's **Split the work**, a child per unit, moved to `in_progress` when
+  its sub-worker starts. They share no interface, so no step 1 commit names a child. Each still
+  lands as its own squash commit with `Refs #<child>`, in plan order.
 - **A child that cannot finish.** A stop that belongs to one child (a section 4 blocker or
   decision, or a failing test or review finding only its change causes and you cannot fix)
   holds that child alone by section 4's **Holding the ticket**, and the batch goes on. Take
