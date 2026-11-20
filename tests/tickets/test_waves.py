@@ -170,10 +170,15 @@ def test_url_fragments_and_plain_backticked_words_are_not_files() -> None:
 
 
 def test_root_files_and_noted_paths_still_count() -> None:
-    entry = plan_with("`Makefile`, `.gitignore`, `src/b.py: add a limit`, `Acme/Other: src/c.py`")
+    entry = plan_with(
+        "`Makefile`, `.gitignore`, `src/b.py: see docs/x.md`, "
+        "`Acme/Other: src/c.py`, `other: LICENSE`"
+    )
     assert waves.parse_unit(entry).files == {
         ("acme/app", "Makefile"),
         ("acme/app", ".gitignore"),
         ("acme/app", "src/b.py"),
         ("acme/other", "src/c.py"),
+        ("acme/other", "LICENSE"),
+        ("acme/app", "docs/x.md"),
     }

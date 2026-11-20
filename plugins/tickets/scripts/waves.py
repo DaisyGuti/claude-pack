@@ -64,7 +64,7 @@ NEXT_SECTION = re.compile(r"^\s*(?:(?:[-*]|\d+\.)\s*)?\*\*[^*]+\*\*|^\s*#")
 # A backticked span, or a bare path with at least one slash.
 PATH = re.compile(r"`([^`\n]+)`|(?<![\w`/.-])((?:[\w.-]+/)+[\w.*-]*)")
 # A backticked path another repo owns: `repo: path` or `owner/repo: path`.
-QUALIFIED = re.compile(r"([\w-]+(?:/[\w.-]+)?):\s+(\S*(?:/|\.\w)\S*)")
+QUALIFIED = re.compile(r"([\w-]+(?:/[\w-]+)?):\s+(\S+)")
 # A backticked word is a file when it has a slash or a dot (`.env`, `a.py`) or starts with a capital
 # (`Makefile`, `LICENSE`); `pytest` is not. A miss would let two workers share a file.
 FILE_LIKE = re.compile(r"/|\.|^[A-Z]")
@@ -136,7 +136,7 @@ def plan_paths(code: str | None, bare: str | None) -> list[tuple[str | None, str
     span = (code or "").strip()
     if qualified := QUALIFIED.fullmatch(span):
         return [(qualified.group(1), qualified.group(2))]
-    words = [w.rstrip(":,;") for w in span.split()]
+    words = [w.strip("()[]{}:,;").rstrip(".") for w in span.split()]
     return [(None, w) for w in words if FILE_LIKE.search(w)]
 
 
