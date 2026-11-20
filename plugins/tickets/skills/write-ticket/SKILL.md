@@ -19,7 +19,7 @@ The request: $ARGUMENTS
 /tickets:write-ticket <what you want, in your own words>
 /tickets:write-ticket --repo my-app <...>        # skip repo inference
 /tickets:write-ticket --ticket 42 --repo my-app  # rewrite an existing ticket in place
-/tickets:write-ticket --ready <...>              # file into the ready lane instead of backlog
+/tickets:write-ticket --ready <...>              # plan it too, and move it to ready once planned
 /tickets:write-ticket --assignee me <...>        # assign it: a login, or "me" for the signed-in user
 /tickets:write-ticket --dry-run <...>            # show the ticket and its labels, create nothing
 ```
@@ -104,7 +104,8 @@ there are any. Fix them and run it again until it exits 0.
   on with `<scripts>/resolve_model.py --tier <tier>` in the report.
 - **Other labels:** `project:<repo>`, and the repo's existing area labels (`web`, `bug`, ...)
   from **list-labels**. Never invent an area label.
-- **Lane:** the backlog lane, or the ready lane with `--ready`.
+- **Lane:** the backlog lane. Ready means planned, so `--ready` never files straight into the
+  ready lane: step 5's **Plan it** moves the ticket there once it has a `### Final Plan`.
 - **Assignee:** only with `--assignee`; `me` is **current-user**. Otherwise leave the ticket
   unassigned.
 - **Blocked:** when a `Depends on:` issue is still open (**issue-state**), the ticket gets the
@@ -119,8 +120,8 @@ are fine, nothing is created. Filing is this skill's whole job, and the person w
 command or asked for a ticket in chat has asked for it, so file without a further confirmation.
 
 1. **ensure-label** for each label that may be missing (run, model, `project:<repo>`, blocked),
-   using the registry's color and description; `project:` labels get color `ededed` and the
-   description "Product: <repo>". Area labels are never created.
+   with the registry's color and description for its own rows and the ones ticket-labels.md
+   gives for `project:<repo>` ("Label colors and descriptions"). Area labels are never created.
 2. **create-issue** with the title, body file and labels (this also adds it to the board).
 3. **set-priority**, then **set-lane**. When the ticket is blocked, **comment** with the
    `Blocked: dependency` comment.
@@ -131,6 +132,12 @@ command or asked for a ticket in chat has asked for it, so file without a furthe
    the backlog lane even with `--ready`, since its parent's plan does not cover it yet:
    **set-lane** it there. No parent fits: it stays single until the next grooming pass.
    `--dry-run` names the parent it would join.
+6. **Plan it**, only with `--ready` and only for a ticket that stayed single. Read
+   [plan-one-ticket.md](${CLAUDE_PLUGIN_ROOT}/references/plan-one-ticket.md) in full and run
+   it on the new ticket. Its step 4 moves the ticket from the backlog lane to the ready lane
+   once its `### Final Plan` is posted. When it returns `held` or `could not plan`, the ticket
+   stays in the backlog lane and the report says why. `--dry-run` passes the dry run through,
+   so the plan is printed and nothing is posted.
 
 `--ticket N`: run **read-issue** first and keep the old body. Stop and say so if the issue is
 closed or its lane is in progress or done (find the lane with **list-items**). Otherwise
@@ -151,5 +158,6 @@ evidence (already built, already ticketed, superseded, window passed). Otherwise
 URL and title, then each assignment with a clause of reasoning, the assumptions you made, and
 any `TBD:` bullets. If step 2 found something short of a stop, such as a related ticket, add
 it. For `--ticket`, say what the old body held so nothing is lost silently. With batching on,
-say which parent it joined, or that it stayed single. When the ticket is
+say which parent it joined, or that it stayed single. With `--ready`, give the planning
+result line and the lane the ticket ended in. When the ticket is
 unassigned, say that `/tickets:work-tickets` will not pick it up until someone is assigned.

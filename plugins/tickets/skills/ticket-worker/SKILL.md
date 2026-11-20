@@ -64,7 +64,8 @@ Paths used below (read them as `<scripts>` and `<data>`):
    an unassigned ticket, offer to assign it to the current user with **assign**, and run
    **assign** only when the user says to. Never offer to take a ticket assigned to someone
    else; that person reassigns it.
-   A closed issue or one carrying the blocked label also stops here, with that fact.
+   A closed issue or one carrying the blocked label also stops here, with that fact, except a
+   resume after a locked signing key (section 4).
 4. **Batch**, when `registry.py show` prints a `batching` `mode` other than `off` (read
    [batches.md](${CLAUDE_PLUGIN_ROOT}/references/batches.md), "Working a batch"): run
    **read-parent**. An issue with a batch parent (`batch` true: its title starts with
@@ -76,7 +77,8 @@ Paths used below (read them as `<scripts>` and `<data>`):
    named in the report. There is no flag for one child alone: to work it by itself, detach it
    from its parent first. An issue with no parent, or a parent with `batch` false, is a
    single. The batch branch is `batch/<parent number>-<area>-solo`, and a direct run never
-   sets `resumed`, so a batch never starts from a branch already on the remote.
+   sets `resumed`, so a batch never starts from a branch already on the remote. The one
+   exception is a resume after a locked signing key (section 4).
 
 ## 3. Choose the model
 
@@ -112,6 +114,26 @@ older version leave it out and say so), `run_in_background: false`, and the disp
 the prompt. The agent file sets `isolation: worktree`. Wait for it. If the spawn fails because
 the agent type is unavailable, tell the user to check that the `tickets` plugin is enabled; do
 not retry in a loop and do not do the worker's job in this session.
+
+**A locked signing key.** The worker signs its commits. When the key is locked and no terminal
+can unlock it, the worker never turns signing off: it keeps the change staged in its
+worktrees, holds the ticket with the blocked label and a `Blocked: failure` comment, and ends
+with `status` `blocked_sandbox`, the `reason` `signing key locked`, and the trees in
+`worktree_paths`. Keep those worktrees (section 6's cleanup leaves them), and ask the user to
+unlock the key in their own terminal, for example by signing one test message so the agent
+caches the passphrase. When they say it is unlocked, that clears the hold: **remove-label** the
+blocked label, **comment** `Unblocked: signing key unlocked.`, and send the same dispatch
+message again with `resume_worktrees` set from the result's `worktree_paths` and `resumed`
+`true`. The resumed
+worker commits the staged change and carries on from section 7 of its contract; the review and
+the gates already ran. In a later session, the user re-runs this skill on the issue and says
+the key is unlocked. Then the blocked label does not stop step 2 when the ticket's latest
+`Blocked:` comment is the signing-key stop: find each repo's worktree with `git worktree list`
+in that repo's clone (the one on `solo-ticket-<n>`, or its `-r2` or `-r3` form), and resume the
+same way. When any repo in `repos` has none, the staged change is gone: resume nothing, say so,
+and the user removes the blocked label and runs the ticket again from the start. A batch
+resumes only in the session that started it; in a later session the user clears the blocked
+label on each held child and runs the batch again.
 
 ## 5. Turn on Auto-fix
 

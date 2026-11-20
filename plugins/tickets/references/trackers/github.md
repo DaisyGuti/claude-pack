@@ -31,6 +31,8 @@ improvise a command for one. When the installed `gh` rejects a flag, run
 - create-issue
 - add-to-board
 - edit-issue
+- read-milestone
+- set-milestone
 - close-issue
 - verify-closed
 - open-review
@@ -231,8 +233,8 @@ gh project item-edit --project-id <tracker_ids.project_id> --id <item_ref> \
   --single-select-option-id <tracker_ids.priority_options[priority value]>
 ```
 
-Label mode: run **ensure-label** for the value (color `ededed`, description
-`Priority: <value>`), take the issue's labels from **read-issue**, then add the value and
+Label mode: run **ensure-label** for the value (color and description from
+ticket-labels.md, "Label colors and descriptions"), take the issue's labels from **read-issue**, then add the value and
 remove every other registry priority value the issue carries, in one edit:
 
 ```bash
@@ -311,6 +313,29 @@ Contract: replaces an issue's body, and its title when one is given.
 ```bash
 gh issue edit <n> --repo <remote> --body-file <file> [--title "<title>"]
 ```
+
+## read-milestone
+
+Contract: `{"milestone": {id, title}}` for one issue, or `{"milestone": null}` when it has
+none. `id` is the milestone's number. A batch parent in `sub-issues` mode is an issue, so its
+milestone is read the same way, with the parent's `number` and `repo`.
+
+```bash
+gh issue view <n> --repo <remote> --json milestone \
+  --jq '{milestone: (.milestone | if . == null then null else {id: .number, title} end)}'
+```
+
+## set-milestone
+
+Contract: puts one issue in a milestone of its own repo, by title, replacing any milestone it
+had. A title the repo does not have fails with `'<title>' not found` and changes nothing.
+
+```bash
+gh issue edit <n> --repo <remote> --milestone "<title>"
+```
+
+Checked 2026-11-20 with `gh` 2.103.0: set, read back and removed (`--remove-milestone`) on a
+real issue, and the not-found error on an unknown title.
 
 ## close-issue
 
@@ -429,13 +454,10 @@ gh api graphql --paginate -f query='query($endCursor:String){ repository(owner:"
 issue), so the query pages through every open issue, 100 per call, and keeps those whose
 `subIssuesSummary.total` is above zero and whose title starts with `Batch: `; `--paginate`
 follows the cursor. `subIssues(first:100)` covers the 100-per-parent limit in one page. Keep
-the first 100 parents printed. Ran on RedCellPartners/quarterdeck: 367 open issues, 21 with
-sub-issues, of which 18 are titled `Batch: ` and printed, for example parent 4040
-"Batch: Assess: evidence mode correctness" with
-`labels: ["project:quarterdeck","P2","req:REQ-15","batch:assess-evidence"]` and children
-such as `{"number":3939,"repo":"RedCellPartners/quarterdeck","state":"closed"}`; the three
-left out (341 "CUI-ready production", 342 and 4055) are not batches. The jq output is one
-JSON object per parent, not an array.
+the first 100 parents printed. Checked on a team repo with a few hundred open issues: every
+parent titled `Batch: ` was printed with its labels and its children
+(`{"number", "repo", "state"}` each), and parents with other titles were left out. The jq
+output is one JSON object per parent, not an array.
 
 ## read-parent
 
@@ -455,10 +477,9 @@ gh api graphql -f query='{repository(owner:"<owner>",name:"<repo>"){issue(number
 An issue with no parent prints `null`. REST has the same read,
 `gh api repos/<owner>/<repo>/issues/<n>/parent`, but it answers HTTP 404 "No parent issue
 found" (non-zero exit) when there is none, and returns the full REST issue object (`number`,
-`title`, `html_url`, `state`, `id`), so use the GraphQL form. Ran both on
-RedCellPartners/quarterdeck: issue 117 gives parent 341 "CUI-ready production", open,
-`batch` false; issue 3936 gives parent 4040, `batch` true; issue 4235 gives `null` (GraphQL,
-exit 0) and the 404 (REST).
+`title`, `html_url`, `state`, `id`), so use the GraphQL form. Checked both on a team repo: a
+child of a parent with another title gives `batch` false, a child of a `Batch: ` parent gives
+`batch` true, and an issue with no parent gives `null` (GraphQL, exit 0) and the 404 (REST).
 
 ## create-parent
 
@@ -499,10 +520,9 @@ repos/<owner>/<repo>/issues/<parent>/sub_issue` with `sub_issue_id`. GraphQL has
 alternative, the `addSubIssue` mutation (`issueId` the parent's node id, `subIssueId` or
 `subIssueUrl`, `replaceParent`); it is not needed.
 
-Ran the id lookup on RedCellPartners/quarterdeck: issue 117 has `id` 5836175230 and node id
-`I_kwDOT9Bmv88AAAABW9z3fg`. REST list of a parent's children
-(`gh api repos/<owner>/<repo>/issues/<parent>/sub_issues`, `per_page` up to 100) returned 7
-for parent 341, matching the GraphQL list.
+Checked the id lookup on a team repo: it returns the numeric `id` and the node id (`I_...`).
+The REST list of a parent's children (`gh api repos/<owner>/<repo>/issues/<parent>/sub_issues`,
+`per_page` up to 100) matched the GraphQL list.
 
 UNVERIFIED: the POST itself was not run (read-only check). The path, body fields and
 `replace_parent` come from the REST docs; the `addSubIssue` input fields were confirmed by

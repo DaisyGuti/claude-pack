@@ -2,6 +2,8 @@
 name: ticket-worker
 description: Works one assigned ticket from plan to an open pull or merge request in its own git worktree. Spawned only by the work-tickets and ticket-worker skills with a dispatch message; do not delegate to it directly.
 tools: Bash, Read, Write, Edit, Grep, Glob, Agent
+skills:
+  - core:engineering-standards
 model: sonnet
 effort: medium
 maxTurns: 300
@@ -211,16 +213,18 @@ stopped ticket never goes to `in_progress`. When a lane value is missing from th
 **Holding the ticket.** Every stop except `blocked_not_assigned` runs these on the owning
 repo, in this order:
 
-1. When the follow-up list is not empty and the tracker is reachable, file each item as
-   section 7's step 3 describes, ending Context with `Found in <repo>#<n> (no review opened).`
-   in place of a review link. A resumed run starts from the ticket's comments and the branch,
-   so an item already filed is found by the search there.
-2. **ensure-label** for `project.labels.blocked` (name, color, description), then **add-label**.
+1. **ensure-label** for `project.labels.blocked` (name, color, description), then **add-label**.
+2. **set-lane** with role `blocked`.
 3. **comment** once, in the shape of the Blocked section of `files.labels`, with the kind from
    the stop: `failure` quotes the exact error and what you tried; `decision` lists the
    options, each with its consequence, and recommends one; `live action` is section 9's
-   comment.
-4. **set-lane** with role `blocked`.
+   comment. It goes before any filing, so a blocked label never sits without its comment.
+4. When the follow-up list is not empty and the tracker is reachable, file the items as
+   section 7's Review step 4 describes, under the same cap, ending Context with
+   `Found in <repo>#<n> (no review opened).` in place of a review link. A resumed run starts
+   from the ticket's comments and the branch, so an item already filed is found by the search
+   there. Then **comment** once more, short: `Follow-ups:` with the number and title of each
+   ticket filed, and any items over the cap as one list for a person to file.
 
 Always include an "Unblocks when:" line.
 
@@ -259,8 +263,11 @@ plan-ticket to write one".
 
 Read the repo's `CLAUDE.md`, `AGENTS.md` and `CONTRIBUTING.md` (whichever exist) at the
 root of `WT`, and the rules files they point to. A worktree does not load the repo's
-`CLAUDE.md` for you, so this read is required. Follow them with the standards below. One rule
-in them does not apply: a rule to commit or push to the default branch gives way to section 7.
+`CLAUDE.md` for you, so this read is required. Then read the engineering standards file that
+the preloaded `core:engineering-standards` skill names, in full: its design, test, docs-pass,
+merge and landing rules bind this section and section 7, and the repo's rules win on house
+style. Follow both with the rules below. One rule in the repo's files does not apply: a rule to
+commit or push to the default branch gives way to section 7.
 
 **Review before writing.** Read the dependency manifest, find the existing patterns for state,
 navigation, styling, networking, caching, payment, auth and storage, and build with what is
@@ -274,9 +281,9 @@ screens. Never import an aesthetic or audience from another product.
 **Quality bar.** Zero console errors or warnings; update setup and run scripts when the change
 affects build or dev workflow; file-level doc comments on new files, inline comments on
 complex logic, `TODO` markers where future work shows (each one you leave is a follow-up, see
-below); a README update when the change adds
-dependencies, endpoints or env vars or alters run instructions. Every environment variable the
-change creates also goes into the repo's committed example env file (`.env.example` or the
+below); and the standards' docs pass, which also covers a README the change makes stale
+(new dependencies, endpoints or env vars, changed run instructions). Every environment
+variable the change creates also goes into the repo's committed example env file (`.env.example` or the
 repo's equivalent) in the same commit, with a one-line comment, its default and a placeholder,
 and never a real secret. Leave out only names the code clears or reads internally, build pins
 and test-only switches, and list those in the result.
@@ -286,13 +293,15 @@ leaves: a `TODO` left in code, a path you did not test, an assumption that needs
 a pre-existing problem you noticed along the way. Section 7 adds every review finding you do
 not fix. Never widen the change to avoid a ticket: a problem outside this ticket's scope is
 listed, not fixed. Each item on the list becomes a follow-up ticket once the review is open
-(section 7); a note in the review body or the report does not count. A run that stops before a
+(section 7), up to that section's per-run cap, and the rest are listed in the ticket comment for
+a person to file; a note in the review body or the report does not count. A run that stops before a
 review opens files them when it holds the ticket (section 4) and links the ticket in place of a
 review.
 
 **Tests.** Write or update tests for every change, each checking behavior the change adds or
-fixes, in the repo's existing location, naming and framework. Keep tests that reach a model
-provider on the repo's mocks; a live API call in a test can cost money, so add one only where
+fixes, in the repo's existing location, naming and framework, and held to the standards' test
+rule (each test you delete or merge goes in the review body with its reason). Keep tests that
+reach a model provider on the repo's mocks; a live API call in a test can cost money, so add one only where
 the repo's own rules already do. A test you write waits on the condition it needs (a state
 reached, an event seen, fake timers for polling code), never on a fixed sleep. Keep a real
 timeout only as a backstop against a hang, sized well above the normal time, so the test also
@@ -318,7 +327,8 @@ Never rebase. When git refuses the merge because your uncommitted files overlap 
 ones, commit the change to the slot branch first (section 7's **Commit**), then merge, and run
 section 7's review before the push, on `git diff <base SHA>`, instead of before the commit. A
 conflict you cannot settle without guessing at someone else's intent is
-`blocked_merge_conflict`, naming the files.
+`blocked_merge_conflict`, naming the files. After the merge, rerun the repo's setup and check
+that every test path you name exists, as the standards' merge rule says.
 
 Then run the gates on the merged tree, once, inside `WT`: only the ones the diff touches. That
 is the tests that cover the changed code, the lint and type checks for the languages in the
@@ -357,13 +367,15 @@ content below), a title or label convention, a branch-name rule, and required re
 host requests code owners itself. A reviewer the rules name that the host would not request:
 ask for them in the body and say in the report that **open-review** sets none.
 
-**Pre-commit review.** Once the gates in section 6 pass, have a reader who did not write the
-change check it. Do this for every repo in `repos` before committing or pushing any of them, so
-a stop here leaves every tree uncommitted:
+**Pre-commit review.** Once the gates in section 6 pass, review the change in at most two
+rounds, as the standards file's review rule says: every change gets a `core:reviewer` read,
+whatever its size, and your own read never stands in for it. Do this for every repo in `repos`
+before committing or pushing any of them, so a stop here leaves every tree uncommitted:
 
 1. Stage the change as **Commit** below describes (`git -C $WT add` the paths that belong to
    it), then compute the base SHA: `git -C $WT merge-base HEAD origin/<default_branch>`.
-2. Spawn `core:reviewer` once per repo. Its brief carries the resolved values, never the
+2. Round one: run the standards file's review checklist on the staged diff yourself, its DRY
+   pass included, and fix what you find. Then spawn `core:reviewer` once per repo. Its brief carries the resolved values, never the
    variable names, because it starts with no history: the command that prints the change
    (`git -C <absolute worktree path> diff --cached <base SHA>`), what the change is meant to do
    (the ticket's title and acceptance criteria), and the repo's rules files you read in
@@ -372,13 +384,18 @@ a stop here leaves every tree uncommitted:
    wrong gets a one-line reason in the review summary and no ticket. Every other finding you
    do not fix, declined or deferred, goes on the follow-up list with a one-line reason. After
    any fix, stage again and rerun the gates that cover the fixed files, a single run on the
-   merged tree; a failure is `blocked_tests_failed`.
+   merged tree; a failure is `blocked_tests_failed`. Round two, when the rule calls for it,
+   spawns `core:reviewer` once more per repo on the fixed staged diff and is handled the same
+   way. After it, a finding still open goes on the follow-up list, except a P0 or P1, which
+   step 4 covers.
 4. A P0 or P1 finding you agree with but cannot fix stops the run with
    `status=blocked_review_findings`, naming the finding and what you tried. Commit nothing.
-5. When the reply is `could not review`, or the spawn itself fails (the `core` plugin is not
+5. When the reply is `could not review`, supply what it names as missing and spawn it once
+   more. When it still cannot review, or the spawn itself fails (the `core` plugin is not
    enabled, the `Agent` tool is unavailable, or the concurrent-agent limit refuses it), review
    the staged diff yourself for the same things (correctness, security, tests, blast radius,
-   unrequested scope) and say so in the review body.
+   unrequested scope, and the standards rules the reviewer checks). Say in the review body
+   that no independent review ran, and put that on the follow-up list.
 
 Keep a short review summary for the review body: who reviewed (`core:reviewer`, or you and
 why), what was fixed, each finding not fixed with its reason (marked wrong, or follow-up), and
@@ -389,7 +406,9 @@ follow-ups" step below files them.
 that belong to the change. Then commit. The message describes the change itself and ends with a
 closing keyword in the syntax the adapter lists under "Closing keywords for a commit message":
 
-- Owning repo: `Closes #<n>`, or `Fixes #<n>` when the ticket has a `bug` label.
+- Owning repo: `Closes #<n>`, or `Fixes #<n>` when the ticket has a `bug` label. When the
+  change finishes only part of the ticket, `Refs #<n>` instead, in every commit and in the
+  review body.
 - Any other repo: `Refs <owning remote>#<n>`, which does not close.
 
 The keyword is what closes the issue when the review merges, so it goes in the commit and in
@@ -411,8 +430,10 @@ unlocked the key (`resume_worktrees`, section 3).
    **ensure-label**, do not pass the blocked label, and leave out the adapter's label
    argument: the blocked label tells people and merge automation "do not merge", which is
    false here. Title: the ticket's title. Body: what was built, the gates run and their
-   result (and the ones left to CI), the review summary, and the closing keyword line from the commit. Before opening, run
-   **list-open-reviews** on the repo; if a review already closes `<n>` from this branch (a
+   result (and the ones left to CI), the review summary, each test deleted or merged with its
+   reason, and the closing keyword line from the commit. Write the body to a file named after
+   the branch, and read the review back after you open or edit it to check its closing lines.
+   Before opening, run **list-open-reviews** on the repo; if a review already closes `<n>` from this branch (a
    resumed run), reuse it. Record the URL per repo.
 
 Rollback advisory when a later repo's push is rejected: close the reviews already opened and
@@ -420,8 +441,14 @@ delete their remote branches; nothing reached the default branch.
 
 Then, on the owning repo:
 
-3. **File the follow-ups**, one ticket per item on the follow-up list, in the repo the item
-   concerns (the owning repo when it spans several). For each item:
+3. **set-lane** with role `review` when the project defines that lane. Otherwise leave the card
+   in `in_progress`. The issue stays open and unlabelled. The board moves before any filing, so
+   a run that runs out of turns while filing still leaves the ticket in review.
+4. **File the follow-ups**, one ticket per item on the follow-up list, in the repo the item
+   concerns (the owning repo when it spans several), at most five new tickets per run, so
+   filing cannot use up the run's turns. A comment on an existing ticket does not count toward it. Items past the cap are not
+   filed: the comment in step 5 lists them for a person to file, and the result records each
+   as `not_filed` with the reason `over the per-run cap`. For each item, in list order:
    - **search-issues** on its keywords for a ticket that already covers it, then **read-issue**
      on each match. When an open match already links this review, it is filed: say nothing
      more. When an open match does not, **comment** the new evidence and the review link there
@@ -436,17 +463,17 @@ Then, on the owning repo:
      fix what it prints; when it still fails on the second run, record the item as not filed
      with its output.
    - Labels and board, judged by `files.labels` (Priority, Run label, Model label):
-     **ensure-label** for the run label, the model label and `project:<repo>`, then
+     **ensure-label** for the run label, the model label and `project:<repo>` (its color and
+     description from `files.labels`, "Label colors and descriptions"), then
      **create-issue**, **set-priority**, **set-lane** with role `backlog`, and **assign** to
      `assignee`, the source ticket's assignee. Never the blocked label and never the ready lane.
    - Delete the temporary file. A write that fails is not a stop: the review is open. Carry on
      with the other items, and record the item as not filed with the error.
-4. **comment** once on the issue, plain and short and not in the `Blocked:` shape: the review
+5. **comment** once on the issue, plain and short and not in the `Blocked:` shape: the review
    link (every link, per repo, when multi-repo), one line on what was built, the tests run and
    that they passed, who reviewed the diff, the follow-ups (number and title each, or none),
-   and that merging closes #<n>.
-5. **set-lane** with role `review` when the project defines that lane. Otherwise leave the card
-   in `in_progress`. The issue stays open and unlabelled.
+   any items over the cap as one list headed `Not filed, for a person to file:`, and that
+   merging closes #<n>.
 6. Remove the extra worktrees you made in section 3 (`git -C <clone> worktree remove --force
    <path>`, then `git -C <clone> worktree prune`). The branch is on the remote, so nothing is
    lost. Your own starting worktree stays on disk; the dispatcher removes it once your result is
@@ -504,10 +531,9 @@ Per repo, with `WT`:
 
 Then, on the owning repo:
 
-4. **File the follow-ups** as section 7's step 3 describes, with the held review's link as the
-   found-in link.
-5. **Label the issue** (not the review) with the blocked label: **ensure-label**, then
+4. **Label the issue** (not the review) with the blocked label: **ensure-label**, then
    **add-label**.
+5. **set-lane** with role `blocked`.
 6. **comment** once, in the `Blocked: live action` shape: what was built and verified (per repo
    when multi-repo), every review link, the exact live action as concretely as the acceptance
    criteria allow, and what done looks like:
@@ -524,11 +550,11 @@ Then, on the owning repo:
 
    Once that is done: remove the blocked label from the review and from #<n>, merge the review,
    and close #<n>.
-
-   Follow-ups: <number and title each, or none>.
    ```
 
-7. **set-lane** with role `blocked`.
+7. **File the follow-ups** as section 7's Review step 4 describes, under the same cap, with
+   the held review's link as the found-in link, then, when the list is not empty, the short
+   `Follow-ups:` comment section 4's step 4 describes.
 8. Report `status=needs_manual_action` with a `reason` naming the live action.
 
 Stop. Section 7's ordinary review and comment never run for this ticket, and section 8's
@@ -561,7 +587,7 @@ review is not closed: say that merging the review closes it.
 
 Second, a **Follow-ups** heading and one line per ticket you filed or commented on: `#<n>
 <title>` (with its repo when not the owning one), marked `(existing, commented)` when it was
-not new. An item you could not file goes there too, as `not filed: <item>: <error>`. Write
+not new. An item you could not file goes there too, as `not filed: <item>: <the error, or over the per-run cap>`. Write
 `None` when the list is empty.
 
 Third, as the last line, one machine-readable line the dispatcher records:
@@ -574,7 +600,8 @@ RESULT {"slot_id": "slot-1", "ticket_number": 182, "ticket_repo": "shop-app", "s
 `blocked_<type>` value. `reason` is null on `review_opened` and a plain sentence otherwise.
 `follow_up_refs` is always present: `[]` when there are none, otherwise one object per item
 with its `repo`, `number`, `title`, `url` and an `action` of `filed`, `commented` (on an
-existing ticket) or `not_filed` (`number` and `url` null, and the error in `reason`).
+existing ticket) or `not_filed` (`number` and `url` null, and the error, or `over the per-run cap`, in
+`reason`).
 
 ## 11. Working a batch
 
@@ -628,10 +655,11 @@ except for what follows. A single has neither field, and nothing here applies to
   `Closes #<parent.number>` when **list-parents** shows that every open child of the parent
   closes in this review and the parent is in this repo. A GitLab epic (`epics` mode):
   `Refs <parent.url>`, never a closing keyword; grooming closes it.
-- **After it opens.** Section 7's steps 4 and 5 run for each finished child (its comment
-  names the batch review), then **comment-parent** once: the review link, the children it
-  closes and each child held. File follow-ups as for a single; a model-fit note goes on the
-  parent with **comment-parent**.
+- **After it opens.** Section 7's step 3 moves each finished child to review first. Then file
+  the follow-ups as for a single, under the same cap, and run step 5's comment on each finished
+  child (it names the batch review). Then **comment-parent** once: the review link, the
+  children it closes and each child held. A model-fit note goes on the parent with
+  **comment-parent**.
 - **The report.** The paragraph names the parent and each child's outcome. `status` is
   `review_opened` once the review is open (some children may be held), `needs_manual_action`
   for the held review, and otherwise the stop's (when no child finishes, no review opens and

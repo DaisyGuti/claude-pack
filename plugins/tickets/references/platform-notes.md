@@ -51,6 +51,9 @@ to correct; the skills and the worker agent point here instead of restating it.
   gets the lock back with its original reason (`git worktree lock --reason "<reason>" <path>`),
   so Claude Code's sweep cannot take it; one that fails partway (`failed to delete`) has already
   unregistered the worktree, so the leftover directory is kept and reported, never `rm -rf`'d.
+  One removal per worktree runs at a time; a `remove` that fails with `could not open
+  directory` or `is not a working tree` is read as another removal of the same path, and the
+  worktree list and the directory are checked again before it is reported kept.
   The process check (`lsof -d cwd`) fails closed on a non-zero exit or any stderr warning, and it
   has a blind spot: a process writing into the worktree from a cwd outside it (a file watcher, a
   Docker bind mount) is not seen, so the worker's own cleanup (stop what you started) is the

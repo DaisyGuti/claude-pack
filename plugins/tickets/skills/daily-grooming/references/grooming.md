@@ -95,8 +95,9 @@ leaves exactly this backlog behind.)
 
 ## 2. Flag duplicates
 
-Flag open tickets with near-identical titles or bodies, within a repo or across repos.
-Never close or merge them. List each group under Duplicates to Review.
+Flag open tickets with near-identical titles or bodies, within a repo or across repos,
+and close candidates: tickets that merged work or another ticket already settles. Never close
+or merge them. List each group under Duplicates to Review.
 
 ## 3. Audit each open ticket
 
@@ -141,8 +142,8 @@ reason decided it. The role names come from the registry.
 
 - **GitHub in field mode** (**capture-board**'s `priority_mode`). The field and a label
   named exactly like the field's option are kept in step, and the field wins.
-  - Field set: the label is added if missing (**ensure-label** with color `ededed` and
-    description `Priority: <name>`, then **add-label**), and any other priority label
+  - Field set: the label is added if missing (**ensure-label** with the priority
+    label's color and description from ticket-labels.md, then **add-label**), and any other priority label
     is removed (**remove-label**).
   - Field empty, exactly one priority label: **set-priority** from that label.
   - Neither, or several labels and no field: judge it, set both, and note the
@@ -285,7 +286,9 @@ parent's ref and each child's Remote and number. The labels-only mode stays per 
   under Needs Attention with the child's reason.
 
 Tickets that come back `held` or `could not plan` go under Needs Attention with the
-reason. In a `--dry-run` this step only lists the tickets that would be planned or
+reason. The notes on a `planned` line go in the summary too: duplicates and close candidates
+under Duplicates to Review, a proposed batch under Batches, a milestone set in Counts, and a
+suggested parent, a milestone mismatch or no assignee under Needs Attention. In a `--dry-run` this step only lists the tickets that would be planned or
 labelled.
 
 ## 8. Print the summary
@@ -317,4 +320,5 @@ Plain language, short, grouped under these headings, each with its count:
   registry, closed-but-unmerged reviews, tickets in the done lane that are open,
   abandoned or contradictory labels, descriptions with no acceptance criteria, failed
   writes, and Ready tickets with no assignee (`work-tickets` will not pick those up).
-- **Counts**: plans that already existed, plans written, labels added, tickets held.
+- **Counts**: plans that already existed, plans written, labels added, milestones set from a
+  parent, tickets held.

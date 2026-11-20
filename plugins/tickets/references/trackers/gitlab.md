@@ -47,6 +47,8 @@ command for one. `jq` must be installed. When the installed `glab` rejects a fla
 - create-issue
 - add-to-board
 - edit-issue
+- read-milestone
+- set-milestone
 - close-issue
 - verify-closed
 - open-review
@@ -319,7 +321,7 @@ jq -c --argjson lanes '["<every lane value>"]' --argjson prios '["<every priorit
 Leave out `-f lane=` to list every lane. Issues come back newest first. A Status that is
 not a registry lane (Skip and Duplicate on the checked board) reads as `lane` null. The
 group form includes projects in subgroups (`includeDescendants`, ignored for a project
-path; checked: the group call returned issues of `rcf/dev-tools/*` projects). Checked on
+path; checked: the group call returned issues of projects in a subgroup). Checked on
 the group board: 459 open issues across 12 projects, every one with a Status, in about
 25 seconds; the `Ready` filter returned 25 in 3 seconds, the same 25 the unfiltered call
 put in Ready. The settle step's closed call is the same command with `-f state=closed`,
@@ -491,7 +493,7 @@ Checked the same way: the old priority label is gone, the new one is on, other l
 are untouched, and an issue with no priority label gets just the new one. `add_labels`
 creates a missing label on the fly (see Terms), so when the priority value is a project
 label of other repos only (see **capture-board**), run **ensure-label** in this issue's
-repo first, with color `ededed` and description `Priority: <name>`.
+repo first, with the color and description ticket-labels.md gives for a priority label.
 
 ## add-label
 
@@ -593,6 +595,53 @@ glab issue update <n> -R <remote> --description-file <file> [--title "<title>"]
 
 Both the body and a numeric title such as `2025` come through as written. A body line
 starting with `/` runs as a quick action (see Terms).
+
+## read-milestone
+
+Contract: `{"milestone": {id, title}}` for one issue or a parent, or `{"milestone": null}`
+when it has none. `id` is the milestone's global id, the same number for a project or a group
+milestone. An issue is read by `<remote>` and `<n>`:
+
+```bash
+glab api --hostname <host> graphql -f path="<remote>" -f iid="<n>" \
+  -f query='query($path: ID!, $iid: String!) { project(fullPath: $path) { workItems(iids: [$iid], first: 1) {
+  nodes { widgets { ... on WorkItemWidgetMilestone { milestone { id title } } } } } } }' |
+jq -c '.data.project.workItems.nodes[0] // error("no such issue") |
+  {milestone: ([.widgets[] | select(has("milestone")) | .milestone][0] |
+    if . == null then null else {id: (.id | split("/") | last | tonumber), title} end)}'
+```
+
+A parent (an epic in `epics` mode) is read by its `parent_ref` from **read-parent**:
+
+```bash
+glab api --hostname <host> graphql -f id="<parent_ref>" \
+  -f query='query($id: WorkItemID!) { workItem(id: $id) { widgets {
+  ... on WorkItemWidgetMilestone { milestone { id title } } } } }' |
+jq -c '.data.workItem // error("no such work item") |
+  {milestone: ([.widgets[] | select(has("milestone")) | .milestone][0] |
+    if . == null then null else {id: (.id | split("/") | last | tonumber), title} end)}'
+```
+
+Checked 2026-11-20 with `glab` 1.130.0 on a self-managed host: an issue in a group
+milestone, its epic parent in the same milestone, and an issue with none.
+
+## set-milestone
+
+Contract: puts one issue in a milestone by the `id` **read-milestone** printed, replacing any
+milestone it had. A group milestone works for any project in the group.
+
+```bash
+glab api --hostname <host> -X PUT "projects/<enc>/issues/<n>" -f milestone_id=<id> |
+  jq -e --argjson id <id> '.milestone.id == $id'
+```
+
+It succeeds only when the milestone read back is the one asked for. Checked 2026-11-20 on a
+self-managed host: the command ran on an open issue already in a group milestone, with that
+milestone's `id`. The read-back `jq -e` passed (exit 0), the global id **read-milestone**
+prints matched the REST `milestone.id`, and the write added no timeline event because the
+milestone did not change. Moving an issue from no milestone, or from another milestone, has
+not been run; it uses the same endpoint and field. An issue number that does not exist prints
+`{"message":"404 Not found"}` and exits 1.
 
 ## close-issue
 

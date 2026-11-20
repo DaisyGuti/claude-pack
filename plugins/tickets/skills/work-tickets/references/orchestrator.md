@@ -442,6 +442,16 @@ fails with `failed to delete`, git has already deleted part of the tree and unre
 (there is nothing left to lock): keep the leftover directory, never `rm -rf` it, and report it
 as an orphan under "Worktrees kept". The local branch stays.
 
+One removal per worktree at a time: only the step that reaps a slot removes its worktrees, and
+it never starts a second `remove` of a path while one is still running (a retry, or a second
+reaper of the same slot). When `remove` fails with `could not open directory` or `is not a
+working tree`, treat it as another removal of that path in progress or just finished, and do
+not re-lock yet. Re-check first: run `git -C <clone> worktree list --porcelain` and test
+whether `<path>` still exists. Neither listed nor on disk: it is removed, so report it
+removed. Still listed: re-lock it as above when you had unlocked it, and list it under
+"Worktrees kept" with the error and the words `another removal may be in progress`. On disk
+but no longer listed: report it as an orphan, as above.
+
 Keep, and list in the report with the failed check, the worktrees of workers still running,
 of every `blocked_*`, `needs_decision` and `needs_manual_action` slot (the branch and review may
 still need them), of a slot with no `RESULT`, and any that fail a check.
@@ -462,7 +472,7 @@ In review: <R>
 Waiting for a later batch slot: <Wb>
   #186 <repo> (parent <ref>: over Batch size; or: another repo than the parent's)
 Follow-ups: <F>
-  #201 <repo>: <title> (from #190; a `not_filed` item is listed with its error)
+  #201 <repo>: <title> (from #190; a `not_filed` item is listed with its reason)
 Blocked: <M>
   #50 <repo>: blocked_push_rejected: non-fast-forward (worktree: ...)
   #189 <repo>: needs_manual_action: create the product for plan B and set PRICE_ID_B

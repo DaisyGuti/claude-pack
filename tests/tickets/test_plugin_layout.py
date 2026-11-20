@@ -140,7 +140,7 @@ def test_worker_files_a_follow_up_ticket_for_every_unfixed_finding_and_known_gap
     for gap in ("`TODO` left in code", "a path you did not test", "an assumption", "pre-existing"):
         assert gap in build, gap
     assert "wrong gets a one-line reason in the review summary and no ticket" in land
-    filing = land[land.index("**File the follow-ups**") : land.index("4. **comment**")]
+    filing = land[land.index("**File the follow-ups**") : land.index("5. **comment**")]
     assert land.index("**open-review**") < land.index("**File the follow-ups**")
     for part in (
         "**search-issues**",
@@ -151,7 +151,7 @@ def test_worker_files_a_follow_up_ticket_for_every_unfixed_finding_and_known_gap
         "**read-issue**",
     ):
         assert part in filing, part
-    assert "File the follow-ups** as section 7's step 3" in held
+    assert "File the follow-ups** as section 7's Review step 4" in held
     # A stop files them too, linking the ticket in place of a review.
     assert "(no review opened)" in body[body.index("**Holding the ticket.**") : body.index("## 5.")]
     assert "**Follow-ups** heading" in final
@@ -164,6 +164,82 @@ def test_worker_files_a_follow_up_ticket_for_every_unfixed_finding_and_known_gap
         assert "`files.ticket_template`" in text and "`files.check_ticket`" in text, dispatcher
     assert (PLUGIN / "skills" / "write-ticket" / "assets" / "ticket-template.md").is_file()
     assert (PLUGIN / "scripts" / "check_ticket.py").is_file()
+
+
+def test_worker_moves_the_card_before_filing_a_capped_set_of_follow_ups() -> None:
+    """A run with many follow-ups once risked its turn budget before the ticket was updated:
+    the board moves first, filing is capped, and the comment that lists the tickets comes
+    last, on the open-review path, the hold path and the held-review path alike."""
+    body = flat(PLUGIN / "agents" / "ticket-worker.md")
+    land = body[body.index("## 7. Land the work") : body.index("## 8. After the review opens")]
+    after = land[land.index("Then, on the owning repo:") :]
+    lane = after.index("3. **set-lane** with role `review`")
+    filing = after.index("4. **File the follow-ups**")
+    comment = after.index("5. **comment** once on the issue")
+    assert lane < filing < comment
+    assert "at most five new tickets per run" in after
+    assert "Not filed, for a person to file:" in after
+    hold = body[body.index("**Holding the ticket.**") : body.index("**Item handle.**")]
+    # A blocked label never sits without its comment, so the Blocked comment precedes filing.
+    assert hold.index("**set-lane** with role `blocked`") < hold.index("3. **comment** once")
+    assert hold.index("3. **comment** once") < hold.index("under the same cap")
+    assert hold.index("under the same cap") < hold.index("**comment** once more")
+    held = body[body.index("## 9. Needs manual action") : body.index("## 10. Final report")]
+    assert held.index("5. **set-lane** with role `blocked`") < held.index("6. **comment** once")
+    assert held.index("6. **comment** once") < held.index("7. **File the follow")
+    assert "`over the per-run cap`" in body[body.index("## 10. Final report") :]
+
+
+def test_the_worker_reviews_in_at_most_two_rounds_with_core_reviewer_every_time() -> None:
+    body = flat(PLUGIN / "agents" / "ticket-worker.md")
+    review = body[body.index("**Pre-commit review.**") : body.index("**Commit.**")]
+    assert "at most two rounds" in review and "whatever its size" in review
+    assert "its DRY pass included" in review
+    assert "Round two, when the rule calls for it" in review
+    assert "spawn it once more" in review
+    assert "blocked_review_findings" in review
+    assert "no independent review ran" in review
+
+
+def test_label_colors_live_once_in_ticket_labels() -> None:
+    """The project and priority label color and description are defined once; every writer
+    points there, the worker's follow-up filing included."""
+    labels = flat(PLUGIN / "references" / "ticket-labels.md")
+    section = labels[labels.index("## Label colors and descriptions") :]
+    assert "| `project:<repo>` | `ededed` | `Product: <repo>` |" in section
+    assert "| A priority value used as a label | `ededed` | `Priority: <name>` |" in section
+    writers = [
+        PLUGIN / "skills" / "write-ticket" / "SKILL.md",
+        PLUGIN / "skills" / "daily-grooming" / "references" / "grooming.md",
+        PLUGIN / "references" / "trackers" / "github.md",
+        PLUGIN / "references" / "trackers" / "gitlab.md",
+        PLUGIN / "agents" / "ticket-worker.md",
+    ]
+    for path in writers:
+        text = flat(path)
+        assert "ededed" not in text and "Product: <repo>" not in text, path
+        assert "color and description" in text, path
+
+
+def test_write_ticket_ready_plans_before_the_ready_lane() -> None:
+    skill = flat(PLUGIN / "skills" / "write-ticket" / "SKILL.md")
+    assert "`--ready` never files straight into the ready lane" in skill
+    plan = skill[skill.index("6. **Plan it**") : skill.index("`--ticket N`:")]
+    assert "plan-one-ticket.md" in plan and "`### Final Plan`" in plan
+    assert "stays in the backlog lane and the report says why" in plan
+
+
+def test_direct_mode_documents_the_locked_key_stop_and_its_resume() -> None:
+    skill = flat(PLUGIN / "skills" / "ticket-worker" / "SKILL.md")
+    section = skill[
+        skill.index("**A locked signing key.**") : skill.index("## 5. Turn on Auto-fix")
+    ]
+    assert "`blocked_sandbox`" in section and "`signing key locked`" in section
+    assert "never turns signing off" in section
+    assert "`resume_worktrees` set from the result's `worktree_paths`" in section
+    assert "except a resume after a locked signing key" in skill
+    assert "and `resumed` `true`" in section and "git worktree list" in section
+    assert "The one exception is a resume after a locked signing key (section 4)." in skill
 
 
 def flat(path: Path) -> str:
@@ -309,6 +385,10 @@ def test_cleanup_after_each_ticket_is_in_the_instructions() -> None:
     # The process check fails closed and states its blind spot.
     assert "any stderr warning" in cleanup and "Any non-zero exit" in cleanup
     assert "a cwd outside it" in cleanup and "stop what you started" in cleanup
+    # One removal per worktree; a racing remove's errors are re-checked before "kept" (#47).
+    assert "One removal per worktree at a time" in cleanup
+    assert "`could not open directory`" in cleanup and "`is not a working tree`" in cleanup
+    assert cleanup.index("Re-check first") < cleanup.index("another removal may be in progress")
     assert "**Cleanup**" in procedure[procedure.index("**7d.**") :]
     worker = (PLUGIN / "agents" / "ticket-worker.md").read_text(encoding="utf-8")
     final = worker[worker.index("## 10. Final report") :]
@@ -393,3 +473,22 @@ def test_no_personal_paths_or_tool_names_leak_into_the_plugin() -> None:
         ):
             hit = banned.search(path.read_text(encoding="utf-8"))
             assert hit is None, f"{path.relative_to(PLUGIN)} mentions {hit.group(0)!r}"
+
+
+def test_both_tracker_adapters_define_every_operation_the_procedures_name() -> None:
+    """A procedure runs a named operation on either tracker, so each adapter lists the same
+    operations, gives each a section, and covers every operation planning names."""
+    trackers = PLUGIN / "references" / "trackers"
+    listed = {}
+    for name in ("github", "gitlab"):
+        text = (trackers / f"{name}.md").read_text(encoding="utf-8")
+        contents = text[text.index("## Contents") :].split("\n## ", 1)[0]
+        ops = set(re.findall(r"^- ([a-z]+(?:-[a-z]+)+)$", contents, re.M))
+        for op in ops:
+            assert f"\n## {op}\n" in text, f"{name}.md lists {op} but has no section for it"
+        listed[name] = ops
+    assert listed["github"] == listed["gitlab"]
+    planning = (PLUGIN / "references" / "plan-one-ticket.md").read_text(encoding="utf-8")
+    named = set(re.findall(r"\*\*([a-z]+(?:-[a-z]+)+)\*\*", planning))
+    assert {"read-milestone", "set-milestone"} <= named
+    assert named <= listed["github"], named - listed["github"]

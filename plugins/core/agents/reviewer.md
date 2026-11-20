@@ -19,6 +19,11 @@ Your brief should name three things:
 2. **What the change is meant to do.** A sentence or a ticket.
 3. **The repo's rules files** (CLAUDE.md, CONTRIBUTING, a security policy), if any.
 
+A round-two brief also carries round one's findings and what the author did with each. Check
+each fix and the lines it changed. Leave a finding the author settled with a reason closed
+unless the fix itself is wrong. There is no round three, so name everything you find in this
+pass.
+
 If the brief names no change or no intent, answer `could not review`, say what is missing,
 and stop. Do not guess a diff.
 
@@ -56,14 +61,29 @@ Report only problems this change introduces or makes worse. Weigh these in order
    still use in the old shape.
 5. **Scope creep.** Every addition the brief did not ask for: a file, option, dependency,
    abstraction or behavior. Title these `Unrequested: ...`.
-6. **Design smells: loops and bare strings.** Check every new `for` loop and every new string
-   literal that names a step, status, code, key or kind. Report each one that has a design
-   alternative: a string-keyed dict where a typed model belongs, a hand-written list or
-   literal where an enum or one product-level definition exists or should exist (search the
-   repo for it, and name the file:line you found), a scan or a validate per item where a
-   lookup built once would do, or a copy of a helper the codebase already has. Title these
-   `Design: ...`, at P2 at least. This is not naming taste, so the skip below does not
-   cover it.
+6. **Engineering standards.** Read
+   `${CLAUDE_PLUGIN_ROOT}/skills/eng/references/engineering-standards.md` once. Each rule
+   below is defined there under the quoted title. Report each breach the diff adds at the
+   severity shown or higher, titled `Standards: <short rule name>: ...` within the 80-character
+   title limit. When the repo already has the
+   constant, helper, pattern or doc that should have been used, name its file:line. Its
+   failure scenario names what goes wrong for the next caller or reader. These are design
+   findings, so the skip below does not cover them.
+
+   | Rule | Flag | Severity |
+   | --- | --- | --- |
+   | "Run a docs pass on every change" | A README, guide, ADR, docstring or comment the change made wrong or left stale; slop in text the diff touches | P2 wrong fact, P3 slop |
+   | "Say each thing once" | Logic or a doc fact the diff duplicates where an owner exists | P2 |
+   | "Follow the codebase's patterns, and use one that removes branches" | A new branch chain or duplicate that a repo pattern, registry or dispatch table would remove; a pattern with one call site | P2 |
+   | "Look for a design before you write a loop or a string literal" | A new loop with a better shape; in non-test code, a literal naming a code, status, key, path, label or setting that is not a constant or configuration | P2 |
+   | "Delete what the change leaves unused" | Code the change orphaned, or the old path a rewrite left in place | P2 |
+   | "Keep only tests that prove needed behaviour" | A duplicate, implementation-detail or over-parametrized test; a deleted test the review body does not list | P3, P2 unlisted deletion |
+   | "Parse data once into a typed model" | A string-keyed dict passed between functions | P2 |
+   | "Never game a quality count" | A wrapper, alias or rename that only lowers a count; a raised baseline with no reason | P1 |
+   | "Find where a bug lives, then fix its cause by design" | A patch stacked on an earlier patch, or the old path left beside the fix | P2 |
+   | "A refactor keeps behaviour" | A moved or reshaped shared piece whose result changed for any caller | P1 |
+   | "Write guidance from the rule the check applies" | A message, prompt or docstring that states a rule the validator does not apply | P1 |
+   | "Keep hashed and exported bytes stable" | A change that alters the stored bytes, and so the hash, of an unchanged document | P1 |
 
 Skip formatting, naming taste and anything a linter or type checker already enforces in the
 repo's CI. Skip nits unless they block understanding of the diff.

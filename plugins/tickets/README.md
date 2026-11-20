@@ -7,7 +7,7 @@ request in parallel, each on the Claude model its label calls for.
 | Command | What it does |
 | --- | --- |
 | `/tickets:write-ticket` | Files a bug or idea as a ticket in the shape workers need, after checking it is not already built, superseded or ticketed. Sets priority, model, run label and lane |
-| `/tickets:plan-ticket` | Posts a plan of about 200 words on one ticket and sets its model and run labels |
+| `/tickets:plan-ticket` | Posts a plan of about 200 words on one ticket, sets its model and run labels, attaches its parent, names batch partners and flags duplicates |
 | `/tickets:daily-grooming` | Tidies the whole board: settles finished work to Done, flags duplicates, syncs priorities, promotes to Ready, plans what is unplanned |
 | `/tickets:work-tickets` | Works your Ready tickets with a rolling pool of parallel `tickets:ticket-worker` agents |
 | `/tickets:ticket-worker` | Works one named issue from plan to an open review |
@@ -46,8 +46,8 @@ Run any command again; it checks the registry and names whatever is still missin
 
 ## How a ticket moves
 
-1. `write-ticket` files it in the backlog (or Ready) with a priority, a run label and a model
-   label.
+1. `write-ticket` files it in the backlog with a priority, a run label and a model label. With
+   `--ready` it also plans the ticket and moves it to Ready once the plan is posted.
 2. `plan-ticket` or `daily-grooming` posts the plan and moves it to Ready. Ready means
    planned: a ticket is in Ready only with a plan and no open blocker, and a planned, unblocked
    ticket is never left in the backlog. Grooming reports the Ready lane in groups, at most a
@@ -83,12 +83,15 @@ it does not fix (unless the finding is wrong), each `TODO` left in code, unteste
 assumption to confirm and pre-existing problem it noticed. Once the review is open it checks
 the tracker for an existing ticket (and comments there if it finds one), otherwise files a
 backlog ticket in the `write-ticket` shape, assigned to the same person, that links the review.
-They are listed under "Follow-ups" in its report and in the `RESULT` line's `follow_up_refs`.
+It moves the card to review before it files, and files a capped number of new tickets per run
+(the worker sets the cap); the rest go as one list in its comment on the ticket for a person to
+file. They are listed under "Follow-ups" in its report and in the `RESULT` line's `follow_up_refs`.
 
 When a commit cannot be signed because the signing key is locked and no terminal can unlock
 it, the worker keeps its change staged and holds the ticket at once (`blocked_sandbox`) without
 turning signing off. `work-tickets` asks you to unlock the key once and then resumes every such
-worker together.
+worker together. `/tickets:ticket-worker` does the same for its one worker: unlock the key, say
+so, and it resumes the worker in the same worktree (`resume_worktrees`).
 
 Work that cannot proceed is held with the `blocked` label and a `Blocked: dependency`,
 `decision`, `live action` or `failure` comment that says what clears it. Workers never push to

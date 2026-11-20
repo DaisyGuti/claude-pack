@@ -49,7 +49,8 @@ Paths used below (read them as `<scripts>` and `<data>`):
    [batches.md](${CLAUDE_PLUGIN_ROOT}/references/batches.md), which you then read in full too.
 4. Planning follows
    [plan-one-ticket.md](${CLAUDE_PLUGIN_ROOT}/references/plan-one-ticket.md), the same
-   procedure `/tickets:plan-ticket` uses. Plan each ticket in its own subagent started with
+   procedure `/tickets:plan-ticket` uses, with its parent, batch, duplicate and grooming
+   checks. Plan each ticket in its own subagent started with
    `model: opus`, in parallel when there are several, so planning runs on Opus whatever the
    session's model ([model-selection.md](${CLAUDE_PLUGIN_ROOT}/references/model-selection.md),
    "Planning runs on frontier"). Priority, run, model and blocked labels mean what
@@ -81,6 +82,6 @@ Paths used below (read them as `<scripts>` and `<data>`):
 - **Ready means planned.** A ticket goes to the ready lane only with a `### Final Plan` and no
   open blocker, and a planned, unblocked ticket goes there in the same pass, never left in the
   backlog.
-- **Duplicates and lane order are reported.** Duplicates are listed for a person and never
-  closed or merged. The Ready order goes in the summary, in waves of tickets that share no
+- **Duplicates and lane order are reported.** Duplicates and close candidates are listed for
+  a person and never closed or merged. The Ready order goes in the summary, in waves of tickets that share no
   file, for someone to apply, since no tracker operation reorders a lane.
