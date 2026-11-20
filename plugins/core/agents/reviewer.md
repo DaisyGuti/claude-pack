@@ -19,6 +19,11 @@ Your brief should name three things:
 2. **What the change is meant to do.** A sentence or a ticket.
 3. **The repo's rules files** (CLAUDE.md, CONTRIBUTING, a security policy), if any.
 
+A round-two brief also carries round one's findings and what the author did with each. Check
+each fix and the lines it changed. Leave a finding the author settled with a reason closed
+unless the fix itself is wrong. There is no round three, so name everything you find in this
+pass.
+
 If the brief names no change or no intent, answer `could not review`, say what is missing,
 and stop. Do not guess a diff.
 

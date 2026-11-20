@@ -254,3 +254,24 @@ def test_the_ticket_worker_reaches_the_shared_standards():
         frontmatter(PLUGIN / "skills" / "engineering-standards" / "SKILL.md")["user-invocable"]
         == "false"
     )
+
+
+def test_every_change_gets_core_reviewer_in_at_most_two_rounds():
+    # Small diffs used to get a self-review only; the rule lives once in the standards file.
+    standards = _flat(PLUGIN / "skills" / "eng" / "references" / "engineering-standards.md")
+    title = "Review every change adversarially, in at most two rounds, before the tests run"
+    assert f"- {title}" in standards
+    rule = standards[standards.index(f"**{title}.**") :]
+    rule = rule[: rule.index("**Land the work")]
+    assert "reviews every change, whatever its size" in rule
+    assert "Your own read never counts as the adversarial review" in rule
+    assert "**At most two rounds.**" in rule and "no third review" in rule
+    assert 'the DRY pass ("Say each thing once")' in rule
+    eng = _flat(PLUGIN / "agents" / "eng.md")
+    step = eng[
+        eng.index("8. **Review your diff adversarially") : eng.index("9. **Verify, then land.**")
+    ]
+    assert "Small diff" not in step and "whatever the diff's size" in step
+    assert "**Round one.**" in step and "**Round two,**" in step and "no third round" in step
+    reviewer = _flat(PLUGIN / "agents" / "reviewer.md")
+    assert "A round-two brief also carries round one's findings" in reviewer

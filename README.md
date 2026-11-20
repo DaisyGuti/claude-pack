@@ -44,7 +44,7 @@ carry their own dry-run or confirmation step.
 
 | Invoke | What it does |
 | --- | --- |
-| `@agent-core:eng` | The engineering pass for a fix, feature, refactor or review. Reads the real code, builds the smallest complete change, reviews its own diff, runs the repo's checks, then pushes a branch and opens a pull or merge request. It never merges and never pushes to the default branch |
+| `@agent-core:eng` | The engineering pass for a fix, feature, refactor or review. Reads the real code, builds the smallest complete change, has `core:reviewer` review its diff in at most two rounds, runs the repo's checks, then pushes a branch and opens a pull or merge request. It never merges and never pushes to the default branch |
 | `/core:eng` | Slash entry that hands a task to the `eng` agent |
 | `@agent-core:reviewer` | A fast, read-only review of one diff, branch or pull request, with ranked findings and a file and line for each |
 | `@agent-core:forward-tester` | Runs a finished change the way a user would (a command, a local server, a page) and reports what happened. Never edits code |

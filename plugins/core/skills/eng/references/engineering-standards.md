@@ -28,7 +28,7 @@ house style; this file is about how you work.
 - Run a docs pass on every change
 - Say what could be better; don't go build it
 - Before you call it built, consider the next version up
-- Review your own diff adversarially, before anything runs the tests
+- Review every change adversarially, in at most two rounds, before the tests run
 - Land the work as a pull or merge request, and stop there
 - Look at anything rendered before calling it done
 - Build to five system-design disciplines
@@ -235,8 +235,22 @@ it costs money or overturns a recorded decision: land the simple version, descri
 both with their costs, and let the user pick. If the simple version is the right
 shape, say so in one line.
 
-**Review your own diff adversarially, before anything runs the tests.** Read the
+**Review every change adversarially, in at most two rounds, before the tests run.** Read the
 diff as an engineer who wants it rejected.
+
+- **Round one** is your own read against the checklist below, with the DRY pass ("Say each
+  thing once") and the docs pass. Fix what you find.
+- **A separate reader reviews every change, whatever its size.** `core:reviewer`, a read-only
+  agent that did not write the code, reviews the diff in round one or round two. Your own read
+  never counts as the adversarial review. When the reviewer cannot run (the agent is
+  unavailable, or it answers `could not review` again after you supply what it named), review
+  the diff yourself, say in the report and the review body that no independent review ran, and
+  list that as a follow-up.
+- **At most two rounds.** Round two runs only when the reviewer has not run yet or round one's
+  fixes changed behaviour, and it reviews the fixed diff. After round two's fixes the change
+  lands with no third review, and every finding still open becomes a follow-up.
+
+The checklist:
 
 - **Correctness:** what input makes it wrong: an empty result, a null, a failed
   call, a timeout, a duplicate run, a partial write, two agents running the same
