@@ -7,7 +7,7 @@ to correct; the skills and the worker agent point here instead of restating it.
 
 - Plugin paths and the registry
 - Worktrees for workers
-- Proven on Linux and macOS (#47)
+- Checked on Linux and macOS (#47)
 - Model and effort at spawn
 - Permission prompts
 - Auto-fix in the desktop app
@@ -59,12 +59,18 @@ to correct; the skills and the worker agent point here instead of restating it.
   non-zero exit and any stderr warning, but it has two blind spots. A process writing into the
   worktree from a cwd outside it (a file watcher, a Docker bind mount) is not seen, so the
   worker's own cleanup (stop what you started) is the guard. And a process owned by another
-  user is not seen either, silently (see "Proven on Linux and macOS" below), so the check
+  user is not seen either, silently (see "Checked on Linux and macOS" below), so the check
   covers only processes of the orchestrator's own user, which is who runs a worker's shell.
   Lock start times are compared as parsed datetimes, not as strings, so padding of a
   single-digit day does not matter.
 
-## Proven on Linux and macOS (#47)
+- A subagent in a default-location worktree does not load that repo's `CLAUDE.md` at its root,
+  so the worker reads `CLAUDE.md`, `AGENTS.md` and `CONTRIBUTING.md` itself (same page).
+- Commands that redirect git into the launch repo's main checkout (`git -C`, `GIT_DIR`, a `cd`
+  into it) are refused while a worker runs in its worktree. The worker therefore never touches
+  the launch repo's primary clone (same page, "How Claude Code enforces isolation").
+
+## Checked on Linux and macOS (#47)
 
 Run 2026-11-20 on macOS (Darwin 27.2) and in a throwaway `debian:bookworm-slim` container
 (Debian 12, lsof 4.95.0, procps-ng 4.0.2, git 2.39.5; no ports published, removed afterwards).
@@ -76,24 +82,18 @@ Run 2026-11-20 on macOS (Darwin 27.2) and in a throwaway `debian:bookworm-slim` 
   same-user processes are covered, which is the intended scope. macOS, same-user processes:
   exit 0, empty stderr. Cross-user visibility on macOS was not run.
 - `ps -o lstart`: Linux procps-ng formats it with `ctime()` (`pr_lstart` in `ps/output.c`,
-  `"%24.24s"`), which pads a single-digit day with a space (`Tue Nov  3 04:05:06 2026`), as
-  macOS does. A real single-digit-day process could not be produced in a container (faking
+  `"%24.24s"`), which pads a single-digit day with a space (`Tue Nov  3 04:05:06 2026`); macOS was not
+  checked for it. A real single-digit-day process could not be produced in a container (faking
   the clock does not move `ps`), so the padding rests on that source and on glibc `ctime`.
   Claude Code's own lock start format could not be run here. The recipe therefore parses both
   strings into datetimes (`strptime` with `%d`, which accepts a padded or unpadded day) and
   treats a parse error as a mismatch, so either padding compares equal and neither is assumed.
-- The half-deleted `.venv`: the cause is known (two concurrent `git worktree remove` runs on
-  one worktree) and the guard is in the cleanup recipe (one removal per worktree at a time;
+- The half-deleted `.venv`: the cause is inferred from the live run that exposed it (two
+  concurrent `git worktree remove` runs on one worktree) and the guard is in the cleanup recipe (one removal per worktree at a time;
   `could not open directory` or `is not a working tree` read as another removal, then a
   re-check). A Linux reproduction was tried (three runs, two concurrent removes of a worktree
   with 24,000 ignored files) and did not trigger the race: git finished first each time, so the
-  window is narrow. The cause and the guard rest on the live run that exposed it.
-
-- A subagent in a default-location worktree does not load that repo's `CLAUDE.md` at its root,
-  so the worker reads `CLAUDE.md`, `AGENTS.md` and `CONTRIBUTING.md` itself (same page).
-- Commands that redirect git into the launch repo's main checkout (`git -C`, `GIT_DIR`, a `cd`
-  into it) are refused while a worker runs in its worktree. The worker therefore never touches
-  the launch repo's primary clone (same page, "How Claude Code enforces isolation").
+  window is narrow. The cause was not reproduced, and the guard rests on that live run.
 
 ## Model and effort at spawn
 

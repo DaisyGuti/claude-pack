@@ -411,7 +411,7 @@ directories; `cd <path> && pwd -P` gives that form.
    orchestrator's own user: a process of another user is hidden without a warning on Linux, and
    a process that writes into the worktree from a cwd outside it (a file watcher, a Docker bind
    mount) is invisible too, so the worker's own cleanup (stop what you started) is the guard
-   (platform-notes.md, "Proven on Linux and macOS").
+   (platform-notes.md, "Checked on Linux and macOS").
 
 Then, with `<clone>` the registry clone of that repo:
 
@@ -435,10 +435,11 @@ Compare the two times as datetimes, never as strings: `ps` pads a single-digit d
 on a difference or a parse error:
 
 ```bash
-python3 -c 'import sys,datetime as d; f=lambda s: d.datetime.strptime(" ".join(s.split()), "%a %b %d %H:%M:%S %Y"); sys.exit(f(sys.argv[1]) != f(sys.argv[2]))' "$(TZ=UTC ps -o lstart= -p <N>)" "<lock start>"
+LC_ALL=C python3 -c 'import sys,datetime as d; f=lambda s: d.datetime.strptime(" ".join(s.split()), "%a %b %d %H:%M:%S %Y"); sys.exit(f(sys.argv[1]) != f(sys.argv[2]))' "$(TZ=UTC ps -o lstart= -p <N>)" "<lock start>"
 ```
 
-Unlock only when the walk ends on `p` equal to `<N>` and that command exits 0 for the lock's `start`; a mismatch is a dead session's lock on a reused pid.
+Unlock only when the walk ends on `p` equal to `<N>` and that command exits 0 for the lock's
+`start`; a mismatch is a dead session's lock on a reused pid.
 Never unlock a worktree whose lock names another pid or has another reason: another session or
 a person holds it. Copy the lock's reason from the `worktree list --porcelain` line (the text
 after `locked `) before you unlock. Never pass `--force`: a refusal means one of the checks

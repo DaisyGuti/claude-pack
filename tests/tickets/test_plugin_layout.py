@@ -388,6 +388,8 @@ def test_cleanup_after_each_ticket_is_in_the_instructions() -> None:
     assert "One removal per worktree at a time" in cleanup
     assert "`could not open directory`" in cleanup and "`is not a working tree`" in cleanup
     assert cleanup.index("Re-check first") < cleanup.index("another removal may be in progress")
+    # Lock start times are compared as parsed datetimes, never as padded strings (#47).
+    assert "strptime" in procedure and "never as strings" in procedure
     assert "**Cleanup**" in procedure[procedure.index("**7d.**") :]
     worker = (PLUGIN / "agents" / "ticket-worker.md").read_text(encoding="utf-8")
     final = worker[worker.index("## 10. Final report") :]
