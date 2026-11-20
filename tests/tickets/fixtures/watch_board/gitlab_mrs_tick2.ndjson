@@ -1,0 +1,2 @@
+{"iid": 7, "title": "Signup: reject emails with no domain", "web_url": "https://gitlab.example.com/acme/shop-app/-/merge_requests/7", "draft": false, "has_conflicts": true, "detailed_merge_status": "conflict"}
+{"iid": 9, "title": "Docs: setup steps", "web_url": "https://gitlab.example.com/acme/shop-app/-/merge_requests/9", "draft": false, "has_conflicts": false, "detailed_merge_status": "ci_still_running"}

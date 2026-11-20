@@ -112,6 +112,20 @@ Planning always runs on Opus, whatever your session's model: `plan-ticket`, `wri
 the planning step of `daily-grooming`. A plan steers a cheaper worker, so a wrong one costs more
 than the planning does.
 
+## Board watcher
+
+`scripts/watch_board.py` reads the board every minute and prints one line per new event:
+`NEW_READY` (a ticket in Ready), `CONFLICT` and `QUEUE_READY` (an open review conflicts, or can
+be queued) and `MERGED`. It only reads the tracker. Run it alongside `work-tickets`, which acts on
+its lines instead of polling:
+
+```bash
+python3 ~/.claude/plugins/cache/<marketplace>/tickets/<version>/scripts/watch_board.py \
+  --data-dir ~/.claude/plugins/data/tickets-<marketplace> --interval 60
+```
+
+`references/board-watcher.md` has the event fields, when each fires and the exit codes.
+
 ## Companions
 
 Before it commits, each worker has the read-only `core:reviewer` agent (from this pack's `core`

@@ -1,0 +1,21 @@
+{
+  "data": {
+    "namespace": {
+      "workItems": {
+        "pageInfo": {
+          "hasNextPage": false
+        },
+        "nodes": [
+          {
+            "iid": "12",
+            "title": "Reject emails with no domain",
+            "webUrl": "https://gitlab.example.com/acme/shop-app/-/work_items/12",
+            "namespace": {
+              "fullPath": "acme/shop-app"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
