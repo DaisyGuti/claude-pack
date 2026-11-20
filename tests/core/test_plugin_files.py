@@ -79,7 +79,7 @@ def test_gates_run_at_the_repos_full_parallelism():
     eng = (PLUGIN / "agents" / "eng.md").read_text(encoding="utf-8")
     assert "at the repo's full parallelism" in eng
     worker = (PLUGIN.parent / "tickets" / "agents" / "ticket-worker.md").read_text(encoding="utf-8")
-    assert "**Run at the repo's full parallelism.**" in worker
+    assert "standards' parallelism rule" in worker
 
 
 def _flat(path):
@@ -150,7 +150,7 @@ def test_new_environment_variables_land_in_the_example_file():
     assert f"- {title}" in standards
     assert f"**{title}.**" in standards
     worker = (PLUGIN.parent / "tickets" / "agents" / "ticket-worker.md").read_text(encoding="utf-8")
-    assert "committed example env file" in worker
+    assert "standards' example-env rule" in worker
 
 
 @pytest.mark.parametrize("path", SKILLS, ids=lambda p: p.parent.name)
