@@ -109,5 +109,6 @@ Then add only what applies:
 - with batching on, the parent it was planned under and every child the plan covers, a new
   batch it proposes, or that it stayed single;
 - the notes on the returned line: the parent attached or suggested, duplicates and close
-  candidates (for a person to close), no assignee;
+  candidates (for a person to close), the milestone set from the parent or a mismatch with
+  it, no assignee;
 - tickets skipped because their repo did not resolve.

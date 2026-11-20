@@ -47,6 +47,8 @@ command for one. `jq` must be installed. When the installed `glab` rejects a fla
 - create-issue
 - add-to-board
 - edit-issue
+- read-milestone
+- set-milestone
 - close-issue
 - verify-closed
 - open-review
@@ -593,6 +595,49 @@ glab issue update <n> -R <remote> --description-file <file> [--title "<title>"]
 
 Both the body and a numeric title such as `2025` come through as written. A body line
 starting with `/` runs as a quick action (see Terms).
+
+## read-milestone
+
+Contract: `{"milestone": {id, title}}` for one issue or a parent, or `{"milestone": null}`
+when it has none. `id` is the milestone's global id, the same number for a project or a group
+milestone. An issue is read by `<remote>` and `<n>`:
+
+```bash
+glab api --hostname <host> graphql -f path="<remote>" -f iid="<n>" \
+  -f query='query($path: ID!, $iid: String!) { project(fullPath: $path) { workItems(iids: [$iid], first: 1) {
+  nodes { widgets { ... on WorkItemWidgetMilestone { milestone { id title } } } } } } }' |
+jq -c '.data.project.workItems.nodes[0] // error("no such issue") |
+  {milestone: ([.widgets[] | select(has("milestone")) | .milestone][0] |
+    if . == null then null else {id: (.id | split("/") | last | tonumber), title} end)}'
+```
+
+A parent (an epic in `epics` mode) is read by its `parent_ref` from **read-parent**:
+
+```bash
+glab api --hostname <host> graphql -f id="<parent_ref>" \
+  -f query='query($id: WorkItemID!) { workItem(id: $id) { widgets {
+  ... on WorkItemWidgetMilestone { milestone { id title } } } } }' |
+jq -c '.data.workItem // error("no such work item") |
+  {milestone: ([.widgets[] | select(has("milestone")) | .milestone][0] |
+    if . == null then null else {id: (.id | split("/") | last | tonumber), title} end)}'
+```
+
+Checked 2026-11-20 with `glab` 1.130.0 on a self-managed host: an issue in a group
+milestone, its epic parent in the same milestone, and an issue with none.
+
+## set-milestone
+
+Contract: puts one issue in a milestone by the `id` **read-milestone** printed, replacing any
+milestone it had. A group milestone works for any project in the group.
+
+```bash
+glab api --hostname <host> -X PUT "projects/<enc>/issues/<n>" -f milestone_id=<id> |
+  jq -e --argjson id <id> '.milestone.id == $id'
+```
+
+It succeeds only when the milestone read back is the one asked for. UNVERIFIED: the write
+itself, run only against an issue number that does not exist (it prints
+`{"message":"404 Not found"}` and exits 1).
 
 ## close-issue
 

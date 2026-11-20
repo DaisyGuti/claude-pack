@@ -110,7 +110,8 @@ were asked to re-plan it), put one line under the heading first:
   one place another ticket appears);
 - restating the brief: link to it.
 
-A fourth section, a table or a third paragraph in one section means stop and cut. If the plan
+A section beyond the six above, a table or a third paragraph in one section means stop and
+cut. If the plan
 will not fit in 200 words, the ticket is too vague: go to step 2.
 
 ## 4. Post it and set the labels
@@ -144,6 +145,10 @@ In a dry run, print the plan, the labels and the lane move below, run no write o
      [ticket-labels.md](ticket-labels.md) "Priority" says.
    - **Team label:** when the repo uses team labels (`team:<name>` or the like, from
      **list-labels**) and the ticket has none, **add-label** the existing one that owns the plan's files. Never invent a label.
+   - **Milestone:** **read-milestone** on the ticket, and on its parent when it has one. The
+     ticket has none and the parent has one: **set-milestone** to the parent's. Both have one
+     and they differ: change nothing and name the mismatch in the returned line, since a
+     person set the ticket's.
    - **Assignee:** never change one. Name an unassigned ticket in the returned line.
 
 **ensure-label** can lose a race when several planners run at once. A failure to create a
@@ -160,7 +165,7 @@ could not plan <repo>#<n>: <reason>
 
 `<notes>` lists, comma-separated, what step 1's item 6 and step 4's item 5 found for a
 person: the parent attached or suggested, the batch joined or proposed, duplicates and close
-candidates, no assignee. The caller reads this line and nothing else; it
+candidates, the milestone set or a mismatch, no assignee. The caller reads this line and nothing else; it
 does not need the plan text back.
 
 ## Labels only, when the plan already exists

@@ -31,6 +31,8 @@ improvise a command for one. When the installed `gh` rejects a flag, run
 - create-issue
 - add-to-board
 - edit-issue
+- read-milestone
+- set-milestone
 - close-issue
 - verify-closed
 - open-review
@@ -311,6 +313,29 @@ Contract: replaces an issue's body, and its title when one is given.
 ```bash
 gh issue edit <n> --repo <remote> --body-file <file> [--title "<title>"]
 ```
+
+## read-milestone
+
+Contract: `{"milestone": {id, title}}` for one issue, or `{"milestone": null}` when it has
+none. `id` is the milestone's number. A batch parent in `sub-issues` mode is an issue, so its
+milestone is read the same way, with the parent's `number` and `repo`.
+
+```bash
+gh issue view <n> --repo <remote> --json milestone \
+  --jq '{milestone: (.milestone | if . == null then null else {id: .number, title} end)}'
+```
+
+## set-milestone
+
+Contract: puts one issue in a milestone of its own repo, by title, replacing any milestone it
+had. A title the repo does not have fails with `'<title>' not found` and changes nothing.
+
+```bash
+gh issue edit <n> --repo <remote> --milestone "<title>"
+```
+
+Checked 2026-11-20 with `gh` 2.103.0: set, read back and removed (`--remove-milestone`) on a
+real issue, and the not-found error on an unknown title.
 
 ## close-issue
 

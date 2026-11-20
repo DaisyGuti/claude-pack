@@ -287,8 +287,8 @@ parent's ref and each child's Remote and number. The labels-only mode stays per 
 
 Tickets that come back `held` or `could not plan` go under Needs Attention with the
 reason. The notes on a `planned` line go in the summary too: duplicates and close candidates
-under Duplicates to Review, a proposed batch under Batches, and a suggested parent or no
-assignee under Needs Attention. In a `--dry-run` this step only lists the tickets that would be planned or
+under Duplicates to Review, a proposed batch under Batches, a milestone set in Counts, and a
+suggested parent, a milestone mismatch or no assignee under Needs Attention. In a `--dry-run` this step only lists the tickets that would be planned or
 labelled.
 
 ## 8. Print the summary
@@ -320,4 +320,5 @@ Plain language, short, grouped under these headings, each with its count:
   registry, closed-but-unmerged reviews, tickets in the done lane that are open,
   abandoned or contradictory labels, descriptions with no acceptance criteria, failed
   writes, and Ready tickets with no assignee (`work-tickets` will not pick those up).
-- **Counts**: plans that already existed, plans written, labels added, tickets held.
+- **Counts**: plans that already existed, plans written, labels added, milestones set from a
+  parent, tickets held.

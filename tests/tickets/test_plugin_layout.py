@@ -393,3 +393,22 @@ def test_no_personal_paths_or_tool_names_leak_into_the_plugin() -> None:
         ):
             hit = banned.search(path.read_text(encoding="utf-8"))
             assert hit is None, f"{path.relative_to(PLUGIN)} mentions {hit.group(0)!r}"
+
+
+def test_both_tracker_adapters_define_every_operation_the_procedures_name() -> None:
+    """A procedure runs a named operation on either tracker, so each adapter lists the same
+    operations, gives each a section, and covers every operation planning names."""
+    trackers = PLUGIN / "references" / "trackers"
+    listed = {}
+    for name in ("github", "gitlab"):
+        text = (trackers / f"{name}.md").read_text(encoding="utf-8")
+        contents = text[text.index("## Contents") :].split("\n## ", 1)[0]
+        ops = set(re.findall(r"^- ([a-z]+(?:-[a-z]+)+)$", contents, re.M))
+        for op in ops:
+            assert f"\n## {op}\n" in text, f"{name}.md lists {op} but has no section for it"
+        listed[name] = ops
+    assert listed["github"] == listed["gitlab"]
+    planning = (PLUGIN / "references" / "plan-one-ticket.md").read_text(encoding="utf-8")
+    named = set(re.findall(r"\*\*([a-z]+(?:-[a-z]+)+)\*\*", planning))
+    assert {"read-milestone", "set-milestone"} <= named
+    assert named <= listed["github"], named - listed["github"]
