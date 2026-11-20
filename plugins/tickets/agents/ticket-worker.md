@@ -318,19 +318,21 @@ Never hardcode a command. While you build, run only the one test or check you ar
 **Merge the default branch, then run the gates once.** When the change is ready, bring in the
 default branch first, as the standards' merge rule says:
 `git -C $WT fetch origin <default_branch> && git -C $WT merge --no-edit origin/<default_branch>`.
-When git refuses the merge because your uncommitted files overlap the incoming
+Never rebase. When git refuses the merge because your uncommitted files overlap the incoming
 ones, commit the change to the slot branch first (section 7's **Commit**), then merge, and run
 section 7's review before the push, on `git diff <base SHA>`, instead of before the commit. A
 conflict you cannot settle without guessing at someone else's intent is
 `blocked_merge_conflict`, naming the files.
 
-Then run the gates once, inside `WT`, on the merged tree, as the standards' merge rule says,
+After the merge, rerun the repo's setup and check that every test path you name exists. Then run the gates once, inside `WT`, on the merged tree, as the standards' merge rule says,
 together with any check the repo's rules require before a commit. Say in the review body and
 the report which gates ran and which were left to CI.
 
 **Parallelism.** Follow the standards' parallelism rule. When you call a test framework
 directly on a subset, give it a temp folder inside `WT` (pytest `--basetemp`, a per-run
-`TMPDIR`) so runs in other slots cannot stall it. On failure stop with `blocked_tests_failed`, with a summary of the output; do
+`TMPDIR`) so runs in other slots cannot stall it.
+
+**On failure.** Stop with `blocked_tests_failed`, with a summary of the output; do
 not commit, and leave the tree dirty. A test passed only if you ran it in `WT` and saw it pass;
 a timeout or unreadable output is a failure.
 

@@ -264,7 +264,8 @@ def test_worker_merges_the_base_with_its_own_command_and_points_to_the_standards
     assert "merge --no-edit origin/<default_branch>" in section
     assert "`blocked_merge_conflict`" in section
     assert "standards' merge rule" in section
-    assert "Never rebase" not in section
+    assert "Never rebase." in section
+    assert section.index("merge --no-edit") < section.index("Then run the gates once")
     assert "which gates ran and which were left to CI" in section
     assert "the gates that ran and the ones left to CI" in body[body.index("## 10. Final report") :]
 
@@ -288,6 +289,8 @@ def test_worker_section_6_points_to_the_standards_for_the_shared_rules() -> None
         "**Every new environment variable lands in the repo's example env file.**",
     ):
         assert rule in standards
+    body = flat(PLUGIN / "agents" / "ticket-worker.md")
+    assert "nothing you started is still running" in body[body.index("## 10. Final report") :]
 
 
 def test_a_locked_signing_key_blocks_the_ticket_and_the_orchestrator_resumes_all_together() -> None:
