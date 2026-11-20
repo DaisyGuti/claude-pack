@@ -43,7 +43,7 @@ Paths used below (read them as `<scripts>` and `<data>`):
 3. Read [grooming.md](${CLAUDE_SKILL_DIR}/references/grooming.md) in full. It holds the steps,
    in order: set up and capture the board; fetch the items and settle closed or merged work to
    done before anything else looks at it; flag duplicates; audit each open ticket, with the
-   priority sync; form batches; triage lanes and order the Ready lane; apply the changes; make
+   priority sync; group related tickets under batch and epic parents; triage lanes and order the Ready lane; apply the changes; make
    every Ready ticket dispatchable; print the summary. The batch steps run only when batching
    is on (`registry.py show` prints `batching`, and its `mode` is not `off`); they follow
    [batches.md](${CLAUDE_PLUGIN_ROOT}/references/batches.md), which you then read in full too.

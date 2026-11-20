@@ -161,17 +161,18 @@ a parent takes one place in a wave and carries all its children's files, so grou
 leaves fewer units to schedule and folds most file overlaps inside one batch. Look across the
 backlog and ready lanes, in two passes.
 
-1. **Parents.** In `epics` and `sub-issues` mode run **read-parent** on each candidate. One
-   with no parent that names an epic or parent is attached as `plan-one-ticket.md` says (step
-   1 item 6, under step 4 item 5's conditions). One with any non-batch parent (`batch`
-   false), already there or attached now, is not a batch candidate, since attaching it would
-   re-parent it.
-2. **Batches.** Form batches as batches.md says ("Forming batches"): attach each fitting
+1. **Batches.** Form batches as batches.md says ("Forming batches"): attach each fitting
    unparented candidate to an open parent, else form new parents from candidates that fit
    each other, never a batch of one. The singles rules there hold. The labels are already
    fetched; run **read-issue** for a candidate's plan only when its labels give no area
-   signal. In `labels` mode, also decide a `Batch: <area>` parent for each `batch:<area>`
-   label step 1 listed without one.
+   signal. In `epics` and `sub-issues` mode run **read-parent** on each candidate first: one
+   with any parent (a non-batch one, `batch` false) is not a candidate, since attaching it
+   would re-parent it. In `labels` mode, also decide a `Batch: <area>` parent for each
+   `batch:<area>` label step 1 listed without one.
+2. **Parents.** In `epics` and `sub-issues` mode, a planned ticket that stayed single, has no
+   parent and whose body (fetched in step 1) names an open epic or parent is attached to it
+   as `plan-one-ticket.md` step 4 item 5 says. An unplanned ticket is left to step 7, whose
+   planning attaches it the same way.
 
 Here you only decide: step 6 runs **create-parent** and **attach-child** (a `--dry-run` lists
 them), and from now on a ticket you attach counts as that parent's child.
@@ -312,16 +313,15 @@ Plain language, short, grouped under these headings, each with its count:
 - **Duplicates to Review**: each group with ticket numbers and titles.
 - **Ready (in waves)**: `#N title [priority] [repo]`, marked planned, already planned, or
   labelled, and with the reasoning for any priority that was a close call. The waves come
-  from `<scripts>/waves.py`, never from a split by hand. Write the step 5 order to a JSON
-  file (the script's docstring gives the shape): one entry per unit with its ref, title,
-  repo, labels and plan text, a batch as its parent with the parent's `### Final Plan` and
-  addenda and its children's refs. Run `<scripts>/waves.py <file> --pool <N>`, `<N>` being
-  `work-tickets`' `--max-parallel` (5 by default), and print its waves in order. It puts
-  flaky-test and CI units first, gives a migration a wave of its own, never puts two units
-  that share a file in one wave, and keeps priority order within a wave. A unit it lists
-  under `no_files` runs alone and goes under Needs Attention, since its plan names no
-  **Files to touch**. When batching is on, a batch is one line, `parent <ref> <title>:
-  #<child> ...`. Delete the file once the waves are printed.
+  from `<scripts>/waves.py`, never from a split by hand; its docstring holds the rules and
+  the input shape. Write the step 5 order as that JSON to a temporary file (a local file, so
+  a `--dry-run` writes it too): one entry per unit, a batch as its parent with every child's
+  labels and refs, and the label `migration` added to a unit whose plan names a schema
+  migration. Run `<scripts>/waves.py <file> --pool <N>`, `<N>` being `work-tickets`'
+  `--max-parallel` (5 by default), print its waves in order and delete the file. Exit 2 means
+  bad input: fix the file and run it again. A unit under `no_files` runs alone and goes under
+  Needs Attention, since its plan names no **Files to touch**. When batching is on, a batch
+  is one line, `parent <ref> <title>: #<child> ...`.
 - **Backlog (priority order)**: `#N title [priority]` and the reason it is in the
   backlog.
 - **In progress**: `#N title`, with its review link when it has one.

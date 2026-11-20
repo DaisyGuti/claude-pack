@@ -6,19 +6,22 @@ loose ticket or a batch parent; a batch parent's plan holds a section per child,
 carries every child's files. Each plan is read once for its **Files to touch**, and the waves
 follow these rules, the same way on every run:
 
-- a flaky-test or CI unit comes first (its labels or title say so), in input order;
+- flaky-test and CI units come first (their labels or title say so), and no other unit runs
+  in a wave before the last one holding them;
 - a unit that adds a migration, or whose files could not be read, gets a wave to itself;
-- no two units in a wave share a file (a file is a repo and a path);
-- a wave holds at most `--pool` units (`work-tickets`' `--max-parallel`, 5 by default);
+- no two units in a wave share a file (a repo and a path; a folder holds every file in it);
+- a wave holds at most `--pool` units (`work-tickets`' `--max-parallel`);
 - a unit goes into the first wave with room that shares no file with it, so priority order
   holds within a wave.
 
 Usage:
-    waves.py UNITS_FILE [--pool N]
+    waves.py UNITS_FILE --pool N
 
 UNITS_FILE is JSON: {"units": [{"ref", "title", "repo", "labels": [...], "plan",
-"children": [...]}]}, in the step 5 order. `plan` is the `### Final Plan` comment with any
-`### Final Plan addendum` comments appended; `children` is empty for a loose ticket.
+"children": [...]}]}, in the step 5 order. `plan` is the latest `### Final Plan` comment with any
+`### Final Plan addendum` comments after it appended; its paths all belong to `repo`.
+`labels` (a batch: every child's labels) and `children` default to empty. A ref listed twice,
+or a child also listed as a unit, is bad input.
 
 Prints JSON {"waves": [{"alone": reason or null, "units": [{"ref", "title", "children"}]}],
 "no_files": [ref, ...]}. Exit codes: 0 printed, 2 bad input.
@@ -37,18 +40,21 @@ from pathlib import Path
 if sys.version_info < (3, 11):  # noqa: UP036  (a clear message on an older python3)
     sys.exit("waves.py needs Python 3.11 or newer; install it and run this again")
 
-# work-tickets' --max-parallel default: a wave never holds more units than the pool runs.
-DEFAULT_POOL = 5
 # Labels and title words that mark a flaky-test or CI unit (orchestrator.md sorts the same way).
 FIRST_LABELS = frozenset({"flaky", "flaky-test", "ci"})
 FIRST_TITLE = re.compile(r"\b(flaky|ci)\b", re.IGNORECASE)
-# A migration is a `migration` label or a file under a migrations folder (batches.md).
+# A migration is a `migration` label or a file under a migrations folder (batches.md); grooming
+# adds the label to a unit whose plan names a schema migration elsewhere.
 MIGRATION_LABELS = frozenset({"migration"})
-MIGRATION_DIRS = frozenset({"migrations"})
-# The plan line that names the files, and the next bold section that ends it.
-FILES_HEADING = re.compile(r"\*\*Files to touch\*\*:?(.*)")
-NEXT_SECTION = re.compile(r"^\s*(?:[-*]\s*)?\*\*[^*]+\*\*|^\s*#")
-CODE_SPAN = re.compile(r"`([^`\s]+)`")
+MIGRATION_DIRS = frozenset({"migrations", "migrate", "alembic"})
+# The plan line that names the files (`**Files to touch**:` or `**Files to touch:**`), and the
+# next bold section, numbered or bulleted, or heading that ends it.
+FILES_HEADING = re.compile(r"\*\*Files to touch:?\*\*:?(.*)", re.IGNORECASE)
+NEXT_SECTION = re.compile(r"^\s*(?:(?:[-*]|\d+\.)\s*)?\*\*[^*]+\*\*|^\s*#")
+# A path in backticks, or a bare one with at least one slash.
+PATH = re.compile(r"`([^`\s]+)`|(?<![\w`/.-])((?:[\w.-]+/)+[\w.*-]*)")
+# A line or symbol suffix on a path (`a.py:12-30`, `a.py::fn`) names the same file.
+SUFFIX = re.compile(r"::.*$|:\d+(?:-\d+)?$")
 
 
 class Alone(Enum):
@@ -81,7 +87,7 @@ class Wave:
             self.alone is None
             and unit.alone is None
             and len(self.units) < pool
-            and self.files.isdisjoint(unit.files)
+            and not any(overlaps(a, b) for a in self.files for b in unit.files)
         )
 
     def add(self, unit: Unit) -> None:
@@ -89,19 +95,37 @@ class Wave:
         self.files |= unit.files
 
 
+def overlaps(a: tuple[str, str], b: tuple[str, str]) -> bool:
+    """Same repo, and the same path or one a folder holding the other (`src/` and `src/a.py`)."""
+    (repo_a, path_a), (repo_b, path_b) = a, b
+    if repo_a != repo_b:
+        return False
+    return path_a == path_b or path_b.startswith(path_a + "/") or path_a.startswith(path_b + "/")
+
+
+def normalise(path: str) -> str:
+    """One spelling per file: no `./`, no trailing slash or glob, no line or symbol suffix."""
+    path = SUFFIX.sub("", path.removeprefix("./"))
+    return path.split("*", 1)[0].rstrip("/")
+
+
 def files_to_touch(plan: str) -> list[str]:
-    """Every code-span path in each **Files to touch** section (a batch plan has one per child)."""
+    """Every path in each **Files to touch** section (a batch plan has one per child)."""
     section: list[str] = []
     reading = False
     for line in plan.splitlines():
         if match := FILES_HEADING.search(line):
             section.append(match.group(1))
             reading = True
-        elif reading and (not line.strip() or NEXT_SECTION.match(line)):
+        elif reading and not line.strip():
+            # A blank line ends the section, unless the heading's list has not started yet.
+            reading = not section[-1].strip()
+        elif reading and NEXT_SECTION.match(line):
             reading = False
         elif reading:
             section.append(line)
-    return CODE_SPAN.findall("\n".join(section))
+    found = (a or b for a, b in PATH.findall("\n".join(section)))
+    return [p for p in (normalise(f) for f in found) if p]
 
 
 def string_list(entry: dict[str, object], key: str) -> list[str]:
@@ -118,9 +142,9 @@ def parse_unit(entry: dict[str, object]) -> Unit:
         raise ValueError(f"unit {entry.get('ref')!r}: missing {', '.join(missing)}")
     title, repo, plan = str(entry["title"]), str(entry["repo"]), str(entry["plan"])
     labels = {label.lower() for label in string_list(entry, "labels")}
-    paths = [p.removeprefix("./") for p in files_to_touch(plan)]
+    paths = files_to_touch(plan)
     migration = bool(labels & MIGRATION_LABELS) or any(
-        MIGRATION_DIRS.intersection(Path(p).parts[:-1]) for p in paths
+        MIGRATION_DIRS.intersection(Path(p).parts) for p in paths
     )
     alone = Alone.MIGRATION if migration else None if paths else Alone.NO_FILES
     return Unit(
@@ -134,22 +158,27 @@ def parse_unit(entry: dict[str, object]) -> Unit:
 
 
 def cut_waves(units: list[Unit], pool: int) -> list[Wave]:
-    """Place each unit, flaky-test and CI ones first, in the first wave that takes it."""
+    """Place each unit in the first wave that takes it, flaky-test and CI ones first.
+
+    The rest start at the last wave holding a flaky-test or CI unit, so none runs ahead of one.
+    """
     waves: list[Wave] = []
-    # sorted() is stable, so input (priority) order holds inside each group.
-    for unit in sorted(units, key=lambda u: not u.first):
-        wave = next((w for w in waves if w.takes(unit, pool)), None)
-        if wave is None:
-            wave = Wave(alone=unit.alone)
-            waves.append(wave)
-        wave.add(unit)
+    start = 0
+    for group in ([u for u in units if u.first], [u for u in units if not u.first]):
+        for unit in group:
+            wave = next((w for w in waves[start:] if w.takes(unit, pool)), None)
+            if wave is None:
+                wave = Wave(alone=unit.alone)
+                waves.append(wave)
+            wave.add(unit)
+        start = max(len(waves) - 1, 0)
     return waves
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("units_file", type=Path)
-    parser.add_argument("--pool", type=int, default=DEFAULT_POOL)
+    parser.add_argument("--pool", type=int, required=True, help="work-tickets' --max-parallel")
     args = parser.parse_args(argv)
     if args.pool < 1:
         parser.error("--pool must be at least 1")
@@ -159,6 +188,9 @@ def main(argv: list[str] | None = None) -> int:
         if not isinstance(entries, list) or not all(isinstance(e, dict) for e in entries):
             raise ValueError('expected {"units": [ {...}, ... ]}')
         units = [parse_unit(entry) for entry in entries]
+        refs = [u.ref for u in units] + [c for u in units for c in u.children]
+        if repeated := sorted({r for r in refs if refs.count(r) > 1}):
+            raise ValueError(f"listed more than once (a child is not its own unit): {repeated}")
     except (OSError, ValueError, KeyError) as exc:
         print(f"waves.py: {args.units_file}: {exc}", file=sys.stderr)
         return 2
