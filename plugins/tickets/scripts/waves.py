@@ -64,11 +64,12 @@ NEXT_SECTION = re.compile(r"^\s*(?:(?:[-*]|\d+\.)\s*)?\*\*[^*]+\*\*|^\s*#")
 # A backticked span, or a bare path with at least one slash.
 PATH = re.compile(r"`([^`\n]+)`|(?<![\w`/.-])((?:[\w.-]+/)+[\w.*-]*)")
 # A backticked path another repo owns: `repo: path` or `owner/repo: path`.
-QUALIFIED = re.compile(r"([\w.-]+(?:/[\w.-]+)?):\s+(\S+)")
-# A backticked span is a file when it has a slash or an extension; `pytest` or `True` is not.
-FILE_LIKE = re.compile(r"/|[\w*]\.\w")
+QUALIFIED = re.compile(r"([\w-]+(?:/[\w.-]+)?):\s+(\S*(?:/|\.\w)\S*)")
+# A backticked word is a file when it has a slash or a dot (`.env`, `a.py`) or starts with a capital
+# (`Makefile`, `LICENSE`); `pytest` is not. A miss would let two workers share a file.
+FILE_LIKE = re.compile(r"/|\.|^[A-Z]")
 # A bare path that starts with a host name (`example.com/y`) is a URL fragment.
-URL_HOST = re.compile(r"(?:[\w-]+\.)+[a-z]{2,}/", re.IGNORECASE)
+URL_HOST = re.compile(r"(?:[\w-]+\.)+(?:com|org|net|io|dev|gov|edu|mil|us)/", re.IGNORECASE)
 # A line or symbol suffix on a path (`a.py:12-30`, `a.py::fn`) names the same file.
 SUFFIX = re.compile(r"::.*$|:\d+(?:-\d+)?$")
 
@@ -125,22 +126,26 @@ def normalise(path: str) -> str:
     return path.split("*", 1)[0].rstrip("/")
 
 
-def plan_path(code: str | None, bare: str | None) -> tuple[str | None, str] | None:
-    """One PATH match as (repo it names or None, path), or None when it is not a file."""
+def plan_paths(code: str | None, bare: str | None) -> list[tuple[str | None, str]]:
+    """One PATH match as (repo it names or None, path) pairs; none when it is not a file.
+
+    A backticked span with spaces is read word by word (`src/a.py: add a limit` names `src/a.py`).
+    """
     if bare is not None:
-        return None if URL_HOST.match(bare) else (None, bare)
+        return [] if URL_HOST.match(bare) else [(None, bare)]
     span = (code or "").strip()
     if qualified := QUALIFIED.fullmatch(span):
-        return qualified.group(1), qualified.group(2)
-    return (None, span) if FILE_LIKE.search(span) and not re.search(r"\s", span) else None
+        return [(qualified.group(1), qualified.group(2))]
+    words = [w.rstrip(":,;") for w in span.split()]
+    return [(None, w) for w in words if FILE_LIKE.search(w)]
 
 
 def qualify(repo: str, named: str | None) -> str:
     """The unit's repo, or the one a path names (a bare name shares the unit repo's owner)."""
-    if named is None or "/" in named:
-        return named or repo
+    if named is None:
+        return repo.lower()
     owner = repo.rpartition("/")[0]
-    return f"{owner}/{named}" if owner else named
+    return (named if "/" in named or not owner else f"{owner}/{named}").lower()
 
 
 def files_to_touch(plan: str) -> list[tuple[str | None, str]]:
@@ -158,8 +163,10 @@ def files_to_touch(plan: str) -> list[tuple[str | None, str]]:
             reading = False
         elif reading:
             section.append(line)
-    found = [plan_path(a or None, b or None) for a, b in PATH.findall("\n".join(section))]
-    paths = [(repo, normalise(path)) for repo, path in (f for f in found if f)]
+    found = [
+        p for a, b in PATH.findall("\n".join(section)) for p in plan_paths(a or None, b or None)
+    ]
+    paths = [(repo, normalise(path)) for repo, path in found]
     return [(repo, path) for repo, path in paths if path]
 
 

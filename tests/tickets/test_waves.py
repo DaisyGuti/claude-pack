@@ -165,5 +165,15 @@ def test_a_scoped_label_counts_by_its_last_part() -> None:
 
 
 def test_url_fragments_and_plain_backticked_words_are_not_files() -> None:
-    entry = plan_with("see example.com/y and `pytest`, `True`, then `src/a.py` and `Makefile.mk`")
-    assert waves.files_to_touch(entry["plan"]) == [(None, "src/a.py"), (None, "Makefile.mk")]
+    entry = plan_with("see example.com/y and `pytest`, `make test`, then `src/a.py`")
+    assert waves.files_to_touch(entry["plan"]) == [(None, "src/a.py")]
+
+
+def test_root_files_and_noted_paths_still_count() -> None:
+    entry = plan_with("`Makefile`, `.gitignore`, `src/b.py: add a limit`, `Acme/Other: src/c.py`")
+    assert waves.parse_unit(entry).files == {
+        ("acme/app", "Makefile"),
+        ("acme/app", ".gitignore"),
+        ("acme/app", "src/b.py"),
+        ("acme/other", "src/c.py"),
+    }
