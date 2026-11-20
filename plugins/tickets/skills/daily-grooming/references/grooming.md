@@ -23,7 +23,7 @@ steps follow it, and the parent operations (**list-parents**, **create-parent**,
 - 1. Fetch the board, and settle finished work first
 - 2. Flag duplicates
 - 3. Audit each open ticket (with the priority sync)
-- 3b. Form batches (when batching is on)
+- 3b. Group before splitting (when batching is on)
 - 4. Triage the lanes
 - 5. Order the Ready lane
 - 6. Apply the changes
@@ -154,18 +154,27 @@ reason decided it. The role names come from the registry.
   others out on both trackers.
 - A priority value in `missing_priorities` is skipped, with one warning for the run.
 
-## 3b. Form batches (when batching is on)
+## 3b. Group before splitting (when batching is on)
 
-Now that every ticket has its priority, form batches as batches.md says ("Forming
-batches"): attach each fitting unparented candidate to an open parent, else form new
-parents from candidates that fit each other, never a batch of one. The singles rules there
-hold. The labels are already fetched; run **read-issue** for a candidate's plan only when
-its labels give no area signal. In `epics` and `sub-issues` mode run **read-parent** on each
-candidate first: one with any parent (a non-batch one, `batch` false) is not a candidate,
-since attaching it would re-parent it. In `labels` mode, also decide a `Batch: <area>`
-parent for each `batch:<area>` label step 1 listed without one. Here you only decide: step 6
-runs **create-parent** and **attach-child** (a `--dry-run` lists them), and from now on a
-ticket you attach counts as that parent's child.
+Now that every ticket has its priority, group related tickets before step 8 splits the waves:
+a parent takes one place in a wave and carries all its children's files, so grouping first
+leaves fewer units to schedule and folds most file overlaps inside one batch. Look across the
+backlog and ready lanes, in two passes.
+
+1. **Parents.** In `epics` and `sub-issues` mode run **read-parent** on each candidate. One
+   with no parent that names an epic or parent is attached as `plan-one-ticket.md` says (step
+   1 item 6, under step 4 item 5's conditions). One with any non-batch parent (`batch`
+   false), already there or attached now, is not a batch candidate, since attaching it would
+   re-parent it.
+2. **Batches.** Form batches as batches.md says ("Forming batches"): attach each fitting
+   unparented candidate to an open parent, else form new parents from candidates that fit
+   each other, never a batch of one. The singles rules there hold. The labels are already
+   fetched; run **read-issue** for a candidate's plan only when its labels give no area
+   signal. In `labels` mode, also decide a `Batch: <area>` parent for each `batch:<area>`
+   label step 1 listed without one.
+
+Here you only decide: step 6 runs **create-parent** and **attach-child** (a `--dry-run` lists
+them), and from now on a ticket you attach counts as that parent's child.
 
 ## 4. Triage the lanes
 
@@ -296,19 +305,23 @@ labelled.
 Plain language, short, grouped under these headings, each with its count:
 
 - **Moved to Done**: the finished items step 1 settled.
-- **Batches** (when batching is on): every attach and every created parent, each as
+- **Batches** (when batching is on): what step 3b grouped: every attach (to an epic or a
+  batch parent) and every created parent, each as
   `parent <ref> <title>: +#<child> ...`, then the parents closed in step 1 and the labels
   converted, and the count of parents left out of triage. A `--dry-run` lists what it would do.
 - **Duplicates to Review**: each group with ticket numbers and titles.
 - **Ready (in waves)**: `#N title [priority] [repo]`, marked planned, already planned, or
-  labelled, and with the reasoning for any priority that was a close call. Cut the step 5
-  order into waves of tickets that touch no file in common, read from each plan's **Files to
-  touch**, so the tickets of a wave can run side by side. A wave holds at most the pool size
-  (`--max-parallel` of `work-tickets`, 5 by default). Flaky-test and CI tickets come first,
-  in the earliest waves. A ticket whose plan adds a migration gets a wave to itself. A ticket
-  goes into the first wave with room that has no file in common with it; within a wave,
-  priority order holds. When batching is on, a batch is one line, `parent <ref> <title>:
-  #<child> ...`, and takes one place in a wave with the files of all its children.
+  labelled, and with the reasoning for any priority that was a close call. The waves come
+  from `<scripts>/waves.py`, never from a split by hand. Write the step 5 order to a JSON
+  file (the script's docstring gives the shape): one entry per unit with its ref, title,
+  repo, labels and plan text, a batch as its parent with the parent's `### Final Plan` and
+  addenda and its children's refs. Run `<scripts>/waves.py <file> --pool <N>`, `<N>` being
+  `work-tickets`' `--max-parallel` (5 by default), and print its waves in order. It puts
+  flaky-test and CI units first, gives a migration a wave of its own, never puts two units
+  that share a file in one wave, and keeps priority order within a wave. A unit it lists
+  under `no_files` runs alone and goes under Needs Attention, since its plan names no
+  **Files to touch**. When batching is on, a batch is one line, `parent <ref> <title>:
+  #<child> ...`. Delete the file once the waves are printed.
 - **Backlog (priority order)**: `#N title [priority]` and the reason it is in the
   backlog.
 - **In progress**: `#N title`, with its review link when it has one.
