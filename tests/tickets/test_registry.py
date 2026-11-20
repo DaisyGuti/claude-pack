@@ -24,7 +24,7 @@ def all_tools_installed(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_first_run_creates_the_registry_and_asks_to_fill_it_in(tmp_path: Path) -> None:
-    code, payload = registry.ensure(tmp_path / "data")
+    code, payload, _ = registry.ensure(tmp_path / "data")
     assert code == registry.EXIT_CREATED
     assert payload["status"] == "created"
     created = Path(payload["path"])
@@ -35,13 +35,13 @@ def test_first_run_creates_the_registry_and_asks_to_fill_it_in(tmp_path: Path) -
 
 def test_example_values_left_in_place_are_reported(tmp_path: Path) -> None:
     registry.ensure(tmp_path / "data")
-    code, payload = registry.ensure(tmp_path / "data")
+    code, payload, _ = registry.ensure(tmp_path / "data")
     assert code == registry.EXIT_INCOMPLETE
     assert any("your-github-login" in p for p in payload["problems"])
 
 
 def test_filled_registry_is_ready(filled_registry: Path) -> None:
-    code, payload = registry.ensure(filled_registry)
+    code, payload, _ = registry.ensure(filled_registry)
     assert (code, payload["status"]) == (0, "ok")
 
 
@@ -57,7 +57,7 @@ def test_unfilled_github_subsection_does_not_block_a_gitlab_registry(filled_regi
     text = path.read_text(encoding="utf-8").replace("- Tracker: `github`", "- Tracker: `gitlab`")
     text = text.replace("- Host: `github.com`", "- Host: `gitlab.com`")
     path.write_text(text.replace("acme/shop-app", "acme-team/shop-app"), encoding="utf-8")
-    code, payload = registry.ensure(filled_registry)
+    code, payload, _ = registry.ensure(filled_registry)
     assert (code, payload["status"]) == (0, "ok")
 
 
@@ -66,7 +66,7 @@ def test_missing_clone_folder_is_a_problem(filled_registry: Path) -> None:
     text = path.read_text(encoding="utf-8")
     clone = next(p for p in (filled_registry.parent / "code").iterdir())
     clone.rmdir()
-    code, payload = registry.ensure(filled_registry)
+    code, payload, _ = registry.ensure(filled_registry)
     assert code == registry.EXIT_INCOMPLETE
     assert any("local clone" in p for p in payload["problems"])
     assert text  # the file itself is untouched
@@ -78,7 +78,7 @@ def test_missing_required_lane_is_a_problem(filled_registry: Path) -> None:
         ln for ln in path.read_text(encoding="utf-8").splitlines() if not ln.startswith("| ready ")
     ]
     path.write_text("\n".join(lines), encoding="utf-8")
-    _, payload = registry.ensure(filled_registry)
+    _, payload, _ = registry.ensure(filled_registry)
     assert any("'ready'" in p for p in payload["problems"])
 
 
@@ -88,7 +88,7 @@ def test_unknown_tracker_is_a_problem(filled_registry: Path) -> None:
         path.read_text(encoding="utf-8").replace("- Tracker: `github`", "- Tracker: `jira`"),
         encoding="utf-8",
     )
-    _, payload = registry.ensure(filled_registry)
+    _, payload, _ = registry.ensure(filled_registry)
     assert any("'github' or 'gitlab'" in p for p in payload["problems"])
 
 
@@ -108,7 +108,7 @@ def test_parse_reads_the_trackers_lane_and_priority_columns(filled_registry: Pat
 
 def test_parse_reads_board_labels_models_and_repos(filled_registry: Path) -> None:
     reg = registry.parse((filled_registry / "registry.md").read_text(encoding="utf-8"))
-    assert reg["board"] == {"owner": "acme", "number": "1", "name": "Engineering"}
+    assert reg["board"] == registry.GitHubBoard(owner="acme", number="1", name="Engineering")
     assert reg["labels"]["run_worker"]["name"] == "run:worker"
     assert reg["model_labels"]["workhorse"]["label"] == "model:sonnet"
     assert reg["repos"][0]["name"] == "shop-app"
@@ -167,7 +167,7 @@ def test_gitlab_status_mode_reads_status_names_as_lanes(
     for label, status in STATUS_LANES.items():
         text = text.replace(label, status)
     path.write_text(text, encoding="utf-8")
-    code, payload = registry.ensure(filled_registry)
+    code, payload, _ = registry.ensure(filled_registry)
     assert (code, payload["status"]) == (0, "ok")
     # In process, so the fixture's stand-in for `which` covers glab, which CI does not install.
     assert registry.main(["show", "--data-dir", str(filled_registry)]) == 0
@@ -183,7 +183,7 @@ def test_gitlab_status_mode_with_label_lanes_is_a_problem(filled_registry: Path)
     path.write_text(
         as_gitlab(path.read_text(encoding="utf-8"), "- Lanes: `status`"), encoding="utf-8"
     )
-    code, payload = registry.ensure(filled_registry)
+    code, payload, _ = registry.ensure(filled_registry)
     assert code == registry.EXIT_INCOMPLETE
     assert any("'status::ready'" in p and "Status name" in p for p in payload["problems"])
 
@@ -193,8 +193,21 @@ def test_unknown_gitlab_lane_mode_is_a_problem(filled_registry: Path) -> None:
     path.write_text(
         as_gitlab(path.read_text(encoding="utf-8"), "- Lanes: `columns`"), encoding="utf-8"
     )
-    _, payload = registry.ensure(filled_registry)
+    _, payload, _ = registry.ensure(filled_registry)
     assert any("'labels' or 'status'" in p for p in payload["problems"])
+
+
+@pytest.mark.parametrize(("written", "code"), [("Group", 0), ("team", registry.EXIT_INCOMPLETE)])
+def test_gitlab_scope_is_read_in_any_case_and_an_unknown_one_is_a_problem(
+    filled_registry: Path, written: str, code: int
+) -> None:
+    path = filled_registry / "registry.md"
+    text = as_gitlab(path.read_text(encoding="utf-8"), None)
+    path.write_text(text.replace("- Scope: `group`", f"- Scope: `{written}`"), encoding="utf-8")
+    found, payload, _ = registry.ensure(filled_registry)
+    assert found == code
+    if code:
+        assert any("Scope 'team'" in p for p in payload["problems"])
 
 
 def test_github_has_no_lane_mode(filled_registry: Path) -> None:
@@ -230,7 +243,7 @@ def test_batching_mode_must_exist_on_the_tracker(
     if tracker == "gitlab":
         text = as_gitlab(text, "- Lanes: `labels`")
     path.write_text(text, encoding="utf-8")
-    code, payload = registry.ensure(filled_registry)
+    code, payload, _ = registry.ensure(filled_registry)
     assert (code == 0) is ok, payload
     if ok:
         assert registry.parse(text)["batching"]["mode"] == mode.lower()
@@ -243,7 +256,7 @@ def test_bad_batch_size_or_mode_is_a_problem(filled_registry: Path, value: str) 
     path = filled_registry / "registry.md"
     text = path.read_text(encoding="utf-8").replace("- Batch size: `5`", f"- Batch size: {value}")
     path.write_text(text.replace("- Batching: `off`", "- Batching: `piles`"), encoding="utf-8")
-    _, payload = registry.ensure(filled_registry)
+    _, payload, _ = registry.ensure(filled_registry)
     assert any("Batch size is" in p for p in payload["problems"])
     assert any("Batching is 'piles'" in p for p in payload["problems"])
 
@@ -304,7 +317,10 @@ def test_command_line_show_prints_json_for_a_ready_registry(filled_registry: Pat
         check=False,
     )
     assert proc.returncode == 0, proc.stderr
-    assert json.loads(proc.stdout)["tracker"] == "github"
+    shown = json.loads(proc.stdout)
+    assert shown["tracker"] == "github"
+    # The skills read the board's keys from this object.
+    assert shown["board"] == {"owner": "acme", "number": "1", "name": "Engineering"}
 
 
 def test_command_line_exit_code_is_3_on_first_run(tmp_path: Path) -> None:
@@ -322,7 +338,7 @@ def test_missing_tracker_cli_is_a_problem_with_an_install_hint(
     filled_registry: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(registry.shutil, "which", lambda name: None if name == "gh" else "/bin/x")
-    code, payload = registry.ensure(filled_registry)
+    code, payload, _ = registry.ensure(filled_registry)
     assert code == registry.EXIT_INCOMPLETE
     assert any("'gh' is not on PATH" in p and "gh auth login" in p for p in payload["problems"])
 
@@ -334,6 +350,6 @@ def test_gitlab_needs_glab_and_jq(filled_registry: Path, monkeypatch: pytest.Mon
     monkeypatch.setattr(
         registry.shutil, "which", lambda name: None if name in {"glab", "jq"} else "/bin/x"
     )
-    _, payload = registry.ensure(filled_registry)
+    _, payload, _ = registry.ensure(filled_registry)
     missing = [p for p in payload["problems"] if "is not on PATH" in p]
     assert len(missing) == 2

@@ -89,14 +89,22 @@ def empty_state() -> dict[str, Any]:
     }
 
 
+class LockHeld(Exception):
+    """`locked(..., wait=False)` found the lock held by another process."""
+
+
 @contextlib.contextmanager
-def locked(path: Path) -> Iterator[None]:
-    """Hold an exclusive advisory lock on `<state file>.lock` for the duration."""
+def locked(path: Path, wait: bool = True) -> Iterator[None]:
+    """Hold an exclusive advisory lock on `<state file>.lock` for the duration. With
+    `wait=False`, raise LockHeld at once instead of waiting for another holder."""
     path.parent.mkdir(parents=True, exist_ok=True)
     lock_path = path.with_suffix(path.suffix + ".lock")
     with open(lock_path, "w", encoding="utf-8") as handle:
         if fcntl is not None:
-            fcntl.flock(handle, fcntl.LOCK_EX)
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX if wait else fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as err:
+                raise LockHeld(f"{lock_path} is locked") from err
         try:
             yield
         finally:

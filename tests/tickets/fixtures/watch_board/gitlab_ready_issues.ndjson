@@ -1,0 +1,2 @@
+{"iid": 12, "title": "Reject emails with no domain", "web_url": "https://gitlab.example.com/group/project/-/issues/12", "author": {"username": "user-pm"}, "references": {"full": "group/project#12"}}
+{"iid": 3, "title": "Unrelated board item", "web_url": "https://gitlab.example.com/group/other/-/issues/3", "author": null, "references": {"full": "group/other#3"}}
