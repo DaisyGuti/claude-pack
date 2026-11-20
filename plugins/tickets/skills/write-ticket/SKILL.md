@@ -120,8 +120,8 @@ are fine, nothing is created. Filing is this skill's whole job, and the person w
 command or asked for a ticket in chat has asked for it, so file without a further confirmation.
 
 1. **ensure-label** for each label that may be missing (run, model, `project:<repo>`, blocked),
-   with the registry's colour and description for its own rows and the ones ticket-labels.md
-   gives for `project:<repo>` ("Label colours and descriptions"). Area labels are never created.
+   with the registry's color and description for its own rows and the ones ticket-labels.md
+   gives for `project:<repo>` ("Label colors and descriptions"). Area labels are never created.
 2. **create-issue** with the title, body file and labels (this also adds it to the board).
 3. **set-priority**, then **set-lane**. When the ticket is blocked, **comment** with the
    `Blocked: dependency` comment.

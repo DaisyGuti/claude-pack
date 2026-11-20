@@ -233,8 +233,8 @@ gh project item-edit --project-id <tracker_ids.project_id> --id <item_ref> \
   --single-select-option-id <tracker_ids.priority_options[priority value]>
 ```
 
-Label mode: run **ensure-label** for the value (colour and description from
-ticket-labels.md, "Label colours and descriptions"), take the issue's labels from **read-issue**, then add the value and
+Label mode: run **ensure-label** for the value (color and description from
+ticket-labels.md, "Label colors and descriptions"), take the issue's labels from **read-issue**, then add the value and
 remove every other registry priority value the issue carries, in one edit:
 
 ```bash

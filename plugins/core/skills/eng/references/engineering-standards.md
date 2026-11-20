@@ -238,17 +238,19 @@ shape, say so in one line.
 **Review every change adversarially, in at most two rounds, before the tests run.** Read the
 diff as an engineer who wants it rejected.
 
-- **Round one** is your own read against the checklist below, with the DRY pass ("Say each
-  thing once") and the docs pass. Fix what you find.
 - **A separate reader reviews every change, whatever its size.** `core:reviewer`, a read-only
-  agent that did not write the code, reviews the diff in round one or round two. Your own read
-  never counts as the adversarial review. When the reviewer cannot run (the agent is
-  unavailable, or it answers `could not review` again after you supply what it named), review
-  the diff yourself, say in the report and the review body that no independent review ran, and
-  list that as a follow-up.
-- **At most two rounds.** Round two runs only when the reviewer has not run yet or round one's
-  fixes changed behaviour, and it reviews the fixed diff. After round two's fixes the change
-  lands with no third review, and every finding still open becomes a follow-up.
+  agent that did not write the code, reviews the diff. Your own read never counts as the
+  adversarial review.
+- **Round one** is your own read against the checklist below, with the DRY pass ("Say each
+  thing once") and the docs pass, then `core:reviewer` on the diff. Fix what holds up.
+- **Round two** runs only when round one's fixes changed behaviour: `core:reviewer` reads the
+  fixed diff, its brief adding round one's findings and what you did with each.
+- **At most two rounds.** After round two's fixes the change lands with no third review, and
+  every finding still open becomes a follow-up. The exception is a P0 or P1 you agree with and
+  cannot fix: it stops the landing, and you report it.
+- **When the reviewer cannot run** (the agent is unavailable, or it answers `could not review`
+  again after you supply what it named), review the diff yourself, say in the report and the
+  review body that no independent review ran, and list that as a follow-up.
 
 The checklist:
 

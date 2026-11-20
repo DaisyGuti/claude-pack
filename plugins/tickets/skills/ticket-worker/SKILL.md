@@ -77,7 +77,8 @@ Paths used below (read them as `<scripts>` and `<data>`):
    named in the report. There is no flag for one child alone: to work it by itself, detach it
    from its parent first. An issue with no parent, or a parent with `batch` false, is a
    single. The batch branch is `batch/<parent number>-<area>-solo`, and a direct run never
-   sets `resumed`, so a batch never starts from a branch already on the remote.
+   sets `resumed`, so a batch never starts from a branch already on the remote. The one
+   exception is a resume after a locked signing key (section 4).
 
 ## 3. Choose the model
 
@@ -122,12 +123,15 @@ with `status` `blocked_sandbox`, the `reason` `signing key locked`, and the tree
 unlock the key in their own terminal, for example by signing one test message so the agent
 caches the passphrase. When they say it is unlocked, that clears the hold: **remove-label** the
 blocked label, **comment** `Unblocked: signing key unlocked.`, and send the same dispatch
-message again with `resume_worktrees` set from the result's `worktree_paths`. The resumed
+message again with `resume_worktrees` set from the result's `worktree_paths` and `resumed`
+`true`. The resumed
 worker commits the staged change and carries on from section 7 of its contract; the review and
 the gates already ran. In a later session, the user re-runs this skill on the issue and says
 the key is unlocked. Then the blocked label does not stop step 2 when the ticket's latest
-`Blocked:` comment is the signing-key stop: find the worktree with `git worktree list` (the
-one on the branch `solo-ticket-<n>`, or the batch branch), and resume the same way.
+`Blocked:` comment is the signing-key stop: find each repo's worktree with `git worktree list`
+in that repo's clone (the one on `solo-ticket-<n>`, a `-r2` or `-r3` form of it, or the batch
+branch), and resume the same way. When a repo has none, the staged change is gone: say so, and
+the user removes the blocked label and runs the ticket again from the start.
 
 ## 5. Turn on Auto-fix
 

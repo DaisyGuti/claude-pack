@@ -83,8 +83,9 @@ it does not fix (unless the finding is wrong), each `TODO` left in code, unteste
 assumption to confirm and pre-existing problem it noticed. Once the review is open it checks
 the tracker for an existing ticket (and comments there if it finds one), otherwise files a
 backlog ticket in the `write-ticket` shape, assigned to the same person, that links the review.
-It moves the card to review before it files, and files at most five new tickets per run; the
-rest go as one list in its comment on the ticket for a person to file. They are listed under "Follow-ups" in its report and in the `RESULT` line's `follow_up_refs`.
+It moves the card to review before it files, and files a capped number of new tickets per run
+(the worker sets the cap); the rest go as one list in its comment on the ticket for a person to
+file. They are listed under "Follow-ups" in its report and in the `RESULT` line's `follow_up_refs`.
 
 When a commit cannot be signed because the signing key is locked and no terminal can unlock
 it, the worker keeps its change staged and holds the ticket at once (`blocked_sandbox`) without

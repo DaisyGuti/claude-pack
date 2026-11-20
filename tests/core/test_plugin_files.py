@@ -264,6 +264,7 @@ def test_every_change_gets_core_reviewer_in_at_most_two_rounds():
     rule = standards[standards.index(f"**{title}.**") :]
     rule = rule[: rule.index("**Land the work")]
     assert "reviews every change, whatever its size" in rule
+    assert "cannot fix: it stops the landing" in rule
     assert "Your own read never counts as the adversarial review" in rule
     assert "**At most two rounds.**" in rule and "no third review" in rule
     assert 'the DRY pass ("Say each thing once")' in rule
@@ -273,5 +274,6 @@ def test_every_change_gets_core_reviewer_in_at_most_two_rounds():
     ]
     assert "Small diff" not in step and "whatever the diff's size" in step
     assert "**Round one.**" in step and "**Round two,**" in step and "no third round" in step
+    assert "Small diff" not in eng
     reviewer = _flat(PLUGIN / "agents" / "reviewer.md")
     assert "A round-two brief also carries round one's findings" in reviewer

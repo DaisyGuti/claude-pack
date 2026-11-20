@@ -143,7 +143,7 @@ reason decided it. The role names come from the registry.
 - **GitHub in field mode** (**capture-board**'s `priority_mode`). The field and a label
   named exactly like the field's option are kept in step, and the field wins.
   - Field set: the label is added if missing (**ensure-label** with the priority
-    label's colour and description from ticket-labels.md, then **add-label**), and any other priority label
+    label's color and description from ticket-labels.md, then **add-label**), and any other priority label
     is removed (**remove-label**).
   - Field empty, exactly one priority label: **set-priority** from that label.
   - Neither, or several labels and no field: judge it, set both, and note the

@@ -180,11 +180,13 @@ def test_worker_moves_the_card_before_filing_a_capped_set_of_follow_ups() -> Non
     assert "at most five new tickets per run" in after
     assert "Not filed, for a person to file:" in after
     hold = body[body.index("**Holding the ticket.**") : body.index("**Item handle.**")]
-    assert hold.index("**set-lane** with role `blocked`") < hold.index("under the same cap")
-    assert hold.index("under the same cap") < hold.index("**comment** once")
+    # A blocked label never sits without its comment, so the Blocked comment precedes filing.
+    assert hold.index("**set-lane** with role `blocked`") < hold.index("3. **comment** once")
+    assert hold.index("3. **comment** once") < hold.index("under the same cap")
+    assert hold.index("under the same cap") < hold.index("**comment** once more")
     held = body[body.index("## 9. Needs manual action") : body.index("## 10. Final report")]
-    assert held.index("5. **set-lane** with role `blocked`") < held.index("6. **File the follow")
-    assert held.index("6. **File the follow") < held.index("7. **comment** once")
+    assert held.index("5. **set-lane** with role `blocked`") < held.index("6. **comment** once")
+    assert held.index("6. **comment** once") < held.index("7. **File the follow")
     assert "`over the per-run cap`" in body[body.index("## 10. Final report") :]
 
 
@@ -193,15 +195,16 @@ def test_the_worker_reviews_in_at_most_two_rounds_with_core_reviewer_every_time(
     review = body[body.index("**Pre-commit review.**") : body.index("**Commit.**")]
     assert "at most two rounds" in review and "whatever its size" in review
     assert "its DRY pass included" in review
-    assert "run round two" in review and "There is no third round" in review
+    assert "Round two, when the rule calls for it" in review
+    assert "spawn it once more" in review
     assert "no independent review ran" in review
 
 
-def test_label_colours_live_once_in_ticket_labels() -> None:
-    """The project and priority label colour and description are defined once; every writer
+def test_label_colors_live_once_in_ticket_labels() -> None:
+    """The project and priority label color and description are defined once; every writer
     points there, the worker's follow-up filing included."""
     labels = flat(PLUGIN / "references" / "ticket-labels.md")
-    section = labels[labels.index("## Label colours and descriptions") :]
+    section = labels[labels.index("## Label colors and descriptions") :]
     assert "| `project:<repo>` | `ededed` | `Product: <repo>` |" in section
     assert "| A priority value used as a label | `ededed` | `Priority: <name>` |" in section
     writers = [
@@ -214,7 +217,7 @@ def test_label_colours_live_once_in_ticket_labels() -> None:
     for path in writers:
         text = flat(path)
         assert "ededed" not in text and "Product: <repo>" not in text, path
-        assert "colour and description" in text, path
+        assert "color and description" in text, path
 
 
 def test_write_ticket_ready_plans_before_the_ready_lane() -> None:

@@ -472,7 +472,7 @@ In review: <R>
 Waiting for a later batch slot: <Wb>
   #186 <repo> (parent <ref>: over Batch size; or: another repo than the parent's)
 Follow-ups: <F>
-  #201 <repo>: <title> (from #190; a `not_filed` item is listed with its error)
+  #201 <repo>: <title> (from #190; a `not_filed` item is listed with its reason)
 Blocked: <M>
   #50 <repo>: blocked_push_rejected: non-fast-forward (worktree: ...)
   #189 <repo>: needs_manual_action: create the product for plan B and set PRICE_ID_B

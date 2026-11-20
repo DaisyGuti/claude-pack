@@ -215,15 +215,16 @@ repo, in this order:
 
 1. **ensure-label** for `project.labels.blocked` (name, color, description), then **add-label**.
 2. **set-lane** with role `blocked`.
-3. When the follow-up list is not empty and the tracker is reachable, file the items as
+3. **comment** once, in the shape of the Blocked section of `files.labels`, with the kind from
+   the stop: `failure` quotes the exact error and what you tried; `decision` lists the
+   options, each with its consequence, and recommends one; `live action` is section 9's
+   comment. It goes before any filing, so a blocked label never sits without its comment.
+4. When the follow-up list is not empty and the tracker is reachable, file the items as
    section 7's step 4 describes, under the same cap, ending Context with
    `Found in <repo>#<n> (no review opened).` in place of a review link. A resumed run starts
    from the ticket's comments and the branch, so an item already filed is found by the search
-   there.
-4. **comment** once, in the shape of the Blocked section of `files.labels`, with the kind from
-   the stop: `failure` quotes the exact error and what you tried; `decision` lists the
-   options, each with its consequence, and recommends one; `live action` is section 9's
-   comment. It names the follow-ups filed and lists any over the cap for a person to file.
+   there. Then **comment** once more, short: `Follow-ups:` with the number and title of each
+   ticket filed, and any items over the cap as one list for a person to file.
 
 Always include an "Unblocks when:" line.
 
@@ -292,7 +293,8 @@ leaves: a `TODO` left in code, a path you did not test, an assumption that needs
 a pre-existing problem you noticed along the way. Section 7 adds every review finding you do
 not fix. Never widen the change to avoid a ticket: a problem outside this ticket's scope is
 listed, not fixed. Each item on the list becomes a follow-up ticket once the review is open
-(section 7); a note in the review body or the report does not count. A run that stops before a
+(section 7), up to that section's per-run cap, and the rest are listed in the ticket comment for
+a person to file; a note in the review body or the report does not count. A run that stops before a
 review opens files them when it holds the ticket (section 4) and links the ticket in place of a
 review.
 
@@ -382,14 +384,14 @@ before committing or pushing any of them, so a stop here leaves every tree uncom
    wrong gets a one-line reason in the review summary and no ticket. Every other finding you
    do not fix, declined or deferred, goes on the follow-up list with a one-line reason. After
    any fix, stage again and rerun the gates that cover the fixed files, a single run on the
-   merged tree; a failure is `blocked_tests_failed`. When the fixes changed behaviour, run
-   round two: spawn `core:reviewer` once more per repo on the fixed staged diff, its brief
-   adding round one's findings and what you did with each, and handle its findings the same
-   way. There is no third round: a finding still open after round two's fixes goes on the
-   follow-up list, except a P0 or P1, which step 4 covers.
+   merged tree; a failure is `blocked_tests_failed`. Round two, when the rule calls for it,
+   spawns `core:reviewer` once more per repo on the fixed staged diff and is handled the same
+   way. After it, a finding still open goes on the follow-up list, except a P0 or P1, which
+   step 4 covers.
 4. A P0 or P1 finding you agree with but cannot fix stops the run with
    `status=blocked_review_findings`, naming the finding and what you tried. Commit nothing.
-5. When the reply is `could not review`, or the spawn itself fails (the `core` plugin is not
+5. When the reply is `could not review`, supply what it names as missing and spawn it once
+   more. When it still cannot review, or the spawn itself fails (the `core` plugin is not
    enabled, the `Agent` tool is unavailable, or the concurrent-agent limit refuses it), review
    the staged diff yourself for the same things (correctness, security, tests, blast radius,
    unrequested scope, and the standards rules the reviewer checks). Say in the review body
@@ -443,9 +445,8 @@ Then, on the owning repo:
    in `in_progress`. The issue stays open and unlabelled. The board moves before any filing, so
    a run that runs out of turns while filing still leaves the ticket in review.
 4. **File the follow-ups**, one ticket per item on the follow-up list, in the repo the item
-   concerns (the owning repo when it spans several), at most five new tickets per run. Each
-   new ticket costs about eight tracker calls, and the cap keeps filing from using up the run's
-   turns. A comment on an existing ticket does not count toward it. Items past the cap are not
+   concerns (the owning repo when it spans several), at most five new tickets per run, so
+   filing cannot use up the run's turns. A comment on an existing ticket does not count toward it. Items past the cap are not
    filed: the comment in step 5 lists them for a person to file, and the result records each
    as `not_filed` with the reason `over the per-run cap`. For each item, in list order:
    - **search-issues** on its keywords for a ticket that already covers it, then **read-issue**
@@ -462,8 +463,8 @@ Then, on the owning repo:
      fix what it prints; when it still fails on the second run, record the item as not filed
      with its output.
    - Labels and board, judged by `files.labels` (Priority, Run label, Model label):
-     **ensure-label** for the run label, the model label and `project:<repo>` (its colour and
-     description from `files.labels`, "Label colours and descriptions"), then
+     **ensure-label** for the run label, the model label and `project:<repo>` (its color and
+     description from `files.labels`, "Label colors and descriptions"), then
      **create-issue**, **set-priority**, **set-lane** with role `backlog`, and **assign** to
      `assignee`, the source ticket's assignee. Never the blocked label and never the ready lane.
    - Delete the temporary file. A write that fails is not a stop: the review is open. Carry on
@@ -533,9 +534,7 @@ Then, on the owning repo:
 4. **Label the issue** (not the review) with the blocked label: **ensure-label**, then
    **add-label**.
 5. **set-lane** with role `blocked`.
-6. **File the follow-ups** as section 7's step 4 describes, under the same cap, with the held
-   review's link as the found-in link.
-7. **comment** once, in the `Blocked: live action` shape: what was built and verified (per repo
+6. **comment** once, in the `Blocked: live action` shape: what was built and verified (per repo
    when multi-repo), every review link, the exact live action as concretely as the acceptance
    criteria allow, and what done looks like:
 
@@ -552,9 +551,11 @@ Then, on the owning repo:
    Once that is done: remove the blocked label from the review and from #<n>, merge the review,
    and close #<n>.
 
-   Follow-ups: <number and title each, or none; then any over the cap, for a person to file>.
    ```
 
+7. **File the follow-ups** as section 7's step 4 describes, under the same cap, with the held
+   review's link as the found-in link, then the short `Follow-ups:` comment section 4's step 4
+   describes.
 8. Report `status=needs_manual_action` with a `reason` naming the live action.
 
 Stop. Section 7's ordinary review and comment never run for this ticket, and section 8's

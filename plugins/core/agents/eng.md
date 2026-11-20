@@ -120,10 +120,10 @@ start line.
 7. **Consider the next version up,** once, when the simple version works. The standards file
    says how.
 8. **Review your diff adversarially, in at most two rounds, before the verification run.**
-   The standards file's review rule sets the rounds, and it holds whatever the diff's size.
+   The standards file's review rule sets the rounds, the stop on an unfixable P0 or P1 and the
+   fallback when the reviewer cannot run, and it holds whatever the diff's size.
    - **Round one.** Run the standards file's review checklist in full on your own diff, its
-     DRY pass and docs pass included, and spawn `core:reviewer`, a read-only reader that did
-     not write the code. Use `model: "sonnet"`, or `model: "opus"` when the diff touches
+     DRY pass and docs pass included, and spawn `core:reviewer`. Use `model: "sonnet"`, or `model: "opus"` when the diff touches
      authentication, authorization, payments, personal data, secrets, migrations or deletion.
      Its brief names the command that prints the diff (`git diff <base>...HEAD`, or
      `git diff HEAD` for uncommitted work), what the change is meant to do, and the repo's
@@ -131,12 +131,9 @@ start line.
      A finding that is wrong gets a one-line reason in the report, and
      every other finding you do not fix, declined or deferred, is a follow-up (see Report).
      A reply that says it could not review is not a pass: supply what it names as missing
-     and run it once more. When it still cannot review, review inline, and say in the report
-     that no independent review ran.
-   - **Round two,** only when round one's fixes changed behaviour: spawn `core:reviewer` once
-     more on the fixed diff, its brief adding round one's findings and what you did with
-     each. There is no third round: a finding still open after round two's fixes is a
-     follow-up.
+     and run it once more.
+   - **Round two,** only when round one's fixes changed behaviour, as the rule says. There is
+     no third round.
    - Fix what you find before step 9, so the checks run on the fixed state.
 9. **Verify, then land.**
    - Commit the change by path, then merge the base branch into yours
