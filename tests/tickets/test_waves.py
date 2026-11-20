@@ -2,25 +2,12 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import subprocess
 import sys
 from pathlib import Path
-from types import ModuleType
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "plugins" / "tickets" / "scripts"
-
-
-def load_script(name: str) -> ModuleType:
-    """Import plugins/tickets/scripts/<name>.py (the scripts are not a package)."""
-    spec = importlib.util.spec_from_file_location(f"tickets_{name}", SCRIPTS / f"{name}.py")
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[f"tickets_{name}"] = module
-    spec.loader.exec_module(module)
-    return module
-
+from tickets_helpers import SCRIPTS, load_script
 
 waves = load_script("waves")
 
@@ -93,7 +80,7 @@ def test_files_are_read_as_plans_write_them() -> None:
         "   - docs/guide.md\n2. **Pattern to reuse**: `src/other.py`\n"
     )
     loose = {"ref": "#1", "title": "Fix login", "repo": "acme/app", "plan": plan}
-    assert waves.files_to_touch(plan) == ["src/auth/login.py", "docs/guide.md"]
+    assert waves.files_to_touch(plan) == [(None, "src/auth/login.py"), (None, "docs/guide.md")]
     assert cut([loose, unit("#2", "src/auth/"), unit("#3", "src/other.py")]) == [
         ["#1", "#3"],
         ["#2"],
@@ -143,3 +130,40 @@ def test_the_same_input_gives_the_same_waves(tmp_path: Path) -> None:
         for _ in range(3)
     }
     assert len(runs) == 1
+
+
+def plan_with(files: str) -> dict:
+    plan = f"### Final Plan\n\n- **Files to touch**: {files}\n- **Acceptance**: done."
+    return {"ref": "#9", "title": "Fix a thing", "repo": "acme/app", "plan": plan}
+
+
+def test_a_repo_qualified_path_belongs_to_that_repo() -> None:
+    entry = plan_with("`other: src/a.py`, `acme/third: src/b.py`, `src/c.py`")
+    assert waves.parse_unit(entry).files == {
+        ("acme/other", "src/a.py"),
+        ("acme/third", "src/b.py"),
+        ("acme/app", "src/c.py"),
+    }
+
+
+def test_a_unit_in_another_repo_does_not_collide_on_the_same_path() -> None:
+    mine, theirs = unit("#1", "src/a.py"), plan_with("`other: src/a.py`")
+    assert cut([mine, theirs]) == [["#1", "#9"]]
+
+
+def test_only_flaky_or_broken_ci_titles_come_first() -> None:
+    def first(title: str) -> bool:
+        return waves.parse_unit({**unit("#1", "a/b.py"), "title": title}).first
+
+    assert first("Document the CI/CD pipeline") is False
+    assert first("Investigate login test flakiness") is True
+    assert first("Fix the CI build") is True
+
+
+def test_a_scoped_label_counts_by_its_last_part() -> None:
+    assert waves.parse_unit(unit("#1", "a/b.py", labels=("type:flaky-test",))).first
+
+
+def test_url_fragments_and_plain_backticked_words_are_not_files() -> None:
+    entry = plan_with("see example.com/y and `pytest`, `True`, then `src/a.py` and `Makefile.mk`")
+    assert waves.files_to_touch(entry["plan"]) == [(None, "src/a.py"), (None, "Makefile.mk")]

@@ -2,29 +2,16 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import subprocess
 import sys
 from pathlib import Path
-from types import ModuleType
 
 import pytest
+from tickets_helpers import load_script
 
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "tickets"
 SCRIPTS = PLUGIN / "scripts"
-
-
-def load_script(name: str) -> ModuleType:
-    """Import plugins/tickets/scripts/<name>.py (the scripts are not a package)."""
-    if str(SCRIPTS) not in sys.path:
-        sys.path.insert(0, str(SCRIPTS))
-    spec = importlib.util.spec_from_file_location(f"tickets_{name}", SCRIPTS / f"{name}.py")
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[f"tickets_{name}"] = module
-    spec.loader.exec_module(module)
-    return module
 
 
 registry = load_script("registry")
