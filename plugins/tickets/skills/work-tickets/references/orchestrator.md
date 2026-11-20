@@ -115,7 +115,7 @@ is not dispatched and its batch goes without it.
   keeps running and the freed slot takes the next ticket.
 - **One poller.** The board watcher the user runs, when there is one, is the only thing that
   polls the tracker: `<scripts>/watch_board.py --data-dir <data>`, or their own watcher printing
-  the same lines (`<scripts>/../references/board-watcher.md` has the events and how to run it). Act on its
+  the same lines (`${CLAUDE_PLUGIN_ROOT}/references/board-watcher.md` has the events and how to run it). Act on its
   events (`QUEUE_READY`, a review ready to queue; `MERGED`, a review that merged) and never start
   a polling loop per review or per worker: the tracker's rate limit is shared
   by every worker and session on the machine. A review reported ready to queue is enqueued from

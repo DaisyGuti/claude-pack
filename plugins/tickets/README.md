@@ -115,8 +115,8 @@ than the planning does.
 ## Board watcher
 
 `scripts/watch_board.py` reads the board every minute and prints one line per new event:
-`NEW_READY` (a ticket in Ready), `CONFLICT` and `QUEUE_READY` (an open review conflicts, or can
-be queued) and `MERGED`. It only reads the tracker. Run it alongside `work-tickets`, which acts on
+`NEW_READY` (a ticket in Ready), `CONFLICT` and `QUEUE_READY` (one of your open reviews
+conflicts, or can be queued) and `MERGED`. It only reads the tracker. Run it alongside `work-tickets`, which acts on
 its lines instead of polling:
 
 ```bash

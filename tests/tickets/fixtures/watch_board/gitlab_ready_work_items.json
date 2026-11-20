@@ -10,8 +10,20 @@
             "iid": "12",
             "title": "Reject emails with no domain",
             "webUrl": "https://gitlab.example.com/acme/shop-app/-/work_items/12",
+            "author": {
+              "username": "acme-pm"
+            },
             "namespace": {
               "fullPath": "acme/shop-app"
+            }
+          },
+          {
+            "iid": "3",
+            "title": "Unrelated board item",
+            "webUrl": "https://gitlab.example.com/acme/other/-/work_items/3",
+            "author": null,
+            "namespace": {
+              "fullPath": "acme/other"
             }
           }
         ]

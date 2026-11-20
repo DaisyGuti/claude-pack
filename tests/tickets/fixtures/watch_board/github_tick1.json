@@ -12,8 +12,22 @@
                 "number": 12,
                 "title": "Reject emails with no domain",
                 "url": "https://github.com/acme/shop-app/issues/12",
+                "author": {
+                  "login": "acme-pm"
+                },
                 "repository": {
                   "nameWithOwner": "acme/shop-app"
+                }
+              }
+            },
+            {
+              "content": {
+                "number": 3,
+                "title": "Unrelated board item",
+                "url": "https://github.com/acme/other/issues/3",
+                "author": null,
+                "repository": {
+                  "nameWithOwner": "acme/other"
                 }
               }
             },
@@ -25,7 +39,6 @@
       }
     },
     "r0": {
-      "nameWithOwner": "acme/shop-app",
       "pullRequests": {
         "pageInfo": {
           "hasNextPage": false
@@ -35,6 +48,13 @@
             "number": 7,
             "title": "Signup: reject emails with no domain",
             "url": "https://github.com/acme/shop-app/pull/7",
+            "author": {
+              "login": "acme-dev"
+            },
+            "isDraft": false,
+            "labels": {
+              "nodes": []
+            },
             "mergeable": "CONFLICTING",
             "mergeStateStatus": "DIRTY"
           },
@@ -42,6 +62,13 @@
             "number": 8,
             "title": "Cart: keep the coupon after sign-in",
             "url": "https://github.com/acme/shop-app/pull/8",
+            "author": {
+              "login": "acme-dev"
+            },
+            "isDraft": false,
+            "labels": {
+              "nodes": []
+            },
             "mergeable": "MERGEABLE",
             "mergeStateStatus": "CLEAN"
           },
@@ -49,8 +76,64 @@
             "number": 9,
             "title": "Docs: setup steps",
             "url": "https://github.com/acme/shop-app/pull/9",
-            "mergeable": "UNKNOWN",
-            "mergeStateStatus": "UNKNOWN"
+            "author": {
+              "login": "acme-dev"
+            },
+            "isDraft": false,
+            "labels": {
+              "nodes": []
+            },
+            "mergeable": "MERGEABLE",
+            "mergeStateStatus": "BLOCKED"
+          },
+          {
+            "number": 10,
+            "title": "Search: faster suggestions",
+            "url": "https://github.com/acme/shop-app/pull/10",
+            "author": {
+              "login": "someone-else"
+            },
+            "isDraft": false,
+            "labels": {
+              "nodes": []
+            },
+            "mergeable": "MERGEABLE",
+            "mergeStateStatus": "CLEAN"
+          },
+          {
+            "number": 11,
+            "title": "Checkout: new layout",
+            "url": "https://github.com/acme/shop-app/pull/11",
+            "author": {
+              "login": "acme-dev"
+            },
+            "isDraft": true,
+            "labels": {
+              "nodes": []
+            },
+            "mergeable": "MERGEABLE",
+            "mergeStateStatus": "CLEAN"
+          },
+          {
+            "number": 13,
+            "title": "Orders: export to CSV",
+            "url": "https://github.com/acme/shop-app/pull/13",
+            "author": {
+              "login": "acme-dev"
+            },
+            "isDraft": false,
+            "labels": {
+              "nodes": [
+                {
+                  "name": "blocked"
+                },
+                {
+                  "name": "enhancement"
+                }
+              ]
+            },
+            "mergeable": "MERGEABLE",
+            "mergeStateStatus": "CLEAN"
           }
         ]
       }

@@ -62,32 +62,35 @@ def config(tracker: str, lane_mode: str | None = None) -> object:
     )
     ready = {"github": "Ready", "labels": "status::ready", "status": "Ready"}[lane_mode or tracker]
     host = "github.com" if tracker == "github" else "gitlab.example.com"
-    return watch.Config(tracker, host, board, ready, lane_mode, ("acme/shop-app",))
+    blocked = "blocked" if tracker == "github" else "status::blocked"
+    return watch.Config(tracker, host, board, ready, lane_mode, blocked, ("acme/shop-app",))
 
 
 # Per tracker: (config, the answers on tick 1, the answers once review 8 has merged).
 SIGNED_IN = {"auth status": ""}
+GITHUB_USER = {"github.com user": fixture("github_user.json")}
+GITLAB_USER = {"gitlab.example.com user": fixture("gitlab_user.json")}
 GITLAB_LABEL_READY = {"/issues?": fixture("gitlab_ready_issues.ndjson")}
 GITLAB_STATUS_READY = {"graphql": fixture("gitlab_ready_work_items.json")}
-GITLAB_TICK_1 = {"merge_requests?": fixture("gitlab_mrs_tick1.ndjson")}
+GITLAB_TICK_1 = {"author_username=acme-dev": fixture("gitlab_mrs_tick1.ndjson")}
 GITLAB_TICK_2 = {
-    "merge_requests?": fixture("gitlab_mrs_tick2.ndjson"),
+    "author_username=acme-dev": fixture("gitlab_mrs_tick2.ndjson"),
     "merge_requests/8": fixture("gitlab_mr_8.json"),
 }
 CASES = {
     "github": (
         config("github"),
-        {"graphql": fixture("github_tick1.json")},
+        {**SIGNED_IN, **GITHUB_USER, "graphql": fixture("github_tick1.json")},
         {"graphql": fixture("github_tick2.json"), "pulls/8": fixture("github_pull_8.json")},
     ),
     "gitlab-labels": (
         config("gitlab", "labels"),
-        {**GITLAB_LABEL_READY, **GITLAB_TICK_1},
+        {**SIGNED_IN, **GITLAB_USER, **GITLAB_LABEL_READY, **GITLAB_TICK_1},
         {**GITLAB_LABEL_READY, **GITLAB_TICK_2},
     ),
     "gitlab-status": (
         config("gitlab", "status"),
-        {**GITLAB_STATUS_READY, **GITLAB_TICK_1},
+        {**SIGNED_IN, **GITLAB_USER, **GITLAB_STATUS_READY, **GITLAB_TICK_1},
         {**GITLAB_STATUS_READY, **GITLAB_TICK_2},
     ),
 }
@@ -102,9 +105,12 @@ def test_each_event_fires_once(case: str) -> None:
     cfg, first, merged = CASES[case]
     cli = RecordedCli(first)
     tracker = watch.TRACKERS[cfg.tracker](cfg, cli)
+    tracker.sign_in()
 
     events, memory = watch.tick(tracker, watch.Memory.empty())
-    # Ticket 12 is Ready, review 7 conflicts, review 8 can be queued; review 9 is still pending.
+    # Ticket 12 is Ready (ticket 3 is in a repo outside the registry), review 7 conflicts and
+    # review 8 can be queued. Review 9 is pending; 10 is someone else's, 11 a draft and 13
+    # blocked, so none of them is ready to queue whatever its merge state says.
     assert events_of(events) == [("CONFLICT", 7), ("NEW_READY", 12), ("QUEUE_READY", 8)]
     repeat, memory = watch.tick(tracker, memory)
     assert repeat == []
@@ -120,7 +126,7 @@ def test_each_event_fires_once(case: str) -> None:
 def test_nothing_changed_prints_nothing_across_runs(
     filled_registry: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    cli = RecordedCli({**SIGNED_IN, "graphql": fixture("github_tick1.json")})
+    cli = RecordedCli({**SIGNED_IN, **GITHUB_USER, "graphql": fixture("github_tick1.json")})
     args = ["--data-dir", str(filled_registry), "--once"]
 
     assert watch.main(args, run=cli) == 0
@@ -129,7 +135,7 @@ def test_nothing_changed_prints_nothing_across_runs(
         Event.CONFLICT, Event.NEW_READY, Event.QUEUE_READY
     ]  # fmt: skip
     name, payload = lines[0].split(" ", 1)
-    assert set(json.loads(payload)) == {"repo", "number", "title", "url"}
+    assert set(json.loads(payload)) == {"repo", "number", "title", "url", "author"}
 
     # A second run reads the memory the first one saved, so the same board prints nothing.
     assert watch.main(args, run=cli) == 0
@@ -146,3 +152,21 @@ def test_refuses_when_not_signed_in(
     assert out.out == ""
     assert "gh auth login --hostname github.com" in out.err
     assert cli.calls == ["gh auth status --hostname github.com"]
+
+
+def test_a_recomputed_merge_state_does_not_fire_again() -> None:
+    """GitHub reads UNKNOWN while it recomputes a review after its target branch moved."""
+    ready = json.loads(fixture("github_tick1.json"))
+    recomputing = json.loads(fixture("github_tick1.json"))
+    for pr in recomputing["data"]["r0"]["pullRequests"]["nodes"]:
+        pr["mergeable"] = pr["mergeStateStatus"] = "UNKNOWN"
+    cli = RecordedCli({**SIGNED_IN, **GITHUB_USER, "graphql": json.dumps(ready)})
+    tracker = watch.GitHub(config("github"), cli)
+    tracker.sign_in()
+    _, memory = watch.tick(tracker, watch.Memory.empty())
+
+    cli.responses["graphql"] = json.dumps(recomputing)
+    events, memory = watch.tick(tracker, memory)
+    assert events == []
+    cli.responses["graphql"] = json.dumps(ready)
+    assert watch.tick(tracker, memory)[0] == []

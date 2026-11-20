@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Watch the board and print one line per new event: the one poller `work-tickets` acts on.
 
-Every tick reads the registry's Ready lane and the open reviews of each registry repo, then
-prints a line for each event it has not printed before. It only reads the tracker; nothing
-here moves a card, labels an issue or merges a review. The event contract (names, fields and
-when each fires) is `references/board-watcher.md`.
+Every tick reads the registry's Ready lane and the signed-in user's open reviews in each
+registry repo, then prints a line for each event it has not printed before. It only reads the
+tracker; nothing here moves a card, labels an issue or merges a review. The event contract
+(names, fields and when each fires) is `references/board-watcher.md`.
 
 What it has printed is kept in `<data dir>/state/board-watcher-<board>.json`, so a restart
 does not print the same events again.
@@ -15,13 +15,14 @@ Usage:
 Exit codes: 0 stopped (after one tick with --once, or by Ctrl-C), 1 the tick failed (--once
 only; a long-running watcher reports the failure and tries again next tick), 2 bad input or an
 unreadable memory file, 3 the registry is missing or incomplete, 4 the tracker CLI is not
-signed in.
+signed in or its login was rejected.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -46,17 +47,23 @@ DEFAULT_INTERVAL = 60
 # Every worker and session on the machine shares the tracker's rate limit.
 MIN_INTERVAL = 10
 MEMORY_SCHEMA = 1
-# SIMPLIFIED: one page per list (100 Ready tickets, 100 open reviews per repo); a longer list
-# is reported on stderr and the rest is not watched. The full version pages through the list.
+# SIMPLIFIED: a GraphQL list reads one page (100 Ready tickets; 100 open pull requests per
+# GitHub repo) and says so on stderr when there are more. The full version pages through it.
 PAGE = 100
+# How gh and glab report a rejected or missing login, and a missing object, in their errors.
+# UNVERIFIED: glab's exact 401 wording; both CLIs print the HTTP status code, which this reads.
+AUTH_FAILURE = re.compile(r"\b401\b|Bad credentials|not been authenticated|not logged in")
+NOT_FOUND = re.compile(r"\b404\b")
 
-# The tracker values that decide a review's readiness. GitHub: PullRequest.mergeable and
+# The tracker values that decide a review's merge state. GitHub: PullRequest.mergeable and
 # mergeStateStatus (CLEAN: checks and required reviews pass; HAS_HOOKS: the same, plus hooks).
 GITHUB_CONFLICTING = "CONFLICTING"
+GITHUB_UNKNOWN = "UNKNOWN"
 GITHUB_QUEUE_READY = frozenset({"CLEAN", "HAS_HOOKS"})
 # GitLab: a merge request's detailed_merge_status.
 GITLAB_CONFLICT = "conflict"
 GITLAB_QUEUE_READY = "mergeable"
+GITLAB_UNKNOWN = frozenset({"checking", "unchecked", "preparing", "approvals_syncing"})
 # `locked` is the moment a merge completes; the merge request is still open.
 GITLAB_OPEN_STATES = frozenset({"opened", "locked"})
 GITLAB_LANE_STATUS = "status"
@@ -74,7 +81,8 @@ class Event(StrEnum):
 class Readiness(StrEnum):
     """Where an open review stands for the merge queue."""
 
-    PENDING = "pending"  # a draft, checks running or failing, approvals missing, not computed
+    PENDING = "pending"  # a draft, blocked, checks running or failing, approvals missing
+    UNKNOWN = "unknown"  # the tracker is recomputing it (after the target branch moved)
     CONFLICT = "conflict"
     QUEUE_READY = "queue_ready"
 
@@ -98,6 +106,7 @@ class Item:
     number: int
     title: str
     url: str
+    author: str | None  # None for an account the tracker no longer has
 
     @property
     def key(self) -> str:
@@ -106,8 +115,12 @@ class Item:
 
 @dataclass(frozen=True)
 class Review:
+    """An open review as the tracker reports it, before the watcher's own rules apply."""
+
     item: Item
-    readiness: Readiness
+    merge: Readiness
+    draft: bool
+    labels: frozenset[str]
 
 
 @dataclass(frozen=True)
@@ -177,8 +190,26 @@ def run_cli(argv: Sequence[str]) -> str:
     proc = subprocess.run(list(argv), capture_output=True, text=True, check=False)
     if proc.returncode != 0:
         detail = (proc.stderr or proc.stdout).strip()
-        raise TrackerError(f"'{' '.join(argv[:3])}' exited {proc.returncode}: {detail}")
+        # argv[4] is the API path or `graphql`; the query text after it is too long to show.
+        raise TrackerError(f"'{' '.join(argv[:5])}' exited {proc.returncode}: {detail}")
     return proc.stdout
+
+
+def parse_json(text: str) -> Any:
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as err:
+        raise TrackerError(f"the tracker CLI printed something that is not JSON ({err})") from err
+
+
+def encode(path: str) -> str:
+    """A group or project path as one URL segment (`a/b` -> `a%2Fb`)."""
+    return quote(path, safe="")
+
+
+def warn_truncated(what: str) -> None:
+    print(f"watch_board.py: {what} has more than {PAGE}; only the first {PAGE} are watched",
+          file=sys.stderr)  # fmt: skip
 
 
 @dataclass(frozen=True)
@@ -190,6 +221,7 @@ class Config:
     board: dict[str, str]
     ready_lane: str
     lane_mode: str | None
+    blocked_label: str
     repos: tuple[str, ...]
 
     @classmethod
@@ -200,59 +232,83 @@ class Config:
             board=reg["board"],
             ready_lane=reg["lanes"]["ready"],
             lane_mode=reg["lane_mode"],
+            blocked_label=reg["labels"]["blocked"]["name"],
             repos=tuple(repo["remote"] for repo in reg["repos"]),
         )
 
 
 class Tracker:
-    """What both trackers share: the CLI, the sign-in check and the board's memory key."""
+    """What both trackers share: the CLI, the sign-in, and the rules that decide which reviews
+    and tickets the watcher reports. Each tracker reads its own snapshot and review state."""
 
     cli: str
 
     def __init__(self, config: Config, run: Run) -> None:
         self.config = config
         self.run = run
+        self.login = ""
+
+    def api(self, *args: str) -> str:
+        return self.run([self.cli, "api", "--hostname", self.config.host, *args])
+
+    def sign_in(self) -> None:
+        """Confirm the CLI's login on the registry's host and remember the account name, whose
+        reviews (opened by the user or by the workers, which use the same login) are watched."""
+        try:
+            self.run([self.cli, "auth", "status", "--hostname", self.config.host])
+            self.login = self.read_login()
+        except TrackerError as err:
+            raise WatchError(self.auth_message(err), EXIT_AUTH) from err
+
+    def auth_message(self, err: TrackerError) -> str:
+        host = self.config.host
+        return (
+            f"error: {self.cli} is not signed in to {host}, or its login was rejected ({err}). "
+            f"Run '{self.cli} auth login --hostname {host}', then start the watcher again."
+        )
+
+    def snapshot(self) -> Snapshot:
+        """The Ready tickets in the registry's repos, and the signed-in user's open reviews."""
+        raw = self.read_snapshot()
+        repos = set(self.config.repos)
+        mine = self.login.casefold()
+        return Snapshot(
+            tuple(item for item in raw.ready if item.repo in repos),
+            tuple(r for r in raw.reviews if (r.item.author or "").casefold() == mine),
+        )
+
+    def readiness(self, review: Review) -> Readiness:
+        """A draft or a review carrying the blocked label is never ready, whatever it reports."""
+        if review.draft or self.config.blocked_label in review.labels:
+            return Readiness.PENDING
+        return review.merge
+
+    def state_of(self, item: Item) -> ReviewState:
+        """Whether a review that left the open list merged. One deleted since reads as closed."""
+        try:
+            return self.read_review_state(item.repo, item.number)
+        except TrackerError as err:
+            if NOT_FOUND.search(str(err)):
+                return ReviewState.CLOSED
+            raise
 
     @property
     def board_key(self) -> str:
         raise NotImplementedError
 
-    def signed_in(self) -> bool:
-        try:
-            self.run([self.cli, "auth", "status", "--hostname", self.config.host])
-        except TrackerError:
-            return False
-        return True
-
-    def auth_message(self) -> str:
-        host = self.config.host
-        return (
-            f"error: {self.cli} is not signed in to {host}, or its login was rejected. Run "
-            f"'{self.cli} auth login --hostname {host}', then start the watcher again."
-        )
-
-    def snapshot(self) -> Snapshot:
+    def read_login(self) -> str:
         raise NotImplementedError
 
-    def review_state(self, repo: str, number: int) -> ReviewState:
+    def read_snapshot(self) -> Snapshot:
         raise NotImplementedError
 
-
-def warn_truncated(what: str) -> None:
-    print(f"watch_board.py: {what} has more than {PAGE}; only the first {PAGE} are watched",
-          file=sys.stderr)  # fmt: skip
-
-
-def parse_json(text: str) -> Any:
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as err:
-        raise TrackerError(f"the tracker CLI printed something that is not JSON ({err})") from err
+    def read_review_state(self, repo: str, number: int) -> ReviewState:
+        raise NotImplementedError
 
 
 class GitHub(Tracker):
     """GitHub Projects (v2): one GraphQL query per tick reads the Ready lane and every repo's
-    open pull requests; REST reads a pull request that left the open list."""
+    open pull requests; REST reads the login and a pull request that left the open list."""
 
     cli = "gh"
 
@@ -260,11 +316,12 @@ class GitHub(Tracker):
     def board_key(self) -> str:
         return f"{self.config.board['owner']}/{self.config.board['number']}"
 
-    def api(self, *args: str) -> Any:
-        return parse_json(self.run([self.cli, "api", "--hostname", self.config.host, *args]))
+    def read_login(self) -> str:
+        return str(parse_json(self.api("user"))["login"])
 
-    def snapshot(self) -> Snapshot:
+    def read_snapshot(self) -> Snapshot:
         # Repo names travel as variables, never spliced into the query text.
+        aliases = [(f"r{index}", remote) for index, remote in enumerate(self.config.repos)]
         declarations = ["$owner: String!", "$number: Int!", "$filter: String!"]
         fields = [
             "-f", f"owner={self.config.board['owner']}",
@@ -272,68 +329,86 @@ class GitHub(Tracker):
             "-f", f'filter=is:issue is:open status:"{self.config.ready_lane}"',
         ]  # fmt: skip
         selections = []
-        for index, remote in enumerate(self.config.repos):
+        for alias, remote in aliases:
             owner, name = remote.split("/", 1)
-            declarations += [f"$o{index}: String!", f"$n{index}: String!"]
-            selections.append(f"r{index}: repository(owner: $o{index}, name: $n{index}) {{...R}}")
-            fields += ["-f", f"o{index}={owner}", "-f", f"n{index}={name}"]
+            declarations += [f"${alias}o: String!", f"${alias}n: String!"]
+            selections.append(f"{alias}: repository(owner: ${alias}o, name: ${alias}n) {{...R}}")
+            fields += ["-f", f"{alias}o={owner}", "-f", f"{alias}n={name}"]
         query = (
             f"query({', '.join(declarations)}) {{\n"
             "  owner: repositoryOwner(login: $owner) { ... on ProjectV2Owner {\n"
             f"    projectV2(number: $number) {{ items(first: {PAGE}, query: $filter) {{\n"
             "      pageInfo { hasNextPage }\n"
             "      nodes { content { ... on Issue {\n"
-            "        number title url repository { nameWithOwner } } } } } } } }\n"
+            "        number title url author { login } repository { nameWithOwner } } } } } } } }\n"
             f"  {' '.join(selections)}\n"
             "}\n"
-            f"fragment R on Repository {{ nameWithOwner pullRequests(states: OPEN, first: {PAGE},\n"
+            f"fragment R on Repository {{ pullRequests(states: OPEN, first: {PAGE},\n"
             "  orderBy: {field: UPDATED_AT, direction: DESC}) {\n"
             "  pageInfo { hasNextPage }\n"
-            "  nodes { number title url mergeable mergeStateStatus } } }\n"
+            "  nodes { number title url author { login } isDraft\n"
+            "    labels(first: 50) { nodes { name } } mergeable mergeStateStatus } } }\n"
         )
-        data = self.api("graphql", "-f", f"query={query}", *fields)["data"]
+        data = parse_json(self.api("graphql", "-f", f"query={query}", *fields))["data"]
         project = (data["owner"] or {}).get("projectV2")
         if project is None:
             raise TrackerError(f"board {self.board_key} was not found or this login cannot read it")
         if project["items"]["pageInfo"]["hasNextPage"]:
             warn_truncated(f"the {self.config.ready_lane} lane")
         ready = tuple(
-            Item(c["repository"]["nameWithOwner"], c["number"], c["title"], c["url"])
+            Item(
+                c["repository"]["nameWithOwner"],
+                c["number"],
+                c["title"],
+                c["url"],
+                github_author(c),
+            )
             for node in project["items"]["nodes"]
             if (c := node["content"])  # empty for an item this login cannot see
         )
         reviews: list[Review] = []
-        for index, remote in enumerate(self.config.repos):
-            repo = data[f"r{index}"]
-            if repo is None:
+        for alias, remote in aliases:
+            if data[alias] is None:
                 raise TrackerError(f"repo {remote} was not found or this login cannot read it")
-            pulls = repo["pullRequests"]
+            pulls = data[alias]["pullRequests"]
             if pulls["pageInfo"]["hasNextPage"]:
                 warn_truncated(f"{remote}'s open pull request list")
             reviews += [
-                Review(Item(remote, pr["number"], pr["title"], pr["url"]), self.readiness(pr))
+                Review(
+                    Item(remote, pr["number"], pr["title"], pr["url"], github_author(pr)),
+                    self.merge_state(pr),
+                    pr["isDraft"],
+                    frozenset(label["name"] for label in pr["labels"]["nodes"]),
+                )
                 for pr in pulls["nodes"]
             ]
         return Snapshot(ready, tuple(reviews))
 
     @staticmethod
-    def readiness(pr: dict[str, Any]) -> Readiness:
+    def merge_state(pr: dict[str, Any]) -> Readiness:
         if pr["mergeable"] == GITHUB_CONFLICTING:
             return Readiness.CONFLICT
+        if GITHUB_UNKNOWN in (pr["mergeable"], pr["mergeStateStatus"]):
+            return Readiness.UNKNOWN
         if pr["mergeStateStatus"] in GITHUB_QUEUE_READY:
             return Readiness.QUEUE_READY
         return Readiness.PENDING
 
-    def review_state(self, repo: str, number: int) -> ReviewState:
-        pull = self.api(f"repos/{repo}/pulls/{number}")
+    def read_review_state(self, repo: str, number: int) -> ReviewState:
+        pull = parse_json(self.api(f"repos/{repo}/pulls/{number}"))
         if pull["merged"]:
             return ReviewState.MERGED
         return ReviewState(pull["state"])
 
 
+def github_author(node: dict[str, Any]) -> str | None:
+    """A GraphQL node's author login; null for a deleted account."""
+    return node["author"]["login"] if node["author"] else None
+
+
 class GitLab(Tracker):
     """GitLab issue boards, in label or Status lane mode (`references/trackers/gitlab.md`):
-    REST for label lanes and merge requests, one GraphQL query for Status lanes."""
+    REST for label lanes and merge requests (every page), one GraphQL query for Status lanes."""
 
     cli = "glab"
 
@@ -341,21 +416,27 @@ class GitLab(Tracker):
     def board_key(self) -> str:
         return f"{self.config.board['path']}/{self.config.board['board']}"
 
-    def api(self, *args: str) -> str:
-        return self.run([self.cli, "api", "--hostname", self.config.host, *args])
+    def read_login(self) -> str:
+        return str(parse_json(self.api("user"))["username"])
 
     def ndjson(self, path: str) -> list[dict[str, Any]]:
         out = self.api("--paginate", "--output", "ndjson", path)
         return [parse_json(line) for line in out.splitlines() if line.strip()]
 
-    def snapshot(self) -> Snapshot:
+    def read_snapshot(self) -> Snapshot:
         reviews: list[Review] = []
         for remote in self.config.repos:
             mrs = self.ndjson(
-                f"projects/{quote(remote, safe='')}/merge_requests?state=opened&per_page={PAGE}"
+                f"projects/{encode(remote)}/merge_requests?state=opened&per_page={PAGE}"
+                f"&author_username={encode(self.login)}"
             )
             reviews += [
-                Review(Item(remote, mr["iid"], mr["title"], mr["web_url"]), self.readiness(mr))
+                Review(
+                    Item(remote, mr["iid"], mr["title"], mr["web_url"], gitlab_author(mr)),
+                    self.merge_state(mr),
+                    mr["draft"],
+                    frozenset(mr["labels"]),
+                )
                 for mr in mrs
             ]
         return Snapshot(self.ready(), tuple(reviews))
@@ -364,14 +445,14 @@ class GitLab(Tracker):
         board = self.config.board
         if self.config.lane_mode == GITLAB_LANE_STATUS:
             return self.ready_by_status(board["path"])
-        scope = f"{board['scope']}s"  # the registry's group or project
+        scope = f"{board['scope']}s"  # the registry's group or project, which it checks
         issues = self.ndjson(
-            f"{scope}/{quote(board['path'], safe='')}/issues?state=opened&per_page={PAGE}"
-            f"&labels={quote(self.config.ready_lane, safe='')}"
+            f"{scope}/{encode(board['path'])}/issues?state=opened&per_page={PAGE}"
+            f"&labels={encode(self.config.ready_lane)}"
         )
         return tuple(
             Item(issue["references"]["full"].rsplit("#", 1)[0], issue["iid"], issue["title"],
-                 issue["web_url"])
+                 issue["web_url"], gitlab_author(issue))
             for issue in issues
         )  # fmt: skip
 
@@ -381,7 +462,7 @@ class GitLab(Tracker):
             "  workItems(state: opened, types: [ISSUE], includeDescendants: true,\n"
             f"            status: {{name: $lane}}, first: {PAGE}) {{\n"
             "    pageInfo { hasNextPage }\n"
-            "    nodes { iid title webUrl namespace { fullPath } } } } }\n"
+            "    nodes { iid title webUrl author { username } namespace { fullPath } } } } }\n"
         )
         out = self.api(
             "graphql", "-f", f"path={path}", "-f", f"lane={self.config.ready_lane}",
@@ -394,22 +475,30 @@ class GitLab(Tracker):
         if items["pageInfo"]["hasNextPage"]:
             warn_truncated(f"the {self.config.ready_lane} lane")
         return tuple(
-            Item(node["namespace"]["fullPath"], int(node["iid"]), node["title"], node["webUrl"])
+            Item(node["namespace"]["fullPath"], int(node["iid"]), node["title"], node["webUrl"],
+                 gitlab_author(node))
             for node in items["nodes"]
-        )
+        )  # fmt: skip
 
     @staticmethod
-    def readiness(mr: dict[str, Any]) -> Readiness:
-        if mr["has_conflicts"] or mr["detailed_merge_status"] == GITLAB_CONFLICT:
+    def merge_state(mr: dict[str, Any]) -> Readiness:
+        status = mr["detailed_merge_status"]
+        if mr["has_conflicts"] or status == GITLAB_CONFLICT:
             return Readiness.CONFLICT
-        if mr["detailed_merge_status"] == GITLAB_QUEUE_READY:
+        if status in GITLAB_UNKNOWN:
+            return Readiness.UNKNOWN
+        if status == GITLAB_QUEUE_READY:
             return Readiness.QUEUE_READY
         return Readiness.PENDING
 
-    def review_state(self, repo: str, number: int) -> ReviewState:
-        mr = parse_json(self.api(f"projects/{quote(repo, safe='')}/merge_requests/{number}"))
-        state = mr["state"]
+    def read_review_state(self, repo: str, number: int) -> ReviewState:
+        state = parse_json(self.api(f"projects/{encode(repo)}/merge_requests/{number}"))["state"]
         return ReviewState.OPEN if state in GITLAB_OPEN_STATES else ReviewState(state)
+
+
+def gitlab_author(node: dict[str, Any]) -> str | None:
+    """A GitLab object's author username; null for a deleted account."""
+    return node["author"]["username"] if node["author"] else None
 
 
 TRACKERS: dict[str, type[Tracker]] = {"github": GitHub, "gitlab": GitLab}
@@ -423,23 +512,38 @@ def tick(tracker: Tracker, memory: Memory) -> tuple[list[tuple[Event, Item]], Me
     snapshot = tracker.snapshot()
     holding: dict[Event, dict[str, Item]] = {event: {} for event in CONDITION_EVENTS}
     holding[Event.NEW_READY] = {item.key: item for item in snapshot.ready}
+    # A review whose state is unknown this tick (being recomputed, or missing from the open
+    # list while still open) keeps what it held, so its event does not fire a second time.
+    unsure: list[Item] = []
     for review in snapshot.reviews:
-        if event := READINESS_EVENT.get(review.readiness):
+        readiness = tracker.readiness(review)
+        if readiness is Readiness.UNKNOWN:
+            unsure.append(review.item)
+        elif event := READINESS_EVENT.get(readiness):
             holding[event][review.item.key] = review.item
+    open_after = {review.item.key: review.item for review in snapshot.reviews}
+    merged: list[Item] = []
+    for key, item in memory.open_reviews.items():
+        if key in open_after:
+            continue
+        state = tracker.state_of(item)
+        if state is ReviewState.MERGED:
+            merged.append(item)
+        elif state is ReviewState.OPEN:
+            open_after[key] = item
+            unsure.append(item)
+    for item in unsure:
+        for event in READINESS_EVENT.values():
+            if item.key in memory.active[event]:
+                holding[event][item.key] = item
     events = [
         (event, item)
         for event, items in holding.items()
         for key, item in items.items()
         if key not in memory.active[event]
     ]
-    open_now = {review.item.key: review.item for review in snapshot.reviews}
-    events += [
-        (Event.MERGED, item)
-        for key, item in memory.open_reviews.items()
-        if key not in open_now
-        and tracker.review_state(item.repo, item.number) is ReviewState.MERGED
-    ]
-    return events, Memory({event: frozenset(items) for event, items in holding.items()}, open_now)
+    events += [(Event.MERGED, item) for item in merged]
+    return events, Memory({event: frozenset(items) for event, items in holding.items()}, open_after)
 
 
 def event_line(event: Event, item: Item) -> str:
@@ -448,6 +552,33 @@ def event_line(event: Event, item: Item) -> str:
 
 def memory_path(data_dir: Path, tracker: Tracker) -> Path:
     return data_dir / "state" / f"board-watcher-{safe_name(tracker.board_key)}.json"
+
+
+def watch(
+    tracker: Tracker, path: Path, interval: int, once: bool, sleep: Callable[[float], None]
+) -> int:
+    memory = Memory.load(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    while True:
+        try:
+            events, after = tick(tracker, memory)
+        except TrackerError as err:
+            if AUTH_FAILURE.search(str(err)):
+                raise WatchError(tracker.auth_message(err), EXIT_AUTH) from err
+            # Anything else (the network, a rate limit, a 5xx) is retried on the next tick.
+            print(f"watch_board.py: the tick failed: {err}", file=sys.stderr, flush=True)
+            if once:
+                return EXIT_TICK_FAILED
+        else:
+            for event, item in events:
+                print(event_line(event, item), flush=True)
+            # Printed before saved: a crash between the two prints those events again on
+            # restart (at least once), never loses one.
+            save(path, after.to_json())
+            memory = after
+        if once:
+            return 0
+        sleep(interval)
 
 
 def main(argv: list[str], run: Run = run_cli, sleep: Callable[[float], None] = time.sleep) -> int:
@@ -459,6 +590,7 @@ def main(argv: list[str], run: Run = run_cli, sleep: Callable[[float], None] = t
         "--interval", type=int, default=DEFAULT_INTERVAL,
         help=f"seconds between ticks (default {DEFAULT_INTERVAL}, at least {MIN_INTERVAL})",
     )  # fmt: skip
+    # For a scheduler, and for a quick look at what the board holds now.
     parser.add_argument("--once", action="store_true", help="run one tick, then exit")
     args = parser.parse_args(argv)
     if args.interval < MIN_INTERVAL:
@@ -474,38 +606,12 @@ def main(argv: list[str], run: Run = run_cli, sleep: Callable[[float], None] = t
         registry.parse(registry.registry_path(data_dir).read_text(encoding="utf-8"))
     )
     tracker = TRACKERS[config.tracker](config, run)
-    if not tracker.signed_in():
-        print(tracker.auth_message(), file=sys.stderr)
-        return EXIT_AUTH
-    path = memory_path(data_dir, tracker)
     try:
-        memory = Memory.load(path)
+        tracker.sign_in()
+        return watch(tracker, memory_path(data_dir, tracker), args.interval, args.once, sleep)
     except WatchError as err:
-        print(f"error: {err}", file=sys.stderr)
+        print(err if err.code == EXIT_AUTH else f"error: {err}", file=sys.stderr)
         return err.code
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    try:
-        while True:
-            try:
-                events, after = tick(tracker, memory)
-            except TrackerError as err:
-                if not tracker.signed_in():
-                    print(tracker.auth_message(), file=sys.stderr)
-                    return EXIT_AUTH
-                print(f"watch_board.py: the tick failed: {err}", file=sys.stderr, flush=True)
-                if args.once:
-                    return EXIT_TICK_FAILED
-            else:
-                for event, item in events:
-                    print(event_line(event, item), flush=True)
-                # Printed before saved: a crash between the two prints those events again on
-                # restart (at least once), never loses one.
-                save(path, after.to_json())
-                memory = after
-            if args.once:
-                return 0
-            sleep(args.interval)
     except KeyboardInterrupt:
         return 0
 
