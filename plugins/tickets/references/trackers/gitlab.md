@@ -636,12 +636,15 @@ glab api --hostname <host> -X PUT "projects/<enc>/issues/<n>" -f milestone_id=<i
 ```
 
 It succeeds only when the milestone read back is the one asked for. Checked 2026-11-20 on a
-self-managed host: the command ran on an open issue already in a group milestone, with that
-milestone's `id`. The read-back `jq -e` passed (exit 0), the global id **read-milestone**
-prints matched the REST `milestone.id`, and the write added no timeline event because the
-milestone did not change. Moving an issue from no milestone, or from another milestone, has
-not been run; it uses the same endpoint and field. An issue number that does not exist prints
-`{"message":"404 Not found"}` and exits 1.
+self-managed host, on real open issues with a group milestone's `id`:
+
+- From no milestone: the read-back `jq -e` passed (exit 0) and the issue's timeline shows one
+  milestone `add` event.
+- Already in that milestone: the read-back passed and no timeline event was added.
+
+The global id **read-milestone** prints matches the REST `milestone.id`. Moving an issue from
+one milestone to another uses the same endpoint and field. An issue number that does not exist
+prints `{"message":"404 Not found"}` and exits 1.
 
 ## close-issue
 
