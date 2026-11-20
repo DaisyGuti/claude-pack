@@ -247,38 +247,50 @@ def flat(path: Path) -> str:
     return " ".join(path.read_text(encoding="utf-8").split())
 
 
-def test_worker_merges_the_base_then_runs_only_the_gates_the_diff_touches_once() -> None:
-    """Ticket workers share one laptop: the default branch is merged in first (never a rebase),
-    then the gates the diff touches run once on the merged tree, and the full suite is left to
-    CI. The worker says in its report which gates ran."""
+STANDARDS = "plugins/core/skills/eng/references/engineering-standards.md"
+
+
+def worker_section_6() -> str:
+    """Section 6 of the ticket worker, whitespace collapsed."""
     body = flat(PLUGIN / "agents" / "ticket-worker.md")
-    section = body[body.index("**Merge the default branch, then run the gates once.**") :]
-    section = section[: section.index("**Waiting.**")]
+    return body[body.index("## 6. Implement and test") : body.index("## 7. Land the work")]
+
+
+def test_worker_merges_the_base_with_its_own_command_and_points_to_the_standards() -> None:
+    """The merge command and `blocked_merge_conflict` are the worker's own; the merge-then-gate
+    order, never rebasing and the report of which gates ran come from the standards file."""
+    body = flat(PLUGIN / "agents" / "ticket-worker.md")
+    section = worker_section_6()
     assert "merge --no-edit origin/<default_branch>" in section
+    assert "`blocked_merge_conflict`" in section
+    assert "standards' merge rule" in section
     assert "Never rebase." in section
-    assert "only the ones the diff touches" in section
-    assert "Do not run the repo's full suite: CI runs it on the review." in section
-    assert "Never run the gates before the merge and again after it" in section
-    assert section.index("merge --no-edit") < section.index("run the gates on the merged tree")
+    assert section.index("merge --no-edit") < section.index("Then run the gates once")
     assert "which gates ran and which were left to CI" in section
     assert "the gates that ran and the ones left to CI" in body[body.index("## 10. Final report") :]
 
 
-def test_worker_waits_by_pid_never_by_a_self_matching_pgrep() -> None:
+def test_worker_section_6_points_to_the_standards_for_the_shared_rules() -> None:
+    """Parallelism, waiting on a condition and environment variables are stated once, in the
+    standards file the worker reads in full, not restated where the two copies would drift."""
+    section = worker_section_6()
+    for pointer in (
+        "standards' parallelism rule",
+        "standards' waiting rule",
+        "standards' example-env rule",
+    ):
+        assert pointer in section
+    for restated in ('pgrep -f "<text>"', "fake timers", "`.env.example`"):
+        assert restated not in section
+    standards = flat(PLUGIN.parents[1] / STANDARDS)
+    for rule in (
+        "**Run tests and gates at the repo's full parallelism.**",
+        "**Wait on a condition, never on a fixed sleep or a self-matching command.**",
+        "**Every new environment variable lands in the repo's example env file.**",
+    ):
+        assert rule in standards
     body = flat(PLUGIN / "agents" / "ticket-worker.md")
-    section = body[body.index("**Waiting.**") : body.index("## 7. Land the work")]
-    assert 'Never loop on `pgrep -f "<text>"`' in section
-    assert "by its PID" in section and "completion of the background job" in section
-    assert "nothing you started is still running" in section
     assert "nothing you started is still running" in body[body.index("## 10. Final report") :]
-
-
-def test_worker_tests_wait_on_conditions_not_sleeps() -> None:
-    body = flat(PLUGIN / "agents" / "ticket-worker.md")
-    section = body[body.index("**Tests.**") : body.index("**Gate command**")]
-    assert "never on a fixed sleep" in section
-    assert "fake timers for polling code" in section
-    assert "only as a backstop against a hang" in section
 
 
 def test_a_locked_signing_key_blocks_the_ticket_and_the_orchestrator_resumes_all_together() -> None:
@@ -344,13 +356,12 @@ def test_model_label_is_sized_to_the_plans_scope() -> None:
     assert "Size it to the plan's scope" in planning
 
 
-def test_grooming_reports_ready_in_waves_that_share_no_file() -> None:
+def test_grooming_cuts_ready_waves_with_the_script() -> None:
     grooming = flat(PLUGIN / "skills" / "daily-grooming" / "references" / "grooming.md")
     summary = grooming[grooming.index("- **Ready (in waves)**") : grooming.index("- **Backlog")]
-    assert "touch no file in common" in summary
-    assert "at most the pool size" in summary
-    assert "Flaky-test and CI tickets come first" in summary
-    assert "adds a migration gets a wave to itself" in summary
+    # The rules live in waves.py (tests/tickets/test_waves.py); the summary must run it.
+    assert "`<scripts>/waves.py <file> --pool <N>`" in summary
+    assert (PLUGIN / "scripts" / "waves.py").is_file()
 
 
 def test_ticket_worker_skill_turns_on_auto_fix_for_an_opened_review() -> None:
@@ -389,6 +400,8 @@ def test_cleanup_after_each_ticket_is_in_the_instructions() -> None:
     assert "One removal per worktree at a time" in cleanup
     assert "`could not open directory`" in cleanup and "`is not a working tree`" in cleanup
     assert cleanup.index("Re-check first") < cleanup.index("another removal may be in progress")
+    # Lock start times are compared as parsed datetimes, never as padded strings (#47).
+    assert "strptime" in procedure and "never as strings" in procedure
     assert "**Cleanup**" in procedure[procedure.index("**7d.**") :]
     worker = (PLUGIN / "agents" / "ticket-worker.md").read_text(encoding="utf-8")
     final = worker[worker.index("## 10. Final report") :]

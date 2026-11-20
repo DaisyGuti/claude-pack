@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
+
+# `--import-mode=importlib` leaves this folder off sys.path; tests import tickets_helpers.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "tickets"
 

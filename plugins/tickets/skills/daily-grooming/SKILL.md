@@ -2,7 +2,7 @@
 name: daily-grooming
 description: Tidies the whole ticket board so that Ready means safe to dispatch. Settles closed and merged work to Done, flags duplicates, syncs priorities, promotes tickets to Ready, and plans and labels each Ready ticket (plan, priority, model, run), for every person's tickets on a GitHub Project or GitLab board. Use for "groom the board", "clean up my backlog", "get Ready in shape", "settle the finished tickets", even when the user names no lane or label. Try --dry-run first.
 argument-hint: "[--dry-run] [--convert-batch-labels] [--project N --owner OWNER] [--repo NAME] [--context FILE]"
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/registry.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve_model.py *)
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/registry.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve_model.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/waves.py *)
 ---
 
 # Daily grooming
@@ -43,7 +43,7 @@ Paths used below (read them as `<scripts>` and `<data>`):
 3. Read [grooming.md](${CLAUDE_SKILL_DIR}/references/grooming.md) in full. It holds the steps,
    in order: set up and capture the board; fetch the items and settle closed or merged work to
    done before anything else looks at it; flag duplicates; audit each open ticket, with the
-   priority sync; form batches; triage lanes and order the Ready lane; apply the changes; make
+   priority sync; group related tickets under batch and epic parents; triage lanes and order the Ready lane; apply the changes; make
    every Ready ticket dispatchable; print the summary. The batch steps run only when batching
    is on (`registry.py show` prints `batching`, and its `mode` is not `off`); they follow
    [batches.md](${CLAUDE_PLUGIN_ROOT}/references/batches.md), which you then read in full too.
@@ -83,5 +83,5 @@ Paths used below (read them as `<scripts>` and `<data>`):
   open blocker, and a planned, unblocked ticket goes there in the same pass, never left in the
   backlog.
 - **Duplicates and lane order are reported.** Duplicates and close candidates are listed for
-  a person and never closed or merged. The Ready order goes in the summary, in waves of tickets that share no
-  file, for someone to apply, since no tracker operation reorders a lane.
+  a person and never closed or merged. The Ready order goes in the summary, in the waves `<scripts>/waves.py` cuts after
+  related tickets are grouped, for someone to apply, since no tracker operation reorders a lane.

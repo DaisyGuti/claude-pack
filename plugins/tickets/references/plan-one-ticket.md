@@ -87,7 +87,7 @@ run, print what you would post and write nothing.
 
 About 200 words and about five minutes of work. One paragraph per section at most:
 
-- **Files to touch**: concrete paths, in each affected repo.
+- **Files to touch**: concrete paths, in each affected repo; write another repo's path in backticks as `other-repo: src/a.py`.
 - **Pattern to reuse**: the existing file or function the work should mirror.
 - **Acceptance**: the one or two checks that mean done.
 - **Blockers / dependencies**: only if real and current.

@@ -282,11 +282,8 @@ screens. Never import an aesthetic or audience from another product.
 affects build or dev workflow; file-level doc comments on new files, inline comments on
 complex logic, `TODO` markers where future work shows (each one you leave is a follow-up, see
 below); and the standards' docs pass, which also covers a README the change makes stale
-(new dependencies, endpoints or env vars, changed run instructions). Every environment
-variable the change creates also goes into the repo's committed example env file (`.env.example` or the
-repo's equivalent) in the same commit, with a one-line comment, its default and a placeholder,
-and never a real secret. Leave out only names the code clears or reads internally, build pins
-and test-only switches, and list those in the result.
+(new dependencies, endpoints or env vars, changed run instructions). Every new environment
+variable follows the standards' example-env rule; list the names you leave out in the result.
 
 **Follow-ups.** Keep a running list from here to the review of every known gap the change
 leaves: a `TODO` left in code, a path you did not test, an assumption that needs confirming, and
@@ -302,10 +299,8 @@ review.
 fixes, in the repo's existing location, naming and framework, and held to the standards' test
 rule (each test you delete or merge goes in the review body with its reason). Keep tests that
 reach a model provider on the repo's mocks; a live API call in a test can cost money, so add one only where
-the repo's own rules already do. A test you write waits on the condition it needs (a state
-reached, an event seen, fake timers for polling code), never on a fixed sleep. Keep a real
-timeout only as a backstop against a hang, sized well above the normal time, so the test also
-passes on a busy machine.
+the repo's own rules already do. Tests wait on a condition, never on a fixed sleep, as the
+standards' waiting rule says.
 
 **Gate command**, first match wins, per repo:
 
@@ -321,35 +316,28 @@ passes on a busy machine.
 Never hardcode a command. While you build, run only the one test or check you are working on.
 
 **Merge the default branch, then run the gates once.** When the change is ready, bring in the
-default branch first, so the gates see the code CI will see:
+default branch first, as the standards' merge rule says:
 `git -C $WT fetch origin <default_branch> && git -C $WT merge --no-edit origin/<default_branch>`.
 Never rebase. When git refuses the merge because your uncommitted files overlap the incoming
 ones, commit the change to the slot branch first (section 7's **Commit**), then merge, and run
 section 7's review before the push, on `git diff <base SHA>`, instead of before the commit. A
 conflict you cannot settle without guessing at someone else's intent is
-`blocked_merge_conflict`, naming the files. After the merge, rerun the repo's setup and check
-that every test path you name exists, as the standards' merge rule says.
+`blocked_merge_conflict`, naming the files.
 
-Then run the gates on the merged tree, once, inside `WT`: only the ones the diff touches. That
-is the tests that cover the changed code, the lint and type checks for the languages in the
-diff, and the build when the diff touches build inputs, together with any check the repo's rules
-require before a commit. Do not run the repo's full suite: CI runs it on the review. Never run
-the gates before the merge and again after it; the one run is on the merged tree. Say in the
-review body and the report which gates ran and which were left to CI.
+After the merge, rerun the repo's setup and check that every test path you name exists. Then run the gates once, inside `WT`, on the merged tree, as the standards' merge rule says,
+together with any check the repo's rules require before a commit. Say in the review body and
+the report which gates ran and which were left to CI.
 
-**Run at the repo's full parallelism.** Read how the chosen command parallelizes (its runner,
-its config, the framework's worker setting) and keep its default. Never lower the worker count
-without a reason you write in the result. Start independent checks (lint, type checks, tests)
-together and await them all. When you call a test framework directly on a subset, give it a
-temp folder inside `WT` (pytest `--basetemp`, a per-run `TMPDIR`) so runs in other slots cannot
-stall it. On failure stop with `blocked_tests_failed`, with a summary of the output; do
+**Parallelism.** Follow the standards' parallelism rule. When you call a test framework
+directly on a subset, give it a temp folder inside `WT` (pytest `--basetemp`, a per-run
+`TMPDIR`) so runs in other slots cannot stall it.
+
+**On failure.** Stop with `blocked_tests_failed`, with a summary of the output; do
 not commit, and leave the tree dirty. A test passed only if you ran it in `WT` and saw it pass;
 a timeout or unreadable output is a failure.
 
-**Waiting.** Wait on a process by its PID, or by the completion of the background job you
-started it as. Never loop on `pgrep -f "<text>"`: the pattern matches the loop's own command
-line, so it never ends. Before you hand back, with any status, make sure nothing you started
-is still running: a dev server, a watcher, a background test run. Stop each by its PID.
+**Waiting.** Follow the standards' waiting rule for processes. Before you hand back, with any
+status, make sure nothing you started is still running.
 
 ## 7. Land the work
 

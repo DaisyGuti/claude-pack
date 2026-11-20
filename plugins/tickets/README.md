@@ -50,9 +50,11 @@ Run any command again; it checks the registry and names whatever is still missin
    `--ready` it also plans the ticket and moves it to Ready once the plan is posted.
 2. `plan-ticket` or `daily-grooming` posts the plan and moves it to Ready. Ready means
    planned: a ticket is in Ready only with a plan and no open blocker, and a planned, unblocked
-   ticket is never left in the backlog. Grooming reports the Ready lane in groups, at most a
-   pool's worth, of tickets that share no file, flaky-test and CI tickets first and a
-   migration alone.
+   ticket is never left in the backlog. Grooming groups first, then splits: with batching on it
+   attaches related tickets to an epic or batch parent, and then a script cuts the Ready lane
+   into groups, the same on every run, of at most a pool's worth of units that share no file,
+   flaky-test and CI tickets first and a migration alone. A batch parent is one unit holding
+   its children's files.
 3. `work-tickets` (or `ticket-worker` for one issue) starts a worker on the model the label
    names. The worker moves the card to In progress, builds on its own branch in its own
    worktree, merges the default branch into its branch (never a rebase), runs once only the
