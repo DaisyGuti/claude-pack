@@ -154,11 +154,12 @@ descriptions when this section is in doubt.
 
 - The official `github` and `gitlab` plugins add MCP servers for repository and issue access.
   This plugin needs only the `gh` or `glab` command line signed in, so it works without them.
-- Each worker spawns the read-only `core:reviewer` on its staged diff before it commits, so a
-  worker runs one level of subagent below itself; the default nesting depth allows it. When
-  the spawn is refused (the `core` plugin is off, or the concurrent-subagent limit is reached)
-  the worker reviews the diff itself and says so. An `Agent(...)` restriction in a subagent's
-  `tools` is ignored, so "only `core:reviewer`" is a rule in the worker's body, not an
-  enforced allowlist. After a worker opens a review, the official
+- Each worker spawns the read-only `core:reviewer` on its diff before it lands, and may spawn
+  sub-workers for parts of a big change, so a worker runs one level of subagent below itself;
+  the default nesting depth allows it. When the reviewer's spawn is refused (the `core` plugin
+  is off, or the concurrent-subagent limit is reached) the worker reviews the diff itself and
+  says so; a refused sub-worker's unit is built inline. An `Agent(...)` restriction in a
+  subagent's `tools` is ignored, so which agents a worker starts is a rule in its body that
+  nothing enforces. After a worker opens a review, the official
   `code-review` and `pr-review-toolkit` plugins can still review the diff before a person
   merges.
