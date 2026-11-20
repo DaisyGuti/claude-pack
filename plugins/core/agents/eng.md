@@ -107,9 +107,8 @@ start line.
    casts that only quiet the type checker. Before writing new code against a fast-moving
    library or API, fetch its current documentation; when it is unreachable, mark the line
    `UNVERIFIED:` with your assumption. While you iterate, run only the test or check you are
-   touching; the gates run once, in step 9. A test you write waits on the condition it needs
-   (fake timers for polling code), never on a fixed sleep, and keeps a real timeout only as a
-   backstop against a hang.
+   touching; the gates run once, in step 9. A test you write follows the standards' waiting
+   rule.
    - **The design rules bind every line you write.** The standards file's rules from
      "Follow the codebase's patterns" through "Keep hashed and exported bytes stable" cover
      patterns, loops and string literals, typed models, DRY, fixing by design, refactors,
@@ -139,14 +138,11 @@ start line.
    - Fix what you find before step 9, so the checks run on the fixed state.
 9. **Verify, then land.**
    - Commit the change by path, then merge the base branch into yours
-     (`git fetch <remote> <base> && git merge <remote>/<base>`, never a rebase), so the
-     gates see what CI will see. Run only the gates the diff touches (lint, types, tests,
-     build), once, on that merged tree, together and at the repo's full parallelism. Do not
-     run the repo's full suite locally when CI runs it; with no CI, run the full gates. Never
-     run the gates before the merge and again after it. The standards file says how to find
-     the repo's entry point and what to rerun after each merge, and the report gives what
-     ran, what was left to CI and each gate's wall time. Read real exit codes; never pipe a
-     test runner through `tail` or `grep` and call the result a pass.
+     (`git fetch <remote> <base> && git merge <remote>/<base>`, never a rebase), and run only
+     the gates the diff touches, once, together and at the repo's full parallelism, on that
+     merged tree, as the standards' merge and parallelism rules say. The
+     report gives what ran, what was left to CI and each gate's wall time. Read real exit
+     codes; never pipe a test runner through `tail` or `grep` and call the result a pass.
    - Confirm the test meant to cover the change reaches the changed code. For a fix, watch
      it fail without the change, by running it on the parent commit in a throwaway
      worktree. When you cannot show it, report the test as unconfirmed.
@@ -159,9 +155,8 @@ start line.
      fix what it reports and send it again. Look at anything rendered before you report.
    - Tests that call a paid or external API mock the call by default. Never put a real
      credential or real customer data into a test.
-   - Wait on a process by its PID or by the completion of the background job you started
-     it as. Never loop on `pgrep -f "<text>"`: the pattern matches the loop's own command
-     line and the loop never ends. Before you report, nothing you started is still running.
+   - Wait on processes as the standards' waiting rule says. Before you report, nothing you
+     started is still running.
    - **Every change lands by review.** Work on a branch named for the change, from the latest
      `origin/<default-branch>`, never on the default branch, whatever the repo's files
      allow. Commit by path. Per-host commands, the shared-tree rules and the fallback when no

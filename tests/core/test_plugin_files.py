@@ -76,8 +76,6 @@ def test_gates_run_at_the_repos_full_parallelism():
     assert "- Run tests and gates at the repo's full parallelism" in standards
     assert "**Run tests and gates at the repo's full parallelism.**" in standards
     assert "Never lower the worker count without a stated reason" in standards
-    eng = (PLUGIN / "agents" / "eng.md").read_text(encoding="utf-8")
-    assert "at the repo's full parallelism" in eng
 
 
 def _flat(path):
@@ -92,10 +90,9 @@ def test_eng_merges_the_base_first_then_runs_only_the_gates_the_diff_touches_onc
     step = step[: step.index("- Confirm the test meant to cover the change")]
     assert "git fetch <remote> <base> && git merge <remote>/<base>" in step
     assert "never a rebase" in step
-    assert "Run only the gates the diff touches" in step
-    assert "Do not run the repo's full suite locally when CI runs it" in step
-    assert "Never run the gates before the merge and again after it" in step
-    assert step.index("merge the base branch") < step.index("Run only the gates")
+    assert "standards' merge and parallelism rules" in step
+    assert "only the gates the diff touches" in step and "full parallelism" in step
+    assert step.index("merge the base branch") < step.index("only the gates the diff touches")
     assert "which gates ran and which were left to CI" in eng[eng.index("## Report") :]
     standards = _flat(PLUGIN / "skills" / "eng" / "references" / "engineering-standards.md")
     assert (
@@ -111,9 +108,10 @@ def test_eng_merges_the_base_first_then_runs_only_the_gates_the_diff_touches_onc
 
 def test_eng_waits_on_conditions_and_leaves_nothing_running():
     eng = _flat(PLUGIN / "agents" / "eng.md")
-    assert "never on a fixed sleep" in eng and "fake timers for polling code" in eng
-    assert 'Never loop on `pgrep -f "<text>"`' in eng
+    assert eng.count("standards' waiting rule") >= 2
     assert "nothing you started is still running" in eng
+    for restated in ("fake timers", 'pgrep -f "<text>"', "fixed sleep"):
+        assert restated not in eng
     standards = _flat(PLUGIN / "skills" / "eng" / "references" / "engineering-standards.md")
     rule = standards[standards.index("**Wait on a condition") :]
     rule = rule[: rule.index("**Hold the industry standard")]
