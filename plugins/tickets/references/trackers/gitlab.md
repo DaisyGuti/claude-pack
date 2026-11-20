@@ -493,7 +493,7 @@ Checked the same way: the old priority label is gone, the new one is on, other l
 are untouched, and an issue with no priority label gets just the new one. `add_labels`
 creates a missing label on the fly (see Terms), so when the priority value is a project
 label of other repos only (see **capture-board**), run **ensure-label** in this issue's
-repo first, with the colour and description ticket-labels.md gives for a priority label.
+repo first, with the color and description ticket-labels.md gives for a priority label.
 
 ## add-label
 
@@ -635,9 +635,13 @@ glab api --hostname <host> -X PUT "projects/<enc>/issues/<n>" -f milestone_id=<i
   jq -e --argjson id <id> '.milestone.id == $id'
 ```
 
-It succeeds only when the milestone read back is the one asked for. UNVERIFIED: the write
-itself, run only against an issue number that does not exist (it prints
-`{"message":"404 Not found"}` and exits 1).
+It succeeds only when the milestone read back is the one asked for. Checked 2026-11-20 on a
+self-managed host: the command ran on an open issue already in a group milestone, with that
+milestone's `id`. The read-back `jq -e` passed (exit 0), the global id **read-milestone**
+prints matched the REST `milestone.id`, and the write added no timeline event because the
+milestone did not change. Moving an issue from no milestone, or from another milestone, has
+not been run; it uses the same endpoint and field. An issue number that does not exist prints
+`{"message":"404 Not found"}` and exits 1.
 
 ## close-issue
 
