@@ -10,6 +10,7 @@ behind them, so every skill assigns them the same way.
 - Run label
 - Model label
 - Blocked (the one way work is held)
+- Label colours and descriptions
 
 ## Priority
 
@@ -101,3 +102,16 @@ worker never closes an issue, so it never clears one. A person clears every othe
 remove the label, move the ticket back to the ready lane (or the backlog lane), and comment
 what changed. A blocked label with no `Blocked:` comment is never cleared automatically;
 whoever finds one asks on the ticket what it is waiting for.
+
+## Label colours and descriptions
+
+**ensure-label** creates a missing label with a colour and a description. The registry gives
+them for its own rows (run, model and blocked labels). Two kinds of label have no registry
+row, so every skill and agent that creates one uses these values:
+
+| Label | Colour | Description |
+| --- | --- | --- |
+| `project:<repo>` | `ededed` | `Product: <repo>` |
+| A priority value used as a label | `ededed` | `Priority: <name>` |
+
+Batch labels follow [batches.md](batches.md). Area labels are never created.

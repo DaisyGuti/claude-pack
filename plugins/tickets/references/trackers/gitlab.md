@@ -321,7 +321,7 @@ jq -c --argjson lanes '["<every lane value>"]' --argjson prios '["<every priorit
 Leave out `-f lane=` to list every lane. Issues come back newest first. A Status that is
 not a registry lane (Skip and Duplicate on the checked board) reads as `lane` null. The
 group form includes projects in subgroups (`includeDescendants`, ignored for a project
-path; checked: the group call returned issues of `rcf/dev-tools/*` projects). Checked on
+path; checked: the group call returned issues of projects in a subgroup). Checked on
 the group board: 459 open issues across 12 projects, every one with a Status, in about
 25 seconds; the `Ready` filter returned 25 in 3 seconds, the same 25 the unfiltered call
 put in Ready. The settle step's closed call is the same command with `-f state=closed`,
@@ -493,7 +493,7 @@ Checked the same way: the old priority label is gone, the new one is on, other l
 are untouched, and an issue with no priority label gets just the new one. `add_labels`
 creates a missing label on the fly (see Terms), so when the priority value is a project
 label of other repos only (see **capture-board**), run **ensure-label** in this issue's
-repo first, with color `ededed` and description `Priority: <name>`.
+repo first, with the colour and description ticket-labels.md gives for a priority label.
 
 ## add-label
 
