@@ -129,9 +129,11 @@ worker commits the staged change and carries on from section 7 of its contract; 
 the gates already ran. In a later session, the user re-runs this skill on the issue and says
 the key is unlocked. Then the blocked label does not stop step 2 when the ticket's latest
 `Blocked:` comment is the signing-key stop: find each repo's worktree with `git worktree list`
-in that repo's clone (the one on `solo-ticket-<n>`, a `-r2` or `-r3` form of it, or the batch
-branch), and resume the same way. When a repo has none, the staged change is gone: say so, and
-the user removes the blocked label and runs the ticket again from the start.
+in that repo's clone (the one on `solo-ticket-<n>`, or its `-r2` or `-r3` form), and resume the
+same way. When any repo in `repos` has none, the staged change is gone: resume nothing, say so,
+and the user removes the blocked label and runs the ticket again from the start. A batch
+resumes only in the session that started it; in a later session the user clears the blocked
+label on each held child and runs the batch again.
 
 ## 5. Turn on Auto-fix
 

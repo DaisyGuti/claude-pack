@@ -275,5 +275,6 @@ def test_every_change_gets_core_reviewer_in_at_most_two_rounds():
     assert "Small diff" not in step and "whatever the diff's size" in step
     assert "**Round one.**" in step and "**Round two,**" in step and "no third round" in step
     assert "Small diff" not in eng
+    assert "That one stops the run before step 9" in step
     reviewer = _flat(PLUGIN / "agents" / "reviewer.md")
     assert "A round-two brief also carries round one's findings" in reviewer

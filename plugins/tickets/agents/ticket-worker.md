@@ -220,7 +220,7 @@ repo, in this order:
    options, each with its consequence, and recommends one; `live action` is section 9's
    comment. It goes before any filing, so a blocked label never sits without its comment.
 4. When the follow-up list is not empty and the tracker is reachable, file the items as
-   section 7's step 4 describes, under the same cap, ending Context with
+   section 7's Review step 4 describes, under the same cap, ending Context with
    `Found in <repo>#<n> (no review opened).` in place of a review link. A resumed run starts
    from the ticket's comments and the branch, so an item already filed is found by the search
    there. Then **comment** once more, short: `Follow-ups:` with the number and title of each
@@ -550,12 +550,11 @@ Then, on the owning repo:
 
    Once that is done: remove the blocked label from the review and from #<n>, merge the review,
    and close #<n>.
-
    ```
 
-7. **File the follow-ups** as section 7's step 4 describes, under the same cap, with the held
-   review's link as the found-in link, then the short `Follow-ups:` comment section 4's step 4
-   describes.
+7. **File the follow-ups** as section 7's Review step 4 describes, under the same cap, with
+   the held review's link as the found-in link, then, when the list is not empty, the short
+   `Follow-ups:` comment section 4's step 4 describes.
 8. Report `status=needs_manual_action` with a `reason` naming the live action.
 
 Stop. Section 7's ordinary review and comment never run for this ticket, and section 8's

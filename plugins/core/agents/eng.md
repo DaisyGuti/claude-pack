@@ -129,7 +129,9 @@ start line.
      `git diff HEAD` for uncommitted work), what the change is meant to do, and the repo's
      rules files. Open the lines a finding cites before you act on it. Fix what holds up.
      A finding that is wrong gets a one-line reason in the report, and
-     every other finding you do not fix, declined or deferred, is a follow-up (see Report).
+     every other finding you do not fix, declined or deferred, is a follow-up (see Report),
+     except a P0 or P1 you agree with and cannot fix. That one stops the run before step 9:
+     commit, push and open nothing, and report it with what you tried.
      A reply that says it could not review is not a pass: supply what it names as missing
      and run it once more.
    - **Round two,** only when round one's fixes changed behaviour, as the rule says. There is

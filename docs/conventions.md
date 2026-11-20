@@ -63,9 +63,9 @@ is the platform fact and this file is the house choice built on it.
     own branch and opens its own pull or merge request has reached the expected end of an
     engineering task, and needs no extra go. It never merges, never enables auto-merge and
     never pushes to the default branch. The same exception covers follow-up tickets: the eng
-    agent and a ticket worker file one for each review finding they did not fix and each
-    known gap the change leaves (and comment on an existing ticket that already covers one),
-    with no per-ticket go. Merging, deploying, posting a message and sending an email still
+    agent and a ticket worker file one for each review finding that holds up and that they did
+    not fix, and each known gap the change leaves, up to the agent's per-run cap (and comment
+    on an existing ticket that already covers one), with no per-ticket go. Merging, deploying, posting a message and sending an email still
     need the user's explicit go.
 
 ## Skills

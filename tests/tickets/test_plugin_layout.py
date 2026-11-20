@@ -151,7 +151,7 @@ def test_worker_files_a_follow_up_ticket_for_every_unfixed_finding_and_known_gap
         "**read-issue**",
     ):
         assert part in filing, part
-    assert "File the follow-ups** as section 7's step 4" in held
+    assert "File the follow-ups** as section 7's Review step 4" in held
     # A stop files them too, linking the ticket in place of a review.
     assert "(no review opened)" in body[body.index("**Holding the ticket.**") : body.index("## 5.")]
     assert "**Follow-ups** heading" in final
@@ -197,6 +197,7 @@ def test_the_worker_reviews_in_at_most_two_rounds_with_core_reviewer_every_time(
     assert "its DRY pass included" in review
     assert "Round two, when the rule calls for it" in review
     assert "spawn it once more" in review
+    assert "blocked_review_findings" in review
     assert "no independent review ran" in review
 
 
@@ -237,6 +238,8 @@ def test_direct_mode_documents_the_locked_key_stop_and_its_resume() -> None:
     assert "never turns signing off" in section
     assert "`resume_worktrees` set from the result's `worktree_paths`" in section
     assert "except a resume after a locked signing key" in skill
+    assert "and `resumed` `true`" in section and "git worktree list" in section
+    assert "The one exception is a resume after a locked signing key (section 4)." in skill
 
 
 def flat(path: Path) -> str:
