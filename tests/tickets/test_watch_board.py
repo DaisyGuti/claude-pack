@@ -36,6 +36,7 @@ def load_script(name: str) -> ModuleType:
 
 watch = load_script("watch_board")
 Event = watch.Event
+LANE_LABELS, LANE_STATUS = watch.registry.LaneMode.LABELS, watch.registry.LaneMode.STATUS
 
 
 class RecordedCli:
@@ -60,19 +61,15 @@ def fixture(name: str) -> str:
     return (FIXTURES / name).read_text(encoding="utf-8")
 
 
-def config(tracker: str, lane_mode: str = "labels", ready: str = "Ready") -> object:
+def config(tracker: str, lane_mode: str = LANE_LABELS, ready: str = "Ready") -> object:
     if tracker == "github":
         board = watch.registry.GitHubBoard(owner="acme", number="1")
-        return watch.Config(
-            tracker, "github.com", board, ready, None, "blocked", ("acme/shop-app",)
-        )
+        return watch.Config("github.com", board, ready, None, "blocked", ("acme/shop-app",))
     board = watch.registry.GitLabBoard(
         scope="project", path="group/project", board="4", lanes=lane_mode
     )
-    lane = "status::ready" if lane_mode == "labels" else ready
-    return watch.Config(
-        tracker, "gitlab.example.com", board, lane, lane_mode, "blocked", ("group/project",)
-    )
+    lane = "status::ready" if lane_mode == LANE_LABELS else ready
+    return watch.Config("gitlab.example.com", board, lane, lane_mode, "blocked", ("group/project",))
 
 
 def github_memory(data_dir: Path) -> Path:
@@ -80,9 +77,9 @@ def github_memory(data_dir: Path) -> Path:
     return watch.memory_path(data_dir, config("github").board)
 
 
-def tracker_error(name: str) -> object:
-    """A failed CLI call as run_cli reports it, with the CLI's own saved error text."""
-    return watch.TrackerError(f"'glab api --hostname gitlab.example.com' exited 1: {fixture(name)}")
+def tracker_error(text: str, path: str = "user") -> object:
+    """A failed CLI call as run_cli reports it: the call's first words, then the CLI's error."""
+    return watch.TrackerError(f"'glab api --hostname gitlab.example.com {path}' exited 1: {text}")
 
 
 # Per tracker: (config, the answers on tick 1, the answers once review 8 has merged).
@@ -105,12 +102,12 @@ CASES = {
         {"graphql": fixture("github_tick2.json"), "pulls/8": fixture("github_pull_8.json")},
     ),
     "gitlab-labels": (
-        config("gitlab", "labels"),
+        config("gitlab", LANE_LABELS),
         {**SIGNED_IN, **GITLAB_USER, **GITLAB_LABEL_READY, **GITLAB_TICK_1},
         {**GITLAB_LABEL_READY, **GITLAB_TICK_2},
     ),
     "gitlab-status": (
-        config("gitlab", "status"),
+        config("gitlab", LANE_STATUS),
         {**SIGNED_IN, **GITLAB_USER, **GITLAB_STATUS_READY, **GITLAB_TICK_1},
         {**GITLAB_STATUS_READY, **GITLAB_TICK_2},
     ),
@@ -125,7 +122,7 @@ def events_of(lines: list[tuple[object, object]]) -> list[tuple[str, int]]:
 def test_each_event_fires_once(case: str) -> None:
     cfg, first, merged = CASES[case]
     cli = RecordedCli(first)
-    tracker = watch.TRACKERS[cfg.tracker](cfg, cli)
+    tracker = watch.TRACKERS[type(cfg.board)](cfg, cli)
     tracker.sign_in()
 
     events, memory = watch.tick(tracker, watch.Memory.empty())
@@ -195,7 +192,7 @@ def test_a_recomputed_merge_state_does_not_fire_again() -> None:
 
 def gitlab_tracker(responses: dict[str, object]) -> object:
     cli = RecordedCli({**SIGNED_IN, **GITLAB_USER, **GITLAB_STATUS_READY, **responses})
-    tracker = watch.GitLab(config("gitlab", "status"), cli)
+    tracker = watch.GitLab(config("gitlab", LANE_STATUS), cli)
     tracker.sign_in()
     return tracker
 
@@ -205,7 +202,7 @@ def test_a_running_watcher_retries_a_failed_tick_and_stops_on_a_401(
 ) -> None:
     tracker = gitlab_tracker({GITLAB_MRS: watch.TrackerError("glab: connection reset by peer")})
     # Each sleep between ticks moves the tracker on: a good tick, then a rejected login.
-    stages = iter([GITLAB_TICK_1, {GITLAB_MRS: tracker_error("gitlab_error_401.txt")}])
+    stages = iter([GITLAB_TICK_1, {GITLAB_MRS: tracker_error(fixture("gitlab_error_401.txt"))}])
 
     def sleep(_: float) -> None:
         tracker.run.responses.update(next(stages))
@@ -248,7 +245,7 @@ def test_bad_input_exits_2(filled_registry: Path, bad: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "answer", [fixture("gitlab_mr_8_closed.json"), tracker_error("gitlab_error_404.txt")],
+    "answer", [fixture("gitlab_mr_8_closed.json"), tracker_error(fixture("gitlab_error_404.txt"))],
     ids=["closed", "deleted"],
 )  # fmt: skip
 def test_a_review_closed_or_deleted_fires_nothing(answer: object) -> None:
@@ -259,6 +256,22 @@ def test_a_review_closed_or_deleted_fires_nothing(answer: object) -> None:
     events, memory = watch.tick(tracker, memory)
     assert events == []
     assert "group/project#8" not in memory.open_reviews
+
+
+@pytest.mark.parametrize("number", [401, 404])
+def test_a_failed_read_of_review_401_or_404_is_retried(tmp_path: Path, number: int) -> None:
+    """The error quotes the API path, which ends in the review number: a server error on review
+    401 is not a rejected login, and one on review 404 is not a deleted review."""
+    item = watch.Item("group/project", number, "A review", "https://x", "user")
+    path = tmp_path / "memory.json"
+    watch.save(path, watch.Memory(watch.Memory.empty().active, {item.key: item}).to_json())
+    api_path = f"projects/group%2Fproject/merge_requests/{number}"
+    tracker = gitlab_tracker(
+        {**GITLAB_TICK_2, f"merge_requests/{number}": tracker_error("HTTP 502", api_path)}
+    )
+
+    assert watch.watch(tracker, path, 60, True, lambda _: None) == watch.EXIT_TICK_FAILED
+    assert item.key in watch.Memory.load(path).open_reviews
 
 
 def test_an_open_review_missing_from_the_list_keeps_its_events() -> None:

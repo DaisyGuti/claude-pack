@@ -22,6 +22,7 @@ already watches this board from this data folder.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess
@@ -53,9 +54,11 @@ MEMORY_SCHEMA = 1
 # GitHub repo) and says so on stderr when there are more. The full version pages through it.
 PAGE = 100
 # How gh and glab report a rejected or missing login, and a missing object, in their errors
-# (glab prints `glab: 401 Unauthorized (HTTP 401)` and `glab: 404 Not found (HTTP 404)`).
-AUTH_FAILURE = re.compile(r"\b401\b|Bad credentials|not been authenticated|not logged in")
-NOT_FOUND = re.compile(r"\b404\b")
+# (glab prints `glab: 401 Unauthorized (HTTP 401)` and `glab: 404 Not found (HTTP 404)`, gh
+# `HTTP 401: Bad credentials`). Only the printed status counts: the error also quotes the API
+# path, which ends in a review number that may be 401 or 404.
+AUTH_FAILURE = re.compile(r"HTTP 401\b|Bad credentials|not been authenticated|not logged in")
+NOT_FOUND = re.compile(r"HTTP 404\b")
 
 # The tracker values that decide a review's merge state. GitHub: PullRequest.mergeable and
 # mergeStateStatus (CLEAN: checks and required reviews pass; HAS_HOOKS: the same, plus hooks).
@@ -68,7 +71,6 @@ GITLAB_QUEUE_READY = "mergeable"
 GITLAB_UNKNOWN = frozenset({"checking", "unchecked", "preparing", "approvals_syncing"})
 # `locked` is the moment a merge completes; the merge request is still open.
 GITLAB_OPEN_STATES = frozenset({"opened", "locked"})
-GITLAB_LANE_STATUS = "status"
 
 
 class Event(StrEnum):
@@ -218,7 +220,6 @@ def warn_truncated(what: str) -> None:
 class Config:
     """The registry facts the watcher reads."""
 
-    tracker: str
     host: str
     board: registry.Board
     ready_lane: str
@@ -229,7 +230,6 @@ class Config:
     @classmethod
     def from_registry(cls, reg: dict[str, Any]) -> Config:
         return cls(
-            tracker=reg["tracker"],
             host=reg["host"],
             board=reg["board"],
             ready_lane=reg["lanes"]["ready"],
@@ -452,7 +452,7 @@ class GitLab(Tracker):
 
     def ready(self) -> tuple[Item, ...]:
         board = self.config.board
-        if self.config.lane_mode == GITLAB_LANE_STATUS:
+        if self.config.lane_mode == registry.LaneMode.STATUS:
             return self.ready_by_status(board.path)
         scope = f"{board.scope}s"  # the registry's group or project, which it checks
         issues = self.ndjson(
@@ -510,7 +510,10 @@ def gitlab_author(node: dict[str, Any]) -> str | None:
     return node["author"]["username"] if node["author"] else None
 
 
-TRACKERS: dict[str, type[Tracker]] = {"github": GitHub, "gitlab": GitLab}
+TRACKERS: dict[type[registry.Board], type[Tracker]] = {
+    registry.GitHubBoard: GitHub,
+    registry.GitLabBoard: GitLab,
+}
 
 
 def tick(tracker: Tracker, memory: Memory) -> tuple[list[tuple[Event, Item]], Memory]:
@@ -560,16 +563,21 @@ def event_line(event: Event, item: Item) -> str:
 
 
 def memory_path(data_dir: Path, board: registry.Board) -> Path:
-    return data_dir / "state" / f"board-watcher-{safe_name(board.key)}.json"
+    # safe_name folds every separator into '-', so `a/b` board 4 and `a-b` board 4 would share
+    # a file (and its lock); a short hash of the exact key keeps them apart.
+    digest = hashlib.sha256(board.key.encode()).hexdigest()[:8]
+    return data_dir / "state" / f"board-watcher-{safe_name(board.key)}-{digest}.json"
 
 
 def watch(
     tracker: Tracker, path: Path, interval: int, once: bool, sleep: Callable[[float], None]
 ) -> int:
-    """Hold the memory file's lock for the whole run, so a second watcher on the same board and
-    data folder is refused instead of printing every event a second time."""
+    """Sign in and watch, holding the memory file's lock for the whole run, so a second watcher
+    on the same board and data folder is refused (before it calls the tracker at all) instead of
+    printing every event a second time."""
     try:
         with locked(path, wait=False):
+            tracker.sign_in()
             return loop(tracker, path, interval, once, sleep)
     except LockHeld as err:
         raise WatchError(
@@ -628,11 +636,9 @@ def main(argv: list[str], run: Run = run_cli, sleep: Callable[[float], None] = t
         # registry.py's bad input (its example file missing from the plugin) stays bad input.
         return EXIT_BAD_INPUT if code == registry.EXIT_BAD_INPUT else EXIT_REGISTRY
     config = Config.from_registry(reg)
-    tracker = TRACKERS[config.tracker](config, run)
+    tracker = TRACKERS[type(config.board)](config, run)
     try:
-        tracker.sign_in()
-        path = memory_path(data_dir, config.board)
-        return watch(tracker, path, args.interval, args.once, sleep)
+        return watch(tracker, memory_path(data_dir, config.board), args.interval, args.once, sleep)
     except WatchError as err:
         print(err if err.code == EXIT_AUTH else f"error: {err}", file=sys.stderr)
         return err.code

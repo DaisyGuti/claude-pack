@@ -304,7 +304,10 @@ def test_command_line_show_prints_json_for_a_ready_registry(filled_registry: Pat
         check=False,
     )
     assert proc.returncode == 0, proc.stderr
-    assert json.loads(proc.stdout)["tracker"] == "github"
+    shown = json.loads(proc.stdout)
+    assert shown["tracker"] == "github"
+    # The skills read the board's keys from this object.
+    assert shown["board"] == {"owner": "acme", "number": "1", "name": "Engineering"}
 
 
 def test_command_line_exit_code_is_3_on_first_run(tmp_path: Path) -> None:

@@ -67,7 +67,9 @@ prints nothing for events already printed; delete the file and the next tick pri
 current event once. The first tick of a fresh watcher prints every event that holds now. A line
 is printed before the memory is saved, so a crash between the two prints that event again on
 restart rather than losing it. A watcher holds a lock on its memory file while it runs, so a second
-watcher on the same board and data folder exits 5 instead of printing every event again.
+watcher on the same board and data folder exits 5 instead of printing every event again. The lock
+is a POSIX `flock`, so it holds on macOS and Linux; on Windows, running one watcher per board is up
+to you.
 
 | Exit | Meaning |
 | --- | --- |

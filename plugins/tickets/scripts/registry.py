@@ -24,8 +24,9 @@ import shutil
 import sys
 from collections.abc import Callable
 from dataclasses import MISSING, asdict, dataclass, fields
+from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 if sys.version_info < (3, 11):  # noqa: UP036
     sys.exit("registry.py needs Python 3.11 or newer; install it and run this again")
@@ -41,15 +42,20 @@ EXIT_HOST_MISMATCH = 5
 REQUIRED_LANES = ("backlog", "ready", "in_progress", "blocked", "done")
 REQUIRED_LABELS = ("blocked", "run_worker", "run_solo")
 TIERS = ("fast", "workhorse", "frontier")
-TRACKERS = ("github", "gitlab")
-# How a GitLab board holds its lanes: scoped labels (the default) or the native work item Status.
-GITLAB_LANE_MODES = ("labels", "status")
-# Where batch parents live: a GitLab group epic, a GitHub sub-issue parent, a shared
-# `batch:<area>` label on either tracker, or no batches at all (every ticket a single).
-BATCH_MODES = {"off": TRACKERS, "epics": ("gitlab",), "sub-issues": ("github",), "labels": TRACKERS}
-DEFAULT_BATCH_SIZE = 5
-# Values that ship in registry.example.md. A board or repo that still holds one was never filled in.
-EXAMPLE_MARKERS = ("your-github-login", "your-group")
+
+
+class Scope(StrEnum):
+    """What a GitLab board belongs to."""
+
+    GROUP = "group"
+    PROJECT = "project"
+
+
+class LaneMode(StrEnum):
+    """How a GitLab board holds its lanes: scoped labels (the default) or the work item Status."""
+
+    LABELS = "labels"
+    STATUS = "status"
 
 
 # The Board section's `Key: value` lines, one model per tracker. A field's name is its key in
@@ -57,6 +63,8 @@ EXAMPLE_MARKERS = ("your-github-login", "your-group")
 @dataclass(frozen=True)
 class GitHubBoard:
     """A GitHub Projects (v2) board: the owning user or organization and the project number."""
+
+    heading: ClassVar[str] = "GitHub"
 
     owner: str
     number: str
@@ -71,12 +79,14 @@ class GitHubBoard:
 class GitLabBoard:
     """A GitLab issue board: its group or project, and its name or id."""
 
-    scope: str
+    heading: ClassVar[str] = "GitLab"
+
+    scope: str  # a Scope; kept as written so problems() can name a wrong one
     path: str
     board: str
-    name: str = ""
-    # A registry written before the Lanes key existed keeps label lanes.
-    lanes: str = "labels"
+    # A LaneMode, kept as written likewise. A registry written before the Lanes key existed
+    # keeps label lanes.
+    lanes: str = LaneMode.LABELS
 
     @property
     def key(self) -> str:
@@ -84,6 +94,18 @@ class GitLabBoard:
 
 
 Board = GitHubBoard | GitLabBoard
+
+
+# Each tracker's board model; any other tracker name reads the GitLab subsection, and
+# problems() refuses it.
+BOARDS: dict[str, type[Board]] = {"github": GitHubBoard, "gitlab": GitLabBoard}
+TRACKERS = tuple(BOARDS)
+# Where batch parents live: a GitLab group epic, a GitHub sub-issue parent, a shared
+# `batch:<area>` label on either tracker, or no batches at all (every ticket a single).
+BATCH_MODES = {"off": TRACKERS, "epics": ("gitlab",), "sub-issues": ("github",), "labels": TRACKERS}
+DEFAULT_BATCH_SIZE = 5
+# Values that ship in registry.example.md. A board or repo that still holds one was never filled in.
+EXAMPLE_MARKERS = ("your-github-login", "your-group")
 
 
 def read_board(cls: type[Board], values: dict[str, str]) -> Board:
@@ -166,9 +188,8 @@ def parse(text: str, home: Path | None = None) -> dict[str, Any]:
     tracker_vals = key_values(top.get("Tracker", ""))
     tracker = tracker_vals.get("tracker", "").lower()
     board_sections = sections("## Board\n" + top.get("Board", ""), 3)
-    # Any tracker but github reads the GitLab subsection; problems() refuses an unknown tracker.
-    wanted, board_type = ("GitHub", GitHubBoard) if tracker == "github" else ("GitLab", GitLabBoard)
-    board = read_board(board_type, key_values(board_sections.get(wanted, "")))
+    board_type = BOARDS.get(tracker, GitLabBoard)
+    board = read_board(board_type, key_values(board_sections.get(board_type.heading, "")))
 
     lanes: dict[str, str] = {}
     lane_meaning: dict[str, str] = {}
@@ -257,12 +278,15 @@ def problems(reg: dict[str, Any], which: Callable[[str], str | None] | None = No
     if reg["tracker"] in TRACKERS:
         for key in missing_board_keys(reg["board"]):
             found.append(f"Board has no '{key}' value for the {reg['tracker']} tracker")
-    if reg["tracker"] == "gitlab" and reg["lane_mode"] not in GITLAB_LANE_MODES:
+    board = reg["board"]
+    if reg["tracker"] == "gitlab" and board.scope not in tuple(Scope):
+        found.append(f"Board has Scope '{board.scope}'; it must be 'group' or 'project'")
+    if reg["tracker"] == "gitlab" and reg["lane_mode"] not in tuple(LaneMode):
         found.append(
             f"Board has Lanes '{reg['lane_mode']}' for the gitlab tracker; "
             "it must be 'labels' or 'status'"
         )
-    if reg["tracker"] == "gitlab" and reg["lane_mode"] == "status":
+    if reg["tracker"] == "gitlab" and reg["lane_mode"] == LaneMode.STATUS:
         # The usual slip when a board moves to Status: the mode flips but the column keeps labels.
         for role, value in reg["lanes"].items():
             if "::" in value:
@@ -387,7 +411,7 @@ def board_url(url: str, reg: dict[str, Any]) -> tuple[int, dict[str, Any]]:
             }
         if kind == "github-project":
             return 0, {"kind": kind, "owner": owner, "number": int(number)}
-        scope = "group" if kind == "gitlab-group" else "project"
+        scope = Scope.GROUP if kind == "gitlab-group" else Scope.PROJECT
         return 0, {"kind": kind, "scope": scope, "path": owner, "board_id": int(number)}
     return EXIT_BAD_INPUT, {
         "status": "bad_url",
