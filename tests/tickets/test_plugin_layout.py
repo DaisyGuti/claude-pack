@@ -505,3 +505,24 @@ def test_both_tracker_adapters_define_every_operation_the_procedures_name() -> N
     named = set(re.findall(r"\*\*([a-z]+(?:-[a-z]+)+)\*\*", planning))
     assert {"read-milestone", "set-milestone"} <= named
     assert named <= listed["github"], named - listed["github"]
+
+
+def test_the_worker_splits_independent_units_to_sub_workers_and_reports_the_split() -> None:
+    """On 2026-11-20 two of three workers on large tickets built everything inline: the worker
+    sends each independent unit to a sub-worker in its own worktree, keeps the merge, review
+    and result, and the RESULT line records the split."""
+    body = flat(PLUGIN / "agents" / "ticket-worker.md")
+    split = body[body.index("**Split the work.**") : body.index("**Quality bar.**")]
+    assert body.index("**Split the work.**") < body.index("**Merge the default branch")
+    assert "Spawn every sub-worker in one message" in split
+    assert "`<worktree_root>/<slot_id>/`, never a primary clone and never your own tree" in split
+    assert "`model-selection.md`" in split and "`git commit -S`" in split
+    assert "no attribution lines" in split and "scratch file" in split
+    assert "share an interface" in split and split.index("interface") < split.index("Spawn")
+    assert "Design decisions, merging, the review and the result stay with you" in split
+    report = body[body.index("## 10. Final report") : body.index("## 11. Working a batch")]
+    result = json.loads(report[report.index("RESULT {") + len("RESULT ") :].split("```")[0])
+    assert set(result["split"]) == {"sub_workers", "kept_inline"}
+    assert "`split` is always present" in report
+    batches = flat(PLUGIN / "references" / "batches.md")
+    assert "may be built in parallel by sub-workers" in batches
