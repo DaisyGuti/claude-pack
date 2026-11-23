@@ -252,9 +252,20 @@ diff as an engineer who wants it rejected.
   thing once") and the docs pass, then `core:reviewer` on the diff. Fix what holds up.
 - **Round two** runs only when round one's fixes changed behaviour: `core:reviewer` reads the
   fixed diff, its brief adding round one's findings and what you did with each.
-- **At most two rounds.** After round two's fixes the change lands with no third review, and
-  every finding still open becomes a follow-up. The exception is a P0 or P1 you agree with and
-  cannot fix: it stops the landing, and you report it.
+- **At most two rounds.** After round two's fixes there is no third `core:reviewer` round,
+  and every finding still open becomes a follow-up. The exception is a P0 or P1 you agree with
+  and cannot fix: it stops the landing, and you report it.
+- **Then a Codex read, when the Codex CLI is installed.** After the last `core:reviewer`
+  round's fixes, look for the CLI with `command -v codex`. When it is there, run it once from
+  the repo root in the background and wait for it: `codex review --uncommitted` for a staged
+  or uncommitted change, `codex review --base <base branch>` for a committed branch. Pass no
+  prompt argument, because `--base` refuses one. A second model catches what Claude's
+  reviewers share a blind spot on, and it spends the user's Codex CLI allowance, not their
+  Claude one. Handle its findings as round one's: open the cited lines,
+  fix what holds up, give a wrong one a one-line reason, and make every other unfixed one a
+  follow-up. An agreed P0 or P1 you cannot fix stops the landing. It is one pass: never run
+  it again after the fixes. When the CLI is missing, fails or is not signed in, skip it and
+  say so in one line of the report and the review body.
 - **When the reviewer cannot run** (the agent is unavailable, or it answers `could not review`
   again after you supply what it named), review the diff yourself, say in the report and the
   review body that no independent review ran, and list that as a follow-up.
