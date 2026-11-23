@@ -26,7 +26,7 @@ before Phase 1 and run each operation as written there; never improvise a comman
 - Mechanics
 - The run record
 - Phase 1: capture the board
-- Orchestration (steps 1 to 8)
+- Orchestration (steps 1 to 8, with the context preflight, 5a)
 - Notes
 
 ## Invocation
@@ -132,6 +132,13 @@ is not dispatched and its batch goes without it.
   would still queue the same Ready tickets until a worker moves its card out of Ready. Do not
   start a second run while workers from the first are still going: step 2 would treat their
   slots as unfinished and dispatch them again.
+- **Context budget.** Agents load a repo's instruction files whole, and one oversized guide
+  read by every worker in the pool can use up a plan's usage limit. `<budget-check>` is core's
+  `skills/project-setup/scripts/check_context_budget.py`, found with
+  `ls ${CLAUDE_PLUGIN_ROOT}/../../core/*/skills/project-setup/scripts/check_context_budget.py
+  ${CLAUDE_PLUGIN_ROOT}/../core/skills/project-setup/scripts/check_context_budget.py` (the first
+  form is an installed pack, the second a checkout). When neither exists, say once that the `core`
+  plugin is missing, skip the preflight in step 5a and continue. Never halt on it.
 - **Orchestrate; never implement.** You never edit a ticket's code. Workers return a paragraph
   and one `RESULT` line; the run record holds the detail, so do not ask for logs.
 
@@ -269,9 +276,28 @@ then unset, stable within a priority, except that a flaky-test or CI ticket (jud
 title and labels) goes ahead of the rest of its priority, then keep the first `--limit`. With
 batching on, a batch sorts and counts as one item, at its highest child's priority.
 
+### 5a. Context preflight
+
+For each slot (a batch counts as one), take the paths its plan's **Files to touch** names (the
+latest `### Final Plan` comment and any addenda, from **read-issue**; a batch: every child's) and
+run, in the owning repo's primary clone:
+
+```sh
+python3 <budget-check> <clone> --path <folder> --path <folder> --json
+```
+
+with one `--path` per distinct folder of those paths (a file's folder; a folder as written). A
+plan that names no files gets no `--path`, so only the root guides count. Keep per slot the
+estimate (`total_tokens_est`, bytes / 4) and every `over_budget` file with its size and
+`over_by`. Exit 0 and 1 both give a report; exit 2 or a missing script is "no estimate" for the
+slot, shown as such. An over-budget slot still dispatches. It gets a warning that names the
+file and says to split it, and its dispatch message carries `large_guides`. A file is judged by
+the repo's own `.context-budget.toml` when it has one.
+
 ### 6. Dry run
 
-With `--dry-run`, print the queue, the skipped list and the existing `blocked` list, then
+With `--dry-run`, print the queue (each line ends with its step 5a estimate, and an over-budget
+slot is followed by its warning), the skipped list and the existing `blocked` list, then
 exit. The only side effects are Phase 1 capture and `--clear-skipped`. The "In review" lines
 come from the `completed` entries that carry `review_refs`, each checked with **review-state**
 on its first `review_refs` entry; list only those still `open`, with their links. A review
@@ -279,7 +305,9 @@ that merged or closed drops out of the line.
 
 ```text
 Ready queue: board <board key> for <login> (max-parallel=<M>, limit=<L>, to-process=<K>)
-  #182 "title" repos=[<repo>] owning=<repo> workhorse sonnet P1
+  #182 "title" repos=[<repo>] owning=<repo> workhorse sonnet P1 context ~31k tokens (est.)
+  #190 "title" repos=[<repo>] owning=<repo> workhorse sonnet P2 context ~110k tokens (est.)
+    WARNING backend/AGENTS.md is 395 KB, 355 KB over the 40 KB limit: split it into area guides
 Left alone: <A> Ready tickets assigned to others, <U> unassigned
 Held (carry the blocked label, not dispatched): <H>
   #71 <repo>: Blocked: dependency
@@ -327,7 +355,8 @@ worker's agent file, `agents/ticket-worker.md`: `mode`
 `files.ticket_template` (the plugin's `skills/write-ticket/assets/ticket-template.md`) and
 `files.check_ticket` (`<scripts>/check_ticket.py`) as absolute paths, `model` (the resolved
 model), `validate_plan_first: true` and `context_files` (the owning repo's brief, or the
-`--context` files), plus `resume_worktrees` for a slot resumed after a locked signing key (7c)
+`--context` files), `large_guides` (the slot's over-budget files from step 5a; leave it out when
+there are none), plus `resume_worktrees` for a slot resumed after a locked signing key (7c)
 and `resumed: true` for every slot dispatched again under its earlier `slot_id` (step 2 and
 7c).
 A batch slot also sends its `parent`, its ordered `children` and `files.batches` (the plugin's
@@ -491,6 +520,8 @@ Blocked: <M>
 Not dispatched: <K>
   #60 "title": run:solo label: human-in-loop required
 Unfinished (resume with the next run): <L>
+Over context budget: <G>
+  backend/AGENTS.md (<repo>): 395 KB, 355 KB over the limit; slots 2, 4, 5 read ~110k tokens each
 Worktrees kept: <W>
   #50 <repo>: <path> (blocked_push_rejected; a failed check, a re-locked refusal or an orphan directory is named)
 Left alone: <A> Ready tickets assigned to others, <U> unassigned
@@ -504,7 +535,7 @@ of `completed` and `blocked` entries: a new backlog ticket (or a comment on an
 existing one) for something the worker left undone, declined in review or noticed along the
 way, assigned to the same person and waiting for grooming. A `needs_manual_action` line's
 reason names the live action and the review links from `manual_action_refs`, which tells the
-user at a glance which Blocked items are a bug to fix and which are a click to make. A "Worktrees kept" line is one the cleanup left on purpose or could not remove; the user removes
+user at a glance which Blocked items are a bug to fix and which are a click to make. An "Over context budget" line lists each file step 5a found over its limit, with the slots that loaded it and the advice to split it into area guides linked from the index; it is the user's to fix, and no worker edits it. A "Worktrees kept" line is one the cleanup left on purpose or could not remove; the user removes
 it (`git worktree remove <path>`) once its work is done. Follow the block with one plain
 sentence on what needs the user: the held tickets and the blocked tickets of this run, each
 with the kind of its most recent `Blocked:` comment (**read-issue**; a run's own `blocked_*` is

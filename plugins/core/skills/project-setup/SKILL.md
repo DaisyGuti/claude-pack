@@ -14,7 +14,8 @@ step below says the choice is the user's.
 ## Boundaries
 
 - Read anything in the repo. Write only the repo's `CLAUDE.md` (at the repo root, or
-  `.claude/CLAUDE.md` if that is where the repo already keeps it).
+  `.claude/CLAUDE.md` if that is where the repo already keeps it). Step 7's context-budget
+  guard is the one other write, and only after the user says yes.
 - Do not commit, push or open a review. Show the diff and let the user land it through the
   repo's normal pull or merge request flow.
 - If the path is not inside a git repository, ask for the repo path and stop.
@@ -75,8 +76,17 @@ step below says the choice is the user's.
    to the default branch goes in the report as a conflict with the review-only rule: the draft
    keeps the review-only line, and the file holding the old rule stays as it is for the user to
    change.
-6. **Show it.** Print `git diff` for the file (or the new file) and stop. Landing is the
-   user's call.
+6. **Show it.** Print `git diff` for the file (or the new file).
+7. **Offer the context-budget guard.** Agents load the root CLAUDE.md and AGENTS.md, the
+   imports, the memory index and the nested guides of the folders they work in, so a guide that
+   grows a little per merge request costs every run. Run
+   `python3 ${CLAUDE_SKILL_DIR}/scripts/check_context_budget.py <repo> --json` (execute it) and
+   report each file's size and whether the repo is over the limits (40 KB per file, 60 KB in
+   total). Then offer the guard and stop until the user answers; write nothing unasked. On a yes,
+   follow [references/context-budget-guard.md](references/context-budget-guard.md). On a no,
+   leave the repo as it is.
+
+Landing is the user's call.
 
 When a `CLAUDE.md` already exists, refresh it in place: keep rules that are still true,
 correct stale commands and paths, and say in the report what you removed and why.
@@ -86,5 +96,6 @@ correct stale commands and paths, and say in the report what you removed and why
 The file path; a few lines on what it now tells Claude; every `UNKNOWN` left for the user to
 fill; any conflict you resolved or left, including any existing rule that says to commit to the
 default branch; the team plugins that are not installed; the known gaps from the scan (unpinned
-images or actions). Background on each rule and its source is in
+images or actions); the context-budget result and whether the guard was offered, accepted or
+declined. Background on each rule and its source is in
 [references/rules-and-sources.md](references/rules-and-sources.md).

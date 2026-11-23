@@ -222,6 +222,13 @@ magic adverbs, teasers, the same fact said twice). Then hold the text to plain E
 The plain-English rules are adapted from SimpleEnglish
 (<https://github.com/AminBlg/SimpleEnglish>).
 
+When the diff touches an agent instruction file (CLAUDE.md or AGENTS.md), also
+check its size. Agents load these whole on every run, and a guide that grows a little per change
+is never seen whole in a diff. Run `check_context_budget.py <repo> --path <folder>` (in the
+`project-setup` skill's `scripts/` folder) and read the file's total against the limit, not just
+the lines added. Over the limit, the new text goes to an area guide linked from the index, not
+into the big file.
+
 **Say what could be better; don't go build it.** When you notice something outside
 your brief that should improve (a rule stated in two places, a test that asserts
 nothing, a query that will not scale), note it with the file path and list it as a

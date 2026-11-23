@@ -2,7 +2,7 @@
 name: work-tickets
 description: Works the user's Ready tickets from a GitHub Project or GitLab board with a rolling pool of parallel workers. Starts one ticket-worker agent per ticket, each on the Claude model its ticket label calls for (Haiku, Sonnet or Opus), each in its own git worktree, and ends with a pull or merge request open per ticket. Use for "work my ready tickets", "run my queue", "work the P1s", or a pasted board URL, even when the user names no lane. For one issue use ticket-worker.
 argument-hint: "[--dry-run] [--priority P1] [--max-parallel N] [--limit N] [--repo NAME] [--project N --owner OWNER] [--clear-skipped]"
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/registry.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve_model.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/ticket_state.py *)
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/registry.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve_model.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/ticket_state.py *) Bash(python3 *check_context_budget.py *)
 ---
 
 # Work tickets
@@ -71,8 +71,11 @@ Paths used below and in the procedure (read them as `<scripts>` and `<data>`):
   grouped by parent, and each parent with Ready children is one slot and one worker, on the
   strongest model and highest effort its children's labels name, working them in the plan's
   order on one branch with one review. A ticket with no parent is a single slot, as before.
+- Before any slot dispatches, and in `--dry-run`, measure the instruction files each slot's workers
+  will load (the procedure's step 5a): a slot over budget is warned about, never halted, and
+  its worker is told to `grep` the big file; the report lists those files on their own line.
 - Finish the queue and wait for every running worker, then report with the counts first: how many tickets are in review, blocked
   and not dispatched, and what needs the user.
 - `--dry-run` has no side effects beyond capturing the board's fields. It prints each ticket's
-  tier, resolved model and effort, the counts of Ready tickets left alone, and an "In review"
+  tier, resolved model and effort, its context estimate, the counts of Ready tickets left alone, and an "In review"
   line with the link for each earlier run's review that is still open.

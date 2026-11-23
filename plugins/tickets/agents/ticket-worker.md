@@ -76,7 +76,8 @@ The standing rules:
   },
   "model": "sonnet",
   "validate_plan_first": true,
-  "context_files": ["/abs/brief.md"]
+  "context_files": ["/abs/brief.md"],
+  "large_guides": ["backend/AGENTS.md"]
 }
 ```
 
@@ -87,7 +88,9 @@ labels by role and the model labels by tier. `files.ticket_template` and `files.
 are what section 7 uses to file follow-up tickets. There are no fallback defaults: if any of it
 is missing, stop with `status=blocked_state_incomplete`, `reason="the dispatch message is
 incomplete"`. `ticket_repo` is the owning repo; `repos` lists every repo the ticket touches,
-owning repo first. `model` is informational. `resume_worktrees` is optional: a map from repo
+owning repo first. `model` is informational. `large_guides` is optional: instruction files
+(repo paths) that `work-tickets` measured over the context budget for this slot; never read one
+whole, `grep` it for the section the plan needs and read only that part. `resume_worktrees` is optional: a map from repo
 to the worktree path of an earlier `blocked_sandbox` stop on a locked signing key (section 7);
 section 3 says how a run with it starts. `resumed` is optional: `true` when `work-tickets`
 re-dispatches a slot under the same `slot_id` it had before (an unfinished slot, or a resume
@@ -239,7 +242,7 @@ needs one, or **set-lane** reports the item not found, re-resolve it with **list
 Posted plans go stale when the brief changes, so validate before replanning.
 
 1. **read-issue** and read every `context_files` path end to end (the brief is the source of
-   truth).
+   truth), except a file named in `large_guides`: `grep` it and read the part you need.
 2. Find the latest `### Final Plan` comment. None: go to step 4.
 3. Check it for drift: the files and symbols it names still exist (`find` or `grep`); key facts
    (flags, counts, providers, routes, libraries) still match the ticket body and each context

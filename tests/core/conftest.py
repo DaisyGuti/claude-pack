@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
@@ -19,6 +20,7 @@ def load_script(name: str) -> ModuleType:
     spec = importlib.util.spec_from_file_location(name, SCRIPTS / f"{name}.py")
     assert spec and spec.loader, f"cannot load {name}"
     module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module  # a dataclass looks its own module up here
     spec.loader.exec_module(module)
     return module
 
@@ -31,6 +33,11 @@ def scan_repo() -> ModuleType:
 @pytest.fixture(scope="session")
 def check_claude_md() -> ModuleType:
     return load_script("check_claude_md")
+
+
+@pytest.fixture(scope="session")
+def check_context_budget() -> ModuleType:
+    return load_script("check_context_budget")
 
 
 GIT_ENV = {
