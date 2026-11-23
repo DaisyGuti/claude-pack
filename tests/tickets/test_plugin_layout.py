@@ -530,3 +530,10 @@ def test_the_worker_splits_independent_units_to_sub_workers_and_reports_the_spli
     assert "`split` is always present" in report
     batches = flat(PLUGIN / "references" / "batches.md")
     assert "may be built in parallel by sub-workers" in batches
+
+
+def test_the_context_preflight_names_a_script_core_ships() -> None:
+    rel = "skills/project-setup/scripts/check_context_budget.py"
+    orchestrator = PLUGIN / "skills/work-tickets/references/orchestrator.md"
+    assert rel in orchestrator.read_text(encoding="utf-8")
+    assert (PLUGIN.parent / "core" / rel).is_file()
