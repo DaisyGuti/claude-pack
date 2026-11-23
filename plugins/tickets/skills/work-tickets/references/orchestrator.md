@@ -290,10 +290,12 @@ python3 <budget-check> <clone> --path <folder> --path <folder> --json
 with one `--path` per distinct folder of those paths (a file's folder; a folder as written; for a
 folder that does not exist yet, its nearest existing parent). A plan that names no files gets no
 `--path`, so only the root guides count. Keep per slot the sum of `total_tokens_est` (bytes / 4,
-an estimate) and the `large` files (each over the per-file limit, whatever the repo's baseline
-holds) with their sizes from `files`. Exit 0 and 1 both give a report; exit 2 or a missing
-script is "no estimate" for the slot, shown as such. A slot with a large file still dispatches.
-It gets a warning that names the file and says to split it, and its dispatch message carries
+an estimate), the `large` files (each over the per-file limit, whatever the repo's baseline
+holds) with their sizes from `files`, and `total_over_by` (several guides that each fit but
+together pass the total limit). Exit 0 and 1 both give a report; exit 2 or a missing
+script is "no estimate" for the slot, shown as such. A slot with a large file or a positive `total_over_by` still dispatches.
+It gets a warning that names the file, or the guides when only the total is over, and says to
+split them, and its dispatch message carries
 `large_guides`: the large files that are inside the repo and not loaded at session start (the
 root CLAUDE.md and its imports are, so only the warning applies to them).
 

@@ -147,7 +147,11 @@ def guide_folders(root: Path) -> list[Path]:
         check=False,
     )
     if git.returncode == 0 and (root / ".git").exists():
-        found = {(root / rel).parent for rel in git.stdout.decode().split("\0") if rel}
+        found = {
+            (root / rel).parent
+            for rel in git.stdout.decode().split("\0")
+            if rel and not SKIP_DIRS.intersection(Path(rel).parts)
+        }
     else:
         found = set()
         for here, dirs, _ in os.walk(root):
@@ -180,8 +184,9 @@ def collect(root: Path, folders: list[Path], everything: bool = False) -> list[E
             if add(folder / name, "nested") and name == "CLAUDE.md":
                 follow_imports(folder / name)
 
-    if add(root / "CLAUDE.md", "claude"):
-        follow_imports(root / "CLAUDE.md")
+    for root_guide in (root / "CLAUDE.md", root / ".claude" / "CLAUDE.md"):
+        if add(root_guide, "claude"):
+            follow_imports(root_guide)
     add(root / "AGENTS.md", "agents")
     if everything:
         for here in guide_folders(root):
@@ -278,7 +283,11 @@ def write_baseline(root: Path, entries: list[Entry], limits: Limits) -> None:
             new[e.label] = min(e.size, limits.baseline.get(e.label, e.size))
     lines = [f"guide_bytes = {limits.guide_bytes}", f"total_bytes = {limits.total_bytes}"]
     if new:
-        lines += ["", "[baseline]", *(f"{json.dumps(k)} = {v}" for k, v in sorted(new.items()))]
+        lines += [
+            "",
+            "[baseline]",
+            *(f"{json.dumps(k, ensure_ascii=False)} = {v}" for k, v in sorted(new.items())),
+        ]
     # Write beside the target and swap it in, so a half-written file never replaces the config.
     fd, temp = tempfile.mkstemp(dir=root, prefix=CONFIG_NAME + ".")
     try:

@@ -326,3 +326,29 @@ def test_all_in_a_git_repo_skips_ignored_guides(
         "AGENTS.md",
         "docs/AGENTS.md",
     ]
+
+
+def test_the_dot_claude_guide_and_its_imports_are_counted(
+    check_context_budget: ModuleType, capsys: pytest.CaptureFixture[str], repo: Path
+) -> None:
+    put(repo, ".claude/CLAUDE.md", text="@notes.md\n")
+    put(repo, ".claude/notes.md", 10)
+    assert paths(report(check_context_budget, capsys, repo)) == [
+        ".claude/CLAUDE.md",
+        ".claude/notes.md",
+    ]
+
+
+def test_write_baseline_keeps_a_non_ascii_path_readable(
+    check_context_budget: ModuleType, capsys: pytest.CaptureFixture[str], repo: Path
+) -> None:
+    put(repo, "\U0001f4d8/AGENTS.md", 50_000)
+    run(check_context_budget, capsys, repo, "--all", "--write-baseline")
+    assert run(check_context_budget, capsys, repo, "--all")[0] == 0
+
+
+def test_all_in_a_git_repo_skips_dependency_folders(
+    check_context_budget: ModuleType, capsys: pytest.CaptureFixture[str], make_repo
+) -> None:
+    root = make_repo({"AGENTS.md": "x", "node_modules/pkg/AGENTS.md": "x"})
+    assert paths(report(check_context_budget, capsys, root, "--all")) == ["AGENTS.md"]
