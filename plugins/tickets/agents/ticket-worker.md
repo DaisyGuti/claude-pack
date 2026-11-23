@@ -411,6 +411,12 @@ before committing or pushing any of them, so a stop here commits nothing beyond 
    spawns `core:reviewer` once more per repo on the fixed staged diff and is handled the same
    way. After it, a finding still open goes on the follow-up list, except a P0 or P1, which
    step 4 covers.
+   Then the standards file's Codex read, per repo, when the Codex CLI is installed. Run it
+   after **Commit** below and before the push, from `$WT`: `codex review --base
+   origin/<default_branch>`, so it reads the whole change, including what section 6's
+   sub-worker merges and any conflict fix committed earlier. Handle its findings the same
+   way; fixes go in one more commit after the gates that cover them pass. Never run it twice.
+   Without the CLI, skip it and say so in the review summary.
 4. A P0 or P1 finding you agree with but cannot fix stops the run with
    `status=blocked_review_findings`, naming the finding and what you tried. Commit nothing.
 5. When the reply is `could not review`, supply what it names as missing and spawn it once

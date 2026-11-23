@@ -475,8 +475,12 @@ def test_the_agent_has_a_delegation_eval() -> None:
 
 
 def test_no_personal_paths_or_tool_names_leak_into_the_plugin() -> None:
+    # The pre-commit review names the Codex CLI on purpose (core's optional Codex read:
+    # "Codex CLI", "Codex read", `codex review`); any other Codex text is a port leftover.
     banned = re.compile(
-        r"(?-i:/Users/)|\bcodex\b|\$work-tickets|\$ticket-worker|\$write-ticket", re.I
+        r"(?-i:/Users/)|\bcodex\b(?!\s+(?:review|CLI|read)\b)"
+        r"|\$work-tickets|\$ticket-worker|\$write-ticket",
+        re.I,
     )
     for path in PLUGIN.rglob("*"):
         if (

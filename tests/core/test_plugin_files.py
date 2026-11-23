@@ -184,8 +184,14 @@ def test_long_reference_files_have_a_table_of_contents():
 
 
 def test_no_personal_or_machine_specific_text_ships():
-    # `~/.claude/` is the standard per-user Claude Code folder, so it is allowed.
-    banned = re.compile(r"/Users/|/home/\w|~/(?!\.claude)|daisy|codex|openai|chatgpt", re.I)
+    # `~/.claude/` is the standard per-user Claude Code folder, so it is allowed. The review
+    # rule names the Codex CLI on purpose (an optional second review: "Codex CLI", "Codex
+    # read", `codex review`, `command -v codex`); any other Codex text is a port leftover.
+    banned = re.compile(
+        r"/Users/|/home/\w|~/(?!\.claude)|daisy|openai|chatgpt"
+        r"|(?<!-v )\bcodex\b(?!\s+(?:review|CLI|read)\b)",
+        re.I,
+    )
     shipped = [
         p
         for p in PLUGIN.rglob("*")
@@ -260,7 +266,12 @@ def test_every_change_gets_core_reviewer_in_at_most_two_rounds():
     assert "reviews every change, whatever its size" in rule
     assert "cannot fix: it stops the landing" in rule
     assert "Your own read never counts as the adversarial review" in rule
-    assert "**At most two rounds.**" in rule and "no third review" in rule
+    assert "**At most two rounds.**" in rule and "no third `core:reviewer` round" in rule
+    # A Codex read follows the Claude rounds when the CLI is installed, once, and never blocks
+    # a landing by its absence.
+    assert "**Then a Codex read, when the Codex CLI is installed.**" in rule
+    assert "`codex review --uncommitted`" in rule and "never run it again" in rule
+    assert "When the CLI is missing, fails or is not signed in, skip it" in rule
     assert 'the DRY pass ("Say each thing once")' in rule
     eng = _flat(PLUGIN / "agents" / "eng.md")
     step = eng[
