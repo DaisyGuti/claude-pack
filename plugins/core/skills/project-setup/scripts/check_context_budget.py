@@ -11,7 +11,8 @@ Usage:
 
 ROOT is the repo root (default: the current directory). Each --path is a folder inside ROOT; the
 guides on the way from ROOT down to it are counted. --all counts every CLAUDE.md and AGENTS.md
-in the repo instead, without the memory index: the form a CI guard runs. Tokens are an estimate
+in the repo instead, without the memory index and without the total limit (no agent loads
+them all): the form a CI guard runs. Tokens are an estimate
 (bytes / 4).
 
 Limits: 40 KB per file and 60 KB in total, unless ROOT/.context-budget.toml says otherwise:
@@ -21,7 +22,8 @@ Limits: 40 KB per file and 60 KB in total, unless ROOT/.context-budget.toml says
     [baseline]               # a ratchet: a file already over the limit is held at its size
     "backend/AGENTS.md" = 395000
 
-A baselined file may not grow past its baseline, and the total limit rises by the excess the
+A baselined file may not grow past its baseline, and a baseline above its file's size is stale
+(exit 1) until `--write-baseline` lowers it. The total limit rises by the excess the
 baselines already hold. `--write-baseline` lowers or adds baseline entries for the files now
 over the limit and never raises one.
 
@@ -36,6 +38,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -79,7 +82,7 @@ def load_limits(root: Path) -> Limits:
         return Limits(DEFAULT_GUIDE_BYTES, DEFAULT_TOTAL_BYTES, {})
     try:
         data = tomllib.loads(config.read_text(encoding="utf-8"))
-    except (OSError, tomllib.TOMLDecodeError) as exc:
+    except (OSError, ValueError) as exc:  # ValueError: bad TOML or bytes that are not UTF-8
         raise UsageError(f"{config}: cannot read the config: {exc}") from exc
     values = {
         "guide_bytes": data.get("guide_bytes", DEFAULT_GUIDE_BYTES),
@@ -106,10 +109,13 @@ def imports_of(guide: Path) -> list[Path]:
             fenced = not fenced
         elif not fenced:
             for target in IMPORT.findall(CODE_SPAN.sub("", line)):
-                candidate = Path(target.rstrip(".,;:)")).expanduser()
-                resolved = candidate if candidate.is_absolute() else guide.parent / candidate
-                if resolved.is_file():
-                    found.append(resolved.resolve())
+                try:
+                    candidate = Path(target.rstrip(".,;:)")).expanduser()
+                    resolved = candidate if candidate.is_absolute() else guide.parent / candidate
+                    if resolved.is_file():
+                        found.append(resolved.resolve())
+                except (RuntimeError, OSError):
+                    continue  # `@~nosuchuser/x` or a name too long for the file system: no import
     return found
 
 
@@ -126,6 +132,8 @@ def resolve_folder(root: Path, folder: str) -> Path:
     path = (root / folder).resolve()
     if path != root and root not in path.parents:
         raise UsageError(f"--path {folder}: not inside the repo root {root}; give a folder in it")
+    if not path.is_dir():
+        raise UsageError(f"--path {folder}: no such folder in {root}; check the spelling")
     return path
 
 
@@ -193,7 +201,7 @@ def tokens(size: int) -> int:
     return -(-size // BYTES_PER_TOKEN)
 
 
-def evaluate(entries: list[Entry], limits: Limits) -> dict[str, object]:
+def evaluate(entries: list[Entry], limits: Limits, check_total: bool = True) -> dict[str, object]:
     """Measure the entries against the limits; the JSON report main prints."""
     over = []
     for entry in entries:
@@ -214,8 +222,15 @@ def evaluate(entries: list[Entry], limits: Limits) -> dict[str, object]:
         for e in entries
         if e.label in limits.baseline
     )
+    # A baseline that sits above its file's size has not been lowered yet; failing here keeps a
+    # shrunk file from growing back to its old size under a stale entry.
+    stale = [
+        {"path": e.label, "bytes": e.size, "baseline": limits.baseline[e.label]}
+        for e in entries
+        if e.label in limits.baseline and e.size < limits.baseline[e.label]
+    ]
     total = sum(e.size for e in entries)
-    total_cap = limits.total_bytes + held
+    total_over = max(0, total - limits.total_bytes - held) if check_total else 0
     return {
         "limits": {
             "guide_bytes": limits.guide_bytes,
@@ -229,36 +244,53 @@ def evaluate(entries: list[Entry], limits: Limits) -> dict[str, object]:
         ],
         "total_bytes": total,
         "total_tokens_est": tokens(total),
+        "large": [e.label for e in entries if e.size > limits.guide_bytes],
         "over_budget": over,
-        "total_over_by": max(0, total - total_cap),
-        "ok": not over and total <= total_cap,
+        "stale_baseline": stale,
+        "total_over_by": total_over,
+        "ok": not over and not stale and not total_over,
     }
 
 
-def shrunk_baselines(entries: list[Entry], limits: Limits) -> list[str]:
-    """Baseline entries the file has since fallen below: the ratchet should come down."""
-    return [
-        f"{e.label}: {e.size} bytes, baseline {limits.baseline[e.label]}; "
-        "lower it with --write-baseline"
-        for e in entries
-        if e.label in limits.baseline and e.size < limits.baseline[e.label]
-    ]
+def safe_label(label: str) -> bool:
+    """A baseline key is a path inside the repo: relative, with no `..`."""
+    path = Path(label)
+    return not path.is_absolute() and ".." not in path.parts
 
 
 def write_baseline(root: Path, entries: list[Entry], limits: Limits) -> None:
-    """Hold each file now over the limit at its size; lower an entry, never raise one."""
-    new: dict[str, int] = {}
+    """Hold each file now over the limit at its size; lower an entry, never raise one.
+
+    An entry for a guide this run did not measure (it is still on disk) stays as it was.
+    """
+    config = root / CONFIG_NAME
+    if config.is_symlink() or (config.exists() and root not in config.resolve().parents):
+        raise UsageError(f"{config}: is a symlink or leaves the repo; replace it with a plain file")
+    measured = {e.label for e in entries}
+    new = {
+        label: size
+        for label, size in limits.baseline.items()
+        if label not in measured and safe_label(label) and (root / label).is_file()
+    }
     for e in entries:
         # A file outside the repo (an import, the memory index) is machine-specific: never held.
-        if e.size > limits.guide_bytes and not Path(e.label).is_absolute():
+        if e.size > limits.guide_bytes and safe_label(e.label):
             new[e.label] = min(e.size, limits.baseline.get(e.label, e.size))
     lines = [f"guide_bytes = {limits.guide_bytes}", f"total_bytes = {limits.total_bytes}"]
     if new:
         lines += ["", "[baseline]", *(f"{json.dumps(k)} = {v}" for k, v in sorted(new.items()))]
-    (root / CONFIG_NAME).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    # Write beside the target and swap it in, so a half-written file never replaces the config.
+    fd, temp = tempfile.mkstemp(dir=root, prefix=CONFIG_NAME + ".")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write("\n".join(lines) + "\n")
+        os.replace(temp, config)
+    except BaseException:
+        os.unlink(temp)
+        raise
 
 
-def render(report: dict[str, object], notes: list[str]) -> str:
+def render(report: dict[str, object]) -> str:
     files = report["files"]
     assert isinstance(files, list)
     out = ["Auto-loaded context (tokens are an estimate: bytes / 4)"]
@@ -289,7 +321,13 @@ def render(report: dict[str, object], notes: list[str]) -> str:
         )
     if report["total_over_by"]:
         out.append(f"OVER total: {report['total_over_by']:,} B past the total limit.")
-    out += [f"Note: {n}" for n in notes]
+    stale = report["stale_baseline"]
+    assert isinstance(stale, list)
+    out += [
+        f"STALE {item['path']}: {item['bytes']:,} B, baseline {item['baseline']:,} B. "
+        "Lower it with --write-baseline."
+        for item in stale
+    ]
     out.append("Within budget." if report["ok"] else "Over budget.")
     return "\n".join(out)
 
@@ -323,15 +361,14 @@ def main(argv: list[str] | None = None) -> int:
             raise UsageError(f"{args.root}: not a folder; give the repo root")
         limits = load_limits(root)
         entries = collect(root, [resolve_folder(root, f) for f in args.path], args.all)
+        if args.write_baseline:
+            write_baseline(root, entries, limits)
+            limits = load_limits(root)
     except (UsageError, OSError) as exc:
         print(f"check_context_budget.py: {exc}", file=sys.stderr)
         return 2
-    if args.write_baseline:
-        write_baseline(root, entries, limits)
-        limits = load_limits(root)
-    report = evaluate(entries, limits)
-    notes = shrunk_baselines(entries, limits)
-    print(json.dumps({**report, "notes": notes}, indent=2) if args.json else render(report, notes))
+    report = evaluate(entries, limits, check_total=not args.all)
+    print(json.dumps(report, indent=2) if args.json else render(report))
     return 0 if report["ok"] else 1
 
 

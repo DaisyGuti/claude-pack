@@ -15,7 +15,8 @@ step below says the choice is the user's.
 
 - Read anything in the repo. Write only the repo's `CLAUDE.md` (at the repo root, or
   `.claude/CLAUDE.md` if that is where the repo already keeps it). Step 7's context-budget
-  guard is the one other write, and only after the user says yes.
+  guard adds a copy of the check script, `.context-budget.toml` and one check entry, and only
+  after the user says yes.
 - Do not commit, push or open a review. Show the diff and let the user land it through the
   repo's normal pull or merge request flow.
 - If the path is not inside a git repository, ask for the repo path and stop.

@@ -78,6 +78,7 @@ def test_nested_guides_on_the_way_to_each_folder_are_counted(
     put(repo, "AGENTS.md", 10)
     put(repo, "backend/AGENTS.md", 20)
     put(repo, "backend/api/CLAUDE.md", 30)
+    put(repo, "backend/api/new_dir/notes.txt", 1)
     put(repo, "backend/other/AGENTS.md", 40)
     put(repo, "frontend/AGENTS.md", 50)
     data = report(check_context_budget, capsys, repo, "--path", "backend/api/new_dir")
@@ -176,14 +177,56 @@ def test_write_baseline_adds_and_lowers_entries_but_never_raises_one(
     assert run(check_context_budget, capsys, repo, "--path", "big")[0] == 1
 
 
-def test_a_file_that_shrank_below_its_baseline_is_noted_but_passes(
+def test_a_baseline_above_its_file_fails_until_lowered(
     check_context_budget: ModuleType, capsys: pytest.CaptureFixture[str], repo: Path
 ) -> None:
     put(repo, ".context-budget.toml", text='[baseline]\n"AGENTS.md" = 50000\n')
     put(repo, "AGENTS.md", 45_000)
     code, out, _ = run(check_context_budget, capsys, repo)
-    assert code == 0
-    assert "lower it with --write-baseline" in out
+    assert code == 1
+    assert "STALE AGENTS.md" in out
+    run(check_context_budget, capsys, repo, "--write-baseline")
+    assert run(check_context_budget, capsys, repo)[0] == 0
+
+
+def test_write_baseline_keeps_entries_for_guides_it_did_not_measure(
+    check_context_budget: ModuleType, capsys: pytest.CaptureFixture[str], repo: Path
+) -> None:
+    put(repo, "docs/AGENTS.md", 10)
+    put(repo, "apps/AGENTS.md", 50_000)
+    put(repo, ".context-budget.toml", text='[baseline]\n"apps/AGENTS.md" = 50000\n')
+    run(check_context_budget, capsys, repo, "--path", "docs", "--write-baseline")
+    assert '"apps/AGENTS.md" = 50000' in (repo / ".context-budget.toml").read_text("utf-8")
+
+
+def test_all_enforces_each_file_but_not_the_total(
+    check_context_budget: ModuleType, capsys: pytest.CaptureFixture[str], repo: Path
+) -> None:
+    for area in "abc":
+        put(repo, f"{area}/AGENTS.md", 30_000)
+    data = report(check_context_budget, capsys, repo, "--all")
+    assert data["total_bytes"] == 90_000
+    assert data["ok"] is True
+
+
+def test_a_symlinked_config_is_refused_and_its_target_left_untouched(
+    check_context_budget: ModuleType, capsys: pytest.CaptureFixture[str], repo: Path, tmp_path: Path
+) -> None:
+    victim = put(tmp_path, "victim.txt", text="keep me\n")
+    (repo / ".context-budget.toml").symlink_to(victim)
+    put(repo, "AGENTS.md", 50_000)
+    code, _, err = run(check_context_budget, capsys, repo, "--write-baseline")
+    assert code == 2
+    assert "symlink" in err
+    assert victim.read_text(encoding="utf-8") == "keep me\n"
+
+
+def test_a_missing_path_folder_exits_2(
+    check_context_budget: ModuleType, capsys: pytest.CaptureFixture[str], repo: Path
+) -> None:
+    code, _, err = run(check_context_budget, capsys, repo, "--path", "typo")
+    assert code == 2
+    assert "no such folder" in err
 
 
 @pytest.mark.parametrize(
@@ -230,10 +273,11 @@ def test_json_report_has_the_documented_shape(
         "files",
         "total_bytes",
         "total_tokens_est",
+        "large",
         "over_budget",
+        "stale_baseline",
         "total_over_by",
         "ok",
-        "notes",
     }
     assert data["files"] == [{"path": "CLAUDE.md", "kind": "claude", "bytes": 8, "tokens_est": 2}]
     assert data["ok"] is True

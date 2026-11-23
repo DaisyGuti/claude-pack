@@ -137,7 +137,7 @@ is not dispatched and its batch goes without it.
   `skills/project-setup/scripts/check_context_budget.py`, found with
   `ls ${CLAUDE_PLUGIN_ROOT}/../../core/*/skills/project-setup/scripts/check_context_budget.py
   ${CLAUDE_PLUGIN_ROOT}/../core/skills/project-setup/scripts/check_context_budget.py` (the first
-  form is an installed pack, the second a checkout). When neither exists, say once that the `core`
+  form is an installed pack, the second a checkout; with several matches take the newest). When neither exists, say once that the `core`
   plugin is missing, skip the preflight in step 5a and continue. Never halt on it.
 - **Orchestrate; never implement.** You never edit a ticket's code. Workers return a paragraph
   and one `RESULT` line; the run record holds the detail, so do not ask for logs.
@@ -279,20 +279,23 @@ batching on, a batch sorts and counts as one item, at its highest child's priori
 ### 5a. Context preflight
 
 For each slot (a batch counts as one), take the paths its plan's **Files to touch** names (the
-latest `### Final Plan` comment and any addenda, from **read-issue**; a batch: every child's) and
-run, in the owning repo's primary clone:
+latest `### Final Plan` comment and any addenda, from **read-issue**; a batch: every child's),
+drop any `:12-30` or `::symbol` suffix, and group them by repo (`other-repo: src/a.py` belongs to
+that repo's clone in `repo_map`). Run, once per repo, in that repo's primary clone:
 
 ```sh
 python3 <budget-check> <clone> --path <folder> --path <folder> --json
 ```
 
-with one `--path` per distinct folder of those paths (a file's folder; a folder as written). A
-plan that names no files gets no `--path`, so only the root guides count. Keep per slot the
-estimate (`total_tokens_est`, bytes / 4) and every `over_budget` file with its size and
-`over_by`. Exit 0 and 1 both give a report; exit 2 or a missing script is "no estimate" for the
-slot, shown as such. An over-budget slot still dispatches. It gets a warning that names the
-file and says to split it, and its dispatch message carries `large_guides`. A file is judged by
-the repo's own `.context-budget.toml` when it has one.
+with one `--path` per distinct folder of those paths (a file's folder; a folder as written; for a
+folder that does not exist yet, its nearest existing parent). A plan that names no files gets no
+`--path`, so only the root guides count. Keep per slot the sum of `total_tokens_est` (bytes / 4,
+an estimate) and the `large` files (each over the per-file limit, whatever the repo's baseline
+holds) with their sizes from `files`. Exit 0 and 1 both give a report; exit 2 or a missing
+script is "no estimate" for the slot, shown as such. A slot with a large file still dispatches.
+It gets a warning that names the file and says to split it, and its dispatch message carries
+`large_guides`: the large files that are inside the repo and not loaded at session start (the
+root CLAUDE.md and its imports are, so only the warning applies to them).
 
 ### 6. Dry run
 
