@@ -926,17 +926,24 @@ UNVERIFIED: run only against a work item that does not exist.
 Contract: `{title, body, state, comments[{created, body}]}` for one parent.
 
 ```bash
-glab api --hostname <host> graphql -f path="<group>" -f iid="<number>" \
-  -f query='query($path: ID!, $iid: String!) { namespace(fullPath: $path) { workItem(iid: $iid) {
-  title description state widgets { ... on WorkItemWidgetNotes { discussions(first: 100) { nodes {
-    notes { nodes { system body createdAt } } } } } } } } }' |
-jq -e -c '.data.namespace.workItem // error("no such parent") | {title, body: .description,
-  state: (.state | ascii_downcase),
-  comments: [.widgets[] | select(has("discussions")) | .discussions.nodes[].notes.nodes[] |
-    select(.system | not) | {created: .createdAt, body}]}'
+glab api --hostname <host> graphql --paginate -f path="<group>" -f iid="<number>" \
+  -f query='query($path: ID!, $iid: String!, $endCursor: String) { namespace(fullPath: $path) {
+  workItem(iid: $iid) { title description state widgets { ... on WorkItemWidgetNotes {
+    discussions(first: 100, after: $endCursor) { pageInfo { hasNextPage endCursor }
+      nodes { notes { nodes { system body createdAt } } } } } } } } }' |
+jq -e -s -c '[.[].data.namespace.workItem] as $pages | $pages[0] // error("no such parent") |
+  {title, body: .description, state: (.state | ascii_downcase),
+   comments: [$pages[].widgets[] | select(has("discussions")) | .discussions.nodes[].notes.nodes[] |
+     select(.system | not) | {created: .createdAt, body}]}'
 ```
 
-Checked on the group's epic: its title and body came back, with no comments yet.
+`--paginate` follows the discussions' `endCursor` and prints one document per page; `jq -s`
+joins them. Without it only the first 100 discussions come back, system notes included (every
+child attached or moved adds one), so a busy batch epic passes 100 with few real comments. On
+2026-11-24 a worker run read rcf&11's first page only, missed four `### Final Plan addendum`
+comments posted that morning and blocked those children as unplanned. Checked the same day on
+that epic: the paged read returned 35 comments with all four addenda; the first page alone
+returned 12 and none of them.
 
 ## close-parent
 
