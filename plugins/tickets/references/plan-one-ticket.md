@@ -127,6 +127,9 @@ In a dry run, print the plan, the labels and the lane move below, run no write o
    tricky invariants. A model label already on the ticket stays
    as it is, in any form the registry resolves, and so does a ticket that has several (report
    that; do not pick). Otherwise **ensure-label**, then **add-label**.
+   **Weight:** when the registry's Model labels row for the ticket's tier (the label it now
+   carries) has a weight, **set-weight** to it, replacing any weight already there. No weight
+   in the registry, or several model labels on the ticket: set none.
 3. **Run label.** Judge it from the acceptance criteria you just wrote, per
    [ticket-labels.md](ticket-labels.md), "Run label". None on the ticket: **ensure-label**
    and **add-label** the right one. The wrong one: **remove-label** it and add the right one.
@@ -172,8 +175,8 @@ does not need the plan text back.
 
 `daily-grooming` also uses this procedure on a ticket that already has a `### Final Plan`
 comment but lacks a model or run label, since `work-tickets` will not dispatch it that way. Do
-step 4's labels (2 and 3) judging from the existing plan, and its lane (4), post nothing, and
-return `labelled <repo>#<n>: <labels added>`.
+step 4's labels and weight (2 and 3) judging from the existing plan, and its lane (4), post
+nothing, and return `labelled <repo>#<n>: <labels added>`.
 
 ## Batches, when batching is on
 

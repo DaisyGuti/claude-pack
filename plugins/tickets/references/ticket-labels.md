@@ -52,6 +52,10 @@ registry's Model labels table maps the tier to.
 [model-selection.md](model-selection.md) has the detail and how the label becomes a model.
 A model label a person put on the ticket stays as it is.
 
+**Weight.** The model tier is also the ticket's planned size. When the registry's Model labels
+table gives a tier a weight, planning sets the issue's weight from the tier's label
+(plan-one-ticket.md step 4), so a milestone burndown counts size rather than tickets.
+
 ## Blocked
 
 There is one way to say a ticket or a review is held: the registry's blocked label plus a

@@ -111,11 +111,16 @@ The label that picks a ticket's worker model, one per tier. `work-tickets` reads
 whichever label here maps to a tier, and `write-ticket` writes the mapped label. The
 tiers run on Claude Haiku (`fast`), Sonnet (`workhorse`) and Opus (`frontier`).
 
-| Tier | Label | Color |
-| --- | --- | --- |
-| fast | `model:haiku` | `ededed` |
-| workhorse | `model:sonnet` | `ededed` |
-| frontier | `model:opus` | `ededed` |
+| Tier | Label | Color | Weight |
+| --- | --- | --- | --- |
+| fast | `model:haiku` | `ededed` | 1 |
+| workhorse | `model:sonnet` | `ededed` | 3 |
+| frontier | `model:opus` | `ededed` | 5 |
+
+Weight is optional. When a tier has one, planning sets the issue's weight to it together with
+the model label, so a milestone's burndown counts planned size. On GitLab it is the issue
+weight. On GitHub it is a number issue field named `Weight` defined by the repo's owner, or,
+without one, a number field named `Weight` on the board. Leave the column out to set no weight.
 
 The labels `model:fast`, `model:workhorse`, `model:frontier` and the dated
 `model:claude-haiku-*`, `model:claude-sonnet-*`, `model:claude-opus-*` forms resolve to

@@ -226,8 +226,13 @@ def parse(text: str, home: Path | None = None) -> dict[str, Any]:
         }
         for row in table(top.get("Labels", ""))
     }
+    # Weight is optional: without the column a tier has none and planning sets no weight.
     model_labels = {
-        row.get("tier", ""): {"label": row.get("label", ""), "color": row.get("color", "")}
+        row.get("tier", ""): {
+            "label": row.get("label", ""),
+            "color": row.get("color", ""),
+            "weight": weight(row.get("weight", "")),
+        }
         for row in table(top.get("Model labels", ""))
     }
     batch_vals = key_values(top.get("Batches", ""))
@@ -261,6 +266,13 @@ def parse(text: str, home: Path | None = None) -> dict[str, Any]:
         "model_labels": model_labels,
         "repos": repos,
     }
+
+
+def weight(cell: str) -> int | str | None:
+    """A Model labels Weight cell: a whole number, None when empty, else the text for problems()."""
+    if not cell:
+        return None
+    return int(cell) if cell.isdigit() else cell
 
 
 def expand(path: str, home: Path) -> str:
@@ -329,6 +341,12 @@ def problems(reg: dict[str, Any], which: Callable[[str], str | None] | None = No
     for tier in TIERS:
         if not reg["model_labels"].get(tier, {}).get("label"):
             found.append(f"Model labels has no row for tier '{tier}'")
+        tier_weight = reg["model_labels"].get(tier, {}).get("weight")
+        if tier_weight is not None and not isinstance(tier_weight, int):
+            found.append(
+                f"Model labels weight for tier '{tier}' is '{tier_weight}'; "
+                "it must be a whole number or empty"
+            )
     if not reg["repos"]:
         found.append("Repos table is empty; add at least one repo")
     for repo in reg["repos"]:

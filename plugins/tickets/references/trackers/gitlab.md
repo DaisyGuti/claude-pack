@@ -49,6 +49,7 @@ command for one. `jq` must be installed. When the installed `glab` rejects a fla
 - edit-issue
 - read-milestone
 - set-milestone
+- set-weight
 - close-issue
 - verify-closed
 - open-review
@@ -646,6 +647,29 @@ The global id **read-milestone** prints matches the REST `milestone.id`. Moving 
 one milestone to another uses the same endpoint and field. An issue number that does not exist
 prints `{"message":"404 Not found"}` and exits 1.
 
+## set-weight
+
+Contract: sets one issue's weight to a whole number, replacing any weight it had.
+
+```bash
+set -o pipefail
+glab api --hostname <host> -X PUT "projects/<enc>/issues/<n>" -f weight=<weight> | jq -c '{weight}'
+```
+
+It prints the weight read back, as `{"weight":3}`. Read the result in this order:
+
+- A non-zero exit (a 404, a 403, a timeout; `pipefail` passes `glab`'s exit through `jq`) is
+  a failure to report for that issue.
+- `{"weight":null}` with exit 0 means the plan has no weight, since issue weight is a
+  paid-tier field: skip **set-weight** for the rest of the run and say so once.
+- Any other weight than the one asked for is a failure to report.
+
+Checked 2026-11-24 on a self-managed GitLab (Premium): 564 open and closed issues across three
+projects of one group, each read back, and the group milestone's burndown counted them. That
+run compared with `jq -e '.weight == $w'`; the `{weight}` filter reads the same response.
+UNVERIFIED: what a plan without weight answers (the check ran on Premium only), so the null or
+missing `.weight` is an assumption until a run on such a plan.
+
 ## close-issue
 
 Contract: closes one issue with a closing comment.
@@ -902,17 +926,24 @@ UNVERIFIED: run only against a work item that does not exist.
 Contract: `{title, body, state, comments[{created, body}]}` for one parent.
 
 ```bash
-glab api --hostname <host> graphql -f path="<group>" -f iid="<number>" \
-  -f query='query($path: ID!, $iid: String!) { namespace(fullPath: $path) { workItem(iid: $iid) {
-  title description state widgets { ... on WorkItemWidgetNotes { discussions(first: 100) { nodes {
-    notes { nodes { system body createdAt } } } } } } } } }' |
-jq -e -c '.data.namespace.workItem // error("no such parent") | {title, body: .description,
-  state: (.state | ascii_downcase),
-  comments: [.widgets[] | select(has("discussions")) | .discussions.nodes[].notes.nodes[] |
-    select(.system | not) | {created: .createdAt, body}]}'
+glab api --hostname <host> graphql --paginate -f path="<group>" -f iid="<number>" \
+  -f query='query($path: ID!, $iid: String!, $endCursor: String) { namespace(fullPath: $path) {
+  workItem(iid: $iid) { title description state widgets { ... on WorkItemWidgetNotes {
+    discussions(first: 100, after: $endCursor) { pageInfo { hasNextPage endCursor }
+      nodes { notes { nodes { system body createdAt } } } } } } } } }' |
+jq -e -s -c '[.[].data.namespace.workItem] as $pages | $pages[0] // error("no such parent") |
+  {title, body: .description, state: (.state | ascii_downcase),
+   comments: [$pages[].widgets[] | select(has("discussions")) | .discussions.nodes[].notes.nodes[] |
+     select(.system | not) | {created: .createdAt, body}]}'
 ```
 
-Checked on the group's epic: its title and body came back, with no comments yet.
+`--paginate` follows the discussions' `endCursor` and prints one document per page; `jq -s`
+joins them. Without it only the first 100 discussions come back, system notes included (every
+child attached or moved adds one), so a busy batch epic passes 100 with few real comments. On
+2026-11-24 a worker run read rcf&11's first page only, missed four `### Final Plan addendum`
+comments posted that morning and blocked those children as unplanned. Checked the same day on
+that epic: the paged read returned 35 comments with all four addenda; the first page alone
+returned 12 and none of them.
 
 ## close-parent
 
