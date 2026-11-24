@@ -659,7 +659,11 @@ glab api --hostname <host> -X PUT "projects/<enc>/issues/<n>" -f weight=<weight>
 It succeeds only when the weight read back is the one asked for. Checked 2026-11-24 on a
 self-managed GitLab (Premium): 564 open and closed issues across three projects of one group,
 each read back, and the group milestone's burndown counted them. Issue weight is a paid-tier
-field; on a plan without it, skip the call and say so once for the run.
+field. A non-zero `glab` exit (a 404, a 403, a timeout) is a failure to report for that issue.
+When `glab` exits 0 with the issue object and `jq -e` fails because `.weight` is null or absent,
+the plan has no weight: skip **set-weight** for the rest of the run and say so once. UNVERIFIED: what a plan without
+weight answers (the check ran on Premium only), so the null or missing `.weight` is an
+assumption until a run on such a plan.
 
 ## close-issue
 

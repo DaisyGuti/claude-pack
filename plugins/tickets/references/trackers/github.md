@@ -4,6 +4,10 @@ The exact commands for each tracker operation when the registry says
 `tracker: github`. Procedures name an operation (for example **set-lane**); this file
 says how to run it. It uses the GitHub CLI (`gh`) and GitHub Projects (v2). Flags were
 checked against `gh` 2.101.0 on 2026-10-08, and the JSON shapes against a live board.
+On 2026-11-24, with `gh` 2.103.0, **capture-board**'s weight field, **add-to-board**,
+**set-weight**'s project field path, **read-milestone** and every batch parent write ran for
+real on github.com against a throwaway user-owned project and a private repo of the same user.
+What that setup could not show is marked `UNVERIFIED:` with the reason.
 
 Read this file once, before the first tracker action of a run, and only when the
 registry's tracker is `github`. Run each operation exactly as written below; never
@@ -41,6 +45,7 @@ improvise a command for one. When the installed `gh` rejects a flag, run
 - list-open-issues
 - list-open-reviews
 - review-state
+- Batch parents
 - list-parents
 - read-parent
 - create-parent
@@ -115,6 +120,22 @@ creates a missing label in the issue's repo when it first sets it. `has_priority
 true in both modes. A registry lane value that is not a key of `status_options` goes in
 `missing_lanes`. Print the raw output when the caller halts on a missing value.
 
+`weight_field_id` is the id of the board's number field named `Weight`, or null. The field
+list above cannot say which: it reports every field that is not a single select as
+`"type": "ProjectV2Field"`, a text field included. Read the data type with a third call:
+
+```bash
+gh api graphql -f id=<project_id> -f query='query($id: ID!) { node(id: $id) { ... on ProjectV2 {
+  fields(first: 100) { nodes { ... on ProjectV2Field { id name dataType } } } } } }' \
+  --jq '{weight_field_id: ([.data.node.fields.nodes[] | select(.name == "Weight" and .dataType == "NUMBER")][0].id)}'
+```
+
+It prints `{"weight_field_id":null}` when the board has no such field, or only a `Weight` of
+another type. Do not use `field(name: "Weight")`: a name the board lacks fails the call with
+`NOT_FOUND` and exit 1. Checked on the throwaway board: it printed null before any `Weight`
+field existed, and the `PVTF_...` id once a number field named `Weight` was created. The same
+query with a text field's name printed null, so the `dataType` filter leaves text fields out.
+
 ## list-items
 
 Contract: every board item, optionally only those in one lane, as
@@ -175,7 +196,9 @@ gh issue list --repo <remote> --state all --search "<keywords>" --limit 20 \
   --json number,title,state,url --jq '.[] | {number, title, state: (.state | ascii_downcase), url}'
 ```
 
-To find the model-fit notes workers leave, search `"Model-fit note in:comments"`.
+To find the model-fit notes workers leave, search `"Model-fit note in:comments"`. Checked
+2026-11-24: it found an issue by a comment's text, but only some seconds after the comment
+was posted, once the search index caught up; asked at once it printed nothing.
 
 ## current-user
 
@@ -308,6 +331,8 @@ Contract: puts an existing issue on the board and returns its `item_ref`.
 gh project item-add <N> --owner <O> --url <issue url> --format json --jq .id
 ```
 
+Checked 2026-11-24: it printed the new item's `PVTI_...` id.
+
 ## edit-issue
 
 Contract: replaces an issue's body, and its title when one is given.
@@ -327,6 +352,9 @@ gh issue view <n> --repo <remote> --json milestone \
   --jq '{milestone: (.milestone | if . == null then null else {id: .number, title} end)}'
 ```
 
+Checked 2026-11-24: an issue with no milestone printed `{"milestone":null}`, and the same issue
+in a new milestone printed its number and title.
+
 ## set-milestone
 
 Contract: puts one issue in a milestone of its own repo, by title, replacing any milestone it
@@ -343,18 +371,71 @@ real issue, and the not-found error on an unknown title.
 
 Contract: sets one issue's weight to a whole number, replacing any weight it had.
 
-GitHub issues have no weight. The board carries one when it has a number field named
-`Weight`: **capture-board**'s field list shows it (`"type": "ProjectV2Field"`, data type
-number); store its `id` in `tracker_ids.weight_field_id` (null when the board has none).
+A GitHub issue has no built-in weight. Two fields can carry one, tried in this order:
 
-```bash
-gh project item-edit --project-id <tracker_ids.project_id> --id <item_ref> \
-  --field-id <tracker_ids.weight_field_id> --number <weight>
-```
+1. **An issue field.** A number issue field named `Weight`, defined by the repo's owner (an
+   organization or a user, in its Settings under "Issue fields"; GitHub docs, "Managing issue
+   fields", read 2026-11-24:
+   https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/managing-issue-fields).
+   It lives on the issue in every repo of that owner, like GitLab's weight. Run the lookup for
+   each issue, since repos of one board can have different owners. `<owner>` and `<repo>` are
+   the two halves of `<remote>`. Look up the issue and the field in one call:
 
-With `weight_field_id` null, skip the call and say so once for the run. UNVERIFIED: no board
-with a `Weight` number field was available to run it against; `--number` is the flag
-`gh project item-edit --help` gives for a number field.
+   ```bash
+   gh api graphql -f owner=<owner> -f repo=<repo> -F n=<n> -f query='query($owner: String!, $repo: String!, $n: Int!) {
+     repository(owner: $owner, name: $repo) { issue(number: $n) { id }
+       issueFields(first: 25) { nodes { ... on IssueFieldNumber { id name } } } } }' \
+     --jq '.data.repository | {issue_id: .issue.id, field_id: ([.issueFields.nodes[] | select(.name == "Weight")][0].id)}'
+   ```
+
+   An owner has at most 25 issue fields (the same page), so one page holds them all. A host
+   whose schema has no `issueFields` (an older GitHub Enterprise Server) fails the lookup with
+   a GraphQL error that names `issueFields`; count that one error as no issue field and go to
+   the project field. Any other failed lookup is a failure to report. UNVERIFIED: the exact
+   error text on such a host (none was available). With a
+   `field_id`, set the value and read it back:
+
+   ```bash
+   gh api graphql -f issue=<issue_id> -f field=<field_id> -F w=<weight> \
+     -f query='mutation($issue: ID!, $field: ID!, $w: Float!) {
+     setIssueFieldValue(input: {issueId: $issue, issueFields: [{fieldId: $field, numberValue: $w}]}) {
+       issue { issueFieldValues(first: 25) { nodes { ... on IssueFieldNumberValue {
+         value field { ... on IssueFieldNumber { id } } } } } } } }' \
+     --jq '[.data.setIssueFieldValue.issue.issueFieldValues.nodes[] | select(.field.id == "<field_id>") | .value] == [<weight>]'
+   ```
+
+   It succeeds only when it prints `true`. A non-zero exit or `false` is a failure to report
+   for that issue; do not also write the project field, so the issue never carries two
+   weights. `gh` has no flag for issue fields (`gh issue edit`
+   in 2.103.0 has none), so both calls go through `gh api graphql`. The REST form is
+   `PUT` or `POST repos/<owner>/<repo>/issues/<n>/issue-field-values`; it takes the field's
+   numeric id and `PUT` replaces every field value on the issue, so the GraphQL form is used.
+   Checked 2026-11-24: the lookup ran for real on a user-owned repo with no issue fields and
+   printed `field_id` null. UNVERIFIED: the mutation against a real field. Defining an issue
+   field (`createIssueField`) needs the `user` or `admin:org` scope, which the checking token
+   lacked, so the mutation ran only against a field id that does not exist: it accepted the
+   input types with the `repo` and `project` scopes and failed with `NOT_FOUND`, exit 1.
+2. **A project field.** Without an issue field, the board's number field named `Weight`,
+   `tracker_ids.weight_field_id` from **capture-board**:
+
+   ```bash
+   gh project item-edit --project-id <tracker_ids.project_id> --id <item_ref> \
+     --field-id <tracker_ids.weight_field_id> --number <weight>
+   gh api graphql -f id=<item_ref> -f query='query($id: ID!) { node(id: $id) { ... on ProjectV2Item {
+     fieldValueByName(name: "Weight") { ... on ProjectV2ItemFieldNumberValue { number } } } } }' \
+     --jq '.data.node.fieldValueByName.number == <weight>'
+   ```
+
+   It succeeds only when the second command prints `true`. The value lives on the board
+   item, so an issue on two boards has a weight on each. Checked 2026-11-24: set 3, then 5,
+   each read back, and **list-items**' raw item shows it as `"weight": 5`. A `--number` on a
+   text field fails with `Did not receive a text value`, and an unknown `item_ref` fails with
+   `Could not resolve to a node`, both exit 1. `--number` also takes a decimal, so pass the
+   registry's whole number as written.
+
+With neither field for an issue (its lookup's `field_id` and `weight_field_id` both null),
+skip that issue's weight. Say so once for the run, naming both fields so the user can add
+one, and keep running the lookup for later issues.
 
 ## close-issue
 
@@ -461,7 +542,7 @@ gh api graphql --paginate -f query='query($endCursor:String){ repository(owner:"
   issues(states:OPEN,first:100,after:$endCursor){ pageInfo{hasNextPage endCursor}
     nodes{ number title url repository{nameWithOwner} labels(first:50){nodes{name}}
       subIssuesSummary{total} subIssues(first:100){nodes{number state repository{nameWithOwner}}} } } } }' \
-  --jq '.data.repository.issues.nodes[] | select(.subIssuesSummary.total > 0) |
+  --jq '.data.repository.issues.nodes[] | select(.subIssuesSummary.total > 0) | select(.subIssues.nodes | length > 0) |
     select(.title | startswith("Batch: ")) | {
     parent_ref: (.number | tostring), number, repo: .repository.nameWithOwner, title, url,
     labels: [.labels.nodes[].name],
@@ -476,7 +557,10 @@ follows the cursor. `subIssues(first:100)` covers the 100-per-parent limit in on
 the first 100 parents printed. Checked on a team repo with a few hundred open issues: every
 parent titled `Batch: ` was printed with its labels and its children
 (`{"number", "repo", "state"}` each), and parents with other titles were left out. The jq
-output is one JSON object per parent, not an array.
+output is one JSON object per parent, not an array. `subIssuesSummary.total` can lag a
+change: right after a parent's only child moved to another parent, the old parent still
+printed, with `children: []`, and read `total` 0 a moment later. The `length > 0` filter
+leaves such a parent out.
 
 ## read-parent
 
@@ -510,10 +594,8 @@ gh issue create --repo <remote> --title "<title>" --body-file <file> --label "<a
 ```
 
 This is **create-issue** without **add-to-board**. It prints the issue's URL; the number is
-the last path segment, and `parent_ref` is that number.
-
-UNVERIFIED: not run, because the check was read-only; the command is the one **create-issue**
-documents, and nothing in it is specific to a parent.
+the last path segment, and `parent_ref` is that number. Checked 2026-11-24: it printed the
+new issue's URL, and **list-parents** then printed the parent once it had a child.
 
 ## attach-child
 
@@ -543,10 +625,13 @@ Checked the id lookup on a team repo: it returns the numeric `id` and the node i
 The REST list of a parent's children (`gh api repos/<owner>/<repo>/issues/<parent>/sub_issues`,
 `per_page` up to 100) matched the GraphQL list.
 
-UNVERIFIED: the POST itself was not run (read-only check). The path, body fields and
-`replace_parent` come from the REST docs; the `addSubIssue` input fields were confirmed by
-schema introspection (`issueId`, `subIssueId`, `subIssueUrl`, `replaceParent`). Verify an
-attach with **read-parent** on the child.
+Checked the POST on 2026-11-24: it printed the parent, and **read-parent** on the child then
+showed that parent with `batch` true. The same POST to a second parent moved the child there.
+Two refusals, both HTTP 422 and exit 1: attaching a child to the parent it already has
+(`Issue may not contain duplicate sub-issues`), and attaching a child that has another parent
+without `replace_parent` (`Sub issue may only have one parent`). So treat the duplicate 422
+as already attached, after **read-parent** confirms it. Verify every attach with
+**read-parent** on the child.
 
 ## comment-parent
 
@@ -564,6 +649,7 @@ Contract: closes the parent with a closing comment. On GitHub it is **close-issu
 parent's number. A pull request body line `Closes #<parent>` closes the parent when the
 pull request merges, like any issue (see **close-issue** for the keywords).
 
-UNVERIFIED: not run for a parent. Closing a parent is documented here only as the ordinary
-issue close; the docs read do not say that closing a parent changes its sub-issues, so close
-each child separately.
+Checked 2026-11-24 with **comment-parent** first: the parent read `closed` with both comments,
+and its open sub-issue stayed `open`. Closing a parent leaves its children alone, so close
+each child separately. UNVERIFIED: the `Closes #<parent>` keyword on a merged pull request
+(no pull request was merged in the throwaway repo); it is the ordinary issue keyword.

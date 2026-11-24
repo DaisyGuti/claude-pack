@@ -118,8 +118,9 @@ tiers run on Claude Haiku (`fast`), Sonnet (`workhorse`) and Opus (`frontier`).
 | frontier | `model:opus` | `ededed` | 5 |
 
 Weight is optional. When a tier has one, planning sets the issue's weight to it together with
-the model label (GitLab's issue weight; on GitHub a project number field named `Weight`), so a
-milestone's burndown counts planned size. Leave the column out to set no weight.
+the model label, so a milestone's burndown counts planned size. On GitLab it is the issue
+weight. On GitHub it is a number issue field named `Weight` defined by the repo's owner, or,
+without one, a number field named `Weight` on the board. Leave the column out to set no weight.
 
 The labels `model:fast`, `model:workhorse`, `model:frontier` and the dated
 `model:claude-haiku-*`, `model:claude-sonnet-*`, `model:claude-opus-*` forms resolve to
