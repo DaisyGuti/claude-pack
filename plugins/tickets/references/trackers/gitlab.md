@@ -652,18 +652,23 @@ prints `{"message":"404 Not found"}` and exits 1.
 Contract: sets one issue's weight to a whole number, replacing any weight it had.
 
 ```bash
-glab api --hostname <host> -X PUT "projects/<enc>/issues/<n>" -f weight=<weight> |
-  jq -e --argjson w <weight> '.weight == $w'
+set -o pipefail
+glab api --hostname <host> -X PUT "projects/<enc>/issues/<n>" -f weight=<weight> | jq -c '{weight}'
 ```
 
-It succeeds only when the weight read back is the one asked for. Checked 2026-11-24 on a
-self-managed GitLab (Premium): 564 open and closed issues across three projects of one group,
-each read back, and the group milestone's burndown counted them. Issue weight is a paid-tier
-field. A non-zero `glab` exit (a 404, a 403, a timeout) is a failure to report for that issue.
-When `glab` exits 0 with the issue object and `jq -e` fails because `.weight` is null or absent,
-the plan has no weight: skip **set-weight** for the rest of the run and say so once. UNVERIFIED: what a plan without
-weight answers (the check ran on Premium only), so the null or missing `.weight` is an
-assumption until a run on such a plan.
+It prints the weight read back, as `{"weight":3}`. Read the result in this order:
+
+- A non-zero exit (a 404, a 403, a timeout; `pipefail` passes `glab`'s exit through `jq`) is
+  a failure to report for that issue.
+- `{"weight":null}` with exit 0 means the plan has no weight, since issue weight is a
+  paid-tier field: skip **set-weight** for the rest of the run and say so once.
+- Any other weight than the one asked for is a failure to report.
+
+Checked 2026-11-24 on a self-managed GitLab (Premium): 564 open and closed issues across three
+projects of one group, each read back, and the group milestone's burndown counted them. That
+run compared with `jq -e '.weight == $w'`; the `{weight}` filter reads the same response.
+UNVERIFIED: what a plan without weight answers (the check ran on Premium only), so the null or
+missing `.weight` is an assumption until a run on such a plan.
 
 ## close-issue
 
