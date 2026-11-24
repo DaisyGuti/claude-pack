@@ -261,6 +261,29 @@ def test_bad_batch_size_or_mode_is_a_problem(filled_registry: Path, value: str) 
     assert any("Batching is 'piles'" in p for p in payload["problems"])
 
 
+def test_model_label_weights_are_read_and_optional(filled_registry: Path) -> None:
+    text = (filled_registry / "registry.md").read_text(encoding="utf-8")
+    tiers = registry.parse(text)["model_labels"]
+    assert {tier: row["weight"] for tier, row in tiers.items()} == {
+        "fast": 1,
+        "workhorse": 3,
+        "frontier": 5,
+    }
+    no_column = text.replace("| Tier | Label | Color | Weight |", "| Tier | Label | Color |")
+    no_column = no_column.replace("| --- | --- | --- | --- |", "| --- | --- | --- |", 1)
+    for size in (" 1 |", " 3 |", " 5 |"):
+        no_column = no_column.replace(f"`ededed` |{size}", "`ededed` |")
+    assert all(row["weight"] is None for row in registry.parse(no_column)["model_labels"].values())
+
+
+def test_a_weight_that_is_not_a_whole_number_is_a_problem(filled_registry: Path) -> None:
+    path = filled_registry / "registry.md"
+    text = path.read_text(encoding="utf-8").replace("| `ededed` | 5 |", "| `ededed` | big |")
+    path.write_text(text, encoding="utf-8")
+    _, payload, _ = registry.ensure(filled_registry)
+    assert any("weight for tier 'frontier' is 'big'" in p for p in payload["problems"])
+
+
 def test_tilde_in_a_clone_path_expands_against_home(tmp_path: Path) -> None:
     text = (PLUGIN / "registry.example.md").read_text(encoding="utf-8")
     reg = registry.parse(text, home=tmp_path)

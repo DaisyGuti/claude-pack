@@ -49,6 +49,7 @@ command for one. `jq` must be installed. When the installed `glab` rejects a fla
 - edit-issue
 - read-milestone
 - set-milestone
+- set-weight
 - close-issue
 - verify-closed
 - open-review
@@ -645,6 +646,20 @@ self-managed host, on real open issues with a group milestone's `id`:
 The global id **read-milestone** prints matches the REST `milestone.id`. Moving an issue from
 one milestone to another uses the same endpoint and field. An issue number that does not exist
 prints `{"message":"404 Not found"}` and exits 1.
+
+## set-weight
+
+Contract: sets one issue's weight to a whole number, replacing any weight it had.
+
+```bash
+glab api --hostname <host> -X PUT "projects/<enc>/issues/<n>" -f weight=<weight> |
+  jq -e --argjson w <weight> '.weight == $w'
+```
+
+It succeeds only when the weight read back is the one asked for. Checked 2026-11-24 on a
+self-managed GitLab (Premium): 564 open and closed issues across three projects of one group,
+each read back, and the group milestone's burndown counted them. Issue weight is a paid-tier
+field; on a plan without it, skip the call and say so once for the run.
 
 ## close-issue
 

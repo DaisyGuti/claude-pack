@@ -33,6 +33,7 @@ improvise a command for one. When the installed `gh` rejects a flag, run
 - edit-issue
 - read-milestone
 - set-milestone
+- set-weight
 - close-issue
 - verify-closed
 - open-review
@@ -97,7 +98,8 @@ map of option name to option id. `tracker_ids` is:
   "project_id": "PVT_...",
   "status_field_id": "PVTSSF_...", "status_options": { "<option name>": "<id>" },
   "priority_mode": "field",
-  "priority_field_id": "PVTSSF_...", "priority_options": { "<option name>": "<id>" }
+  "priority_field_id": "PVTSSF_...", "priority_options": { "<option name>": "<id>" },
+  "weight_field_id": "PVTF_... or null"
 }
 ```
 
@@ -336,6 +338,23 @@ gh issue edit <n> --repo <remote> --milestone "<title>"
 
 Checked 2026-11-20 with `gh` 2.103.0: set, read back and removed (`--remove-milestone`) on a
 real issue, and the not-found error on an unknown title.
+
+## set-weight
+
+Contract: sets one issue's weight to a whole number, replacing any weight it had.
+
+GitHub issues have no weight. The board carries one when it has a number field named
+`Weight`: **capture-board**'s field list shows it (`"type": "ProjectV2Field"`, data type
+number); store its `id` in `tracker_ids.weight_field_id` (null when the board has none).
+
+```bash
+gh project item-edit --project-id <tracker_ids.project_id> --id <item_ref> \
+  --field-id <tracker_ids.weight_field_id> --number <weight>
+```
+
+With `weight_field_id` null, skip the call and say so once for the run. UNVERIFIED: no board
+with a `Weight` number field was available to run it against; `--number` is the flag
+`gh project item-edit --help` gives for a number field.
 
 ## close-issue
 
