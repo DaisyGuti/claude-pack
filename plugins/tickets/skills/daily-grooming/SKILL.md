@@ -2,7 +2,7 @@
 name: daily-grooming
 description: Tidies the whole ticket board so that Ready means safe to dispatch. Settles closed and merged work to Done, flags duplicates, syncs priorities, promotes tickets to Ready, and plans and labels each Ready ticket (plan, priority, model, run), for every person's tickets on a GitHub Project or GitLab board. Use for "groom the board", "clean up my backlog", "get Ready in shape", "settle the finished tickets", even when the user names no lane or label. Try --dry-run first.
 argument-hint: "[--dry-run] [--convert-batch-labels] [--project N --owner OWNER] [--repo NAME] [--context FILE]"
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/registry.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve_model.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/waves.py *)
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/registry.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve_model.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/waves.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/deps.py *) Bash(${CLAUDE_PLUGIN_ROOT}/scripts/links.py fetch *)
 ---
 
 # Daily grooming
@@ -62,8 +62,12 @@ Paths used below (read them as `<scripts>` and `<data>`):
   audited, prioritised, triaged or planned.
 - **Never touch a ticket a worker or a person put somewhere.** A ticket in progress, in the
   blocked lane, carrying the blocked label, or with an open linked review keeps its lane and is
-  never planned. Grooming only flags the ones that look wrong: a blocked label with no
-  `Blocked:` comment, and a ticket in the blocked lane without the label.
+  never planned. The one move grooming makes among them keeps the blocked label and the
+  blocked lane in agreement, both ways; it flags a blocked label with no `Blocked:` comment.
+- **Holds that can never clear are reported.** Dependencies are native blocked-by links.
+  `<scripts>/links.py fetch` reads them and `<scripts>/deps.py` finds dependency cycles, links
+  to a tracker or batch parent, and links whose work already merged; each goes under Needs
+  Attention with the re-point to make.
 - **Never change an assignee.** A Ready ticket with no assignee is listed under Needs
   Attention, because `/tickets:work-tickets` works only tickets assigned to its person.
 - **Preserve labels.** Remove only a priority label being replaced; add rather than remove when

@@ -45,6 +45,10 @@ improvise a command for one. When the installed `gh` rejects a flag, run
 - list-open-issues
 - list-open-reviews
 - review-state
+- merged-reviews
+- list-blockers
+- add-blocker
+- remove-blocker
 - Batch parents
 - list-parents
 - read-parent
@@ -511,6 +515,77 @@ Contract: `open`, `merged` or `closed` for one review (a closed review that was 
 ```bash
 gh pr view <n> --repo <remote> --json state --jq '.state | ascii_downcase'
 ```
+
+## merged-reviews
+
+Contract: the merged reviews in the same repo whose description has a `Refs` line naming one
+issue and that merged into the repo's default branch, as `{number, url, merged_at}`, one per
+line; nothing when there are none. Such a review leaves the issue open, and its work is on the
+default branch: maybe all of it, maybe only a part (a worker writes `Refs` for a change that
+finishes part of a ticket), so a person reads it before anything stops waiting on the issue. A
+review that only mentions the issue in prose does not count.
+
+```bash
+gh repo view <remote> --json defaultBranchRef --jq .defaultBranchRef.name
+gh api --paginate "repos/<remote>/issues/<n>/timeline?per_page=100" --jq '.[]
+  | select(.event == "cross-referenced" and .source.issue.pull_request.merged_at != null)
+  | .source.issue | select(.repository.full_name == "<remote>")
+  | select((.body // "") | split("\n") | any(test("^\\W*refs?\\b"; "i") and test("(#|/issues/)<n>(\\D|$)")))
+  | {number, url: .html_url, merged_at: .pull_request.merged_at}'
+gh pr view <number> --repo <remote> --json baseRefName --jq .baseRefName
+```
+
+The first command gives the default branch, once per repo. Run the third once per review the
+second prints, and keep the ones whose base is the default branch. A review that mentions the
+issue leaves a `cross-referenced` event on its timeline whatever the keyword, a mention in
+prose included; the body test keeps the ones with a `Refs` line. Checked 2026-11-25 with `gh`
+2.103.0 on a throwaway private repo: an issue, then a pull request with `Refs #<n>` in its body,
+squash-merged; the issue stayed open, the second command printed the pull request with its
+merge time, and the third printed `main`.
+
+## list-blockers
+
+Contract: for one issue, the issues it is blocked by and the issues it blocks (native issue
+dependencies), each as `{ref, state}`, `ref` written `owner/repo#<n>`. A dependency is this
+link and nothing else: a `Depends on:` line in a body is not one.
+
+```bash
+gh api --paginate "repos/<remote>/issues/<n>/dependencies/blocked_by?per_page=100" \
+  --jq '.[] | {ref: ((.repository_url | sub(".*/repos/"; "")) + "#" + (.number | tostring)), state}'
+gh api --paginate "repos/<remote>/issues/<n>/dependencies/blocking?per_page=100" \
+  --jq '.[] | {ref: ((.repository_url | sub(".*/repos/"; "")) + "#" + (.number | tostring)), state}'
+```
+
+The first prints the blockers, the second the issues it blocks. A closed blocker is listed with
+`state` `closed`. For a whole repo at once, `scripts/links.py fetch` reads every open issue's
+`blockedBy` in one paged GraphQL query (it lists closed blockers too). Checked 2026-11-25 with
+`gh` 2.103.0 on a throwaway private repo: both commands, before and after the blocker closed.
+
+## add-blocker
+
+Contract: marks issue `<n>` as blocked by another issue (`<blocker>`, in this repo or another).
+Link an issue, never a review: a ticket waiting on a pull request is linked to that pull
+request's issue.
+
+```bash
+gh api "repos/<blocker remote>/issues/<blocker n>" --jq .id
+gh api -X POST "repos/<remote>/issues/<n>/dependencies/blocked_by" -F issue_id=<id>
+```
+
+The first command gives the blocker's numeric id (not its number). Checked 2026-11-25 on the
+throwaway repo: the link appeared in **list-blockers** on both issues, and `links.py migrate
+--apply` added one the same way.
+
+## remove-blocker
+
+Contract: removes the link that marks issue `<n>` as blocked by `<blocker>`.
+
+```bash
+gh api "repos/<blocker remote>/issues/<blocker n>" --jq .id
+gh api -X DELETE "repos/<remote>/issues/<n>/dependencies/blocked_by/<id>"
+```
+
+Checked 2026-11-25 on the throwaway repo: **list-blockers** printed nothing after it.
 
 ## Batch parents
 

@@ -116,19 +116,48 @@ Check, using the bodies and labels already fetched:
 - **Held work.** A ticket with the blocked label but no `Blocked:` comment: run
   **read-issue** and look for a comment that begins `**Blocked:`. Without one, list it
   under Needs Attention, so someone asks what it waits on (see
-  `ticket-labels.md`, "Blocked"). A ticket in the blocked lane
-  without the blocked label goes there too.
-- **Dependency holds that have cleared.** A ticket whose most recent `**Blocked:`
-  comment has the kind `dependency`: check each issue on its `Depends on:` line with
-  **issue-state**. When every one is closed (a merged review closes its issue, so
-  this is how review-landed work frees what waits on it), **remove-label** the
-  blocked label and **comment** "Unblocked: every dependency is closed." If it
-  sits in the blocked lane, it goes through step 4's table like any open ticket. Any other kind of
-  hold stays for a person.
+  `ticket-labels.md`, "Blocked").
+- **The blocked label and the blocked lane agree, both ways.** An open ticket with the
+  blocked label in any lane but the blocked one moves to the blocked lane (**set-lane** with
+  role `blocked`, in step 6), whatever lane it sat in. A ticket in the blocked lane without
+  the label gets it back (**add-label**) when its latest status comment begins `**Blocked:`;
+  without one it goes under Needs Attention and stays where it is.
+- **The dependency report.** Dependencies are native blocked-by links (`ticket-labels.md`,
+  "Blocked"); a `Depends on:` line in a body is not read. Run `<scripts>/links.py fetch
+  --tracker <tracker> --host <host> --blocked-label <blocked label> --repo <remote>` (one
+  `--repo` per registry repo on the board) into a temporary file: it reads every open issue's
+  blocked-by links, each held ticket's closed blockers, and **merged-reviews** for each open
+  blocker, in `<scripts>/deps.py`'s input shape. When batching is on, add `children` to each
+  batch parent's entry. Run `<scripts>/deps.py <file>`. For each ref under `unknown`, run
+  **issue-state**, add it with its state, and run it again; exit 2 means bad input: fix the
+  file and run it again. Delete the file after (a `--dry-run` writes and deletes it too). Then:
+  - each **cycle** goes under Needs Attention as its chain (`#26 blocked by #21, #21 closes
+    after its part #32, #32 blocked by #26`), with the re-point that breaks it: the link to a
+    tracker or to a ticket it was cut from, moved to the part that does the work;
+  - each **tracker dependency** goes under Needs Attention as `#<ticket> is blocked by
+    <tracker or parent>; link <name_instead> instead`, or with its `open_parts` to choose
+    from when `name_instead` is null;
+  - each **merged dependency** goes under Needs Attention with its reviews: a person reads them
+    and either closes the issue (its work is done) or keeps the link (more is to come);
+  - **cleared** is the next item.
+
+  Grooming never adds or removes a link itself: a person, or the next plan of that ticket,
+  makes the re-point. A held ticket with a `Blocked: dependency` comment and no blocked-by link
+  goes under Needs Attention: `<scripts>/links.py migrate` (a dry run unless `--apply`) turns
+  its old lines into links.
+- **Dependency holds that have cleared.** A ticket under `cleared` whose most recent
+  `**Blocked:` comment has the kind `dependency` (a merged review closes its issue, so this
+  is how review-landed work frees what waits on it): **remove-label** the blocked label,
+  **comment** "Unblocked: every dependency is closed.", and in the same step move it out of
+  the blocked lane through step 4's table like any open ticket. Any other kind of hold stays
+  for a person.
+- **Stale reviews.** An open ticket in the review lane that no open review from step 1 closes
+  is stale: list it under Needs Attention (its review merged without closing it, or was
+  closed), and leave its lane.
 
 **Label preservation.** Grooming removes a label in exactly two cases: a priority label
 it is replacing, and the blocked label of a dependency hold whose dependencies are all
-closed (above). It never removes a `model:*`, `repo:*`, `project:*`, `size:*` or run
+closed (above), which leaves the blocked lane in the same step. It never removes a `model:*`, `repo:*`, `project:*`, `size:*` or run
 label, or any other label it did not add. The one place a run label is ever removed is
 the planning step's correction, from the plan's evidence. When in doubt, add; do not
 remove.
@@ -187,9 +216,11 @@ there; leave its lane exactly as it is. It is still audited and given a priority
 Needs Attention.
 
 A ticket whose dependency hold step 3 cleared in this run is no longer held, even in
-the blocked lane: it goes through the table below like any other open ticket. One more
-exception: a ticket that carries the blocked label and sits in the ready lane is not ready, so
-it moves to the backlog lane and keeps its label and comment.
+the blocked lane: it goes through the table below like any other open ticket, so the label
+comes off and the lane changes together. One more exception: a ticket that carries the blocked
+label outside the blocked lane moves to the blocked lane (step 3), from the ready, backlog,
+in-progress or review lane alike, and keeps its label and comment. A labelled ticket never
+waits in the backlog.
 
 **Ready means planned.** A ticket goes to the ready lane only with a `### Final Plan` comment
 and no open blocker, and a planned, unblocked ticket always goes there, never left in the
@@ -218,7 +249,7 @@ For everything else (the open tickets that are not held):
 
 The tickets step 4 sent to ready, and the ones step 7 will plan into it, and only those, are
 ordered for the summary: by the Priority table's rank, highest first; within a rank, tickets
-that other open tickets name on a `Depends on:` line first, then the ticket number ascending.
+that block other open tickets (a blocked-by link) first, then the ticket number ascending.
 When batching is on, a batch is one entry, ranked by its highest child.
 There is no cap on the order. Step 8 cuts it into waves, once step 7 has made every plan
 readable.
@@ -260,7 +291,7 @@ ones assigned to the person running this):
 1. **read-issue**. A `### Final Plan` comment means it is planned.
 2. **Unplanned:** plan it by `plan-one-ticket.md`. The model label is sized to the plan's
    scope as `ticket-labels.md` says. Posting the plan moves the ticket to the ready lane
-   unless it is blocked; a ticket the planning holds goes to the backlog lane.
+   unless it is blocked; a ticket the planning holds goes to the blocked lane.
 3. **Planned, but missing a model or run label:** labels-only mode of the same file.
 
 When batching is on, a batch is planned as one unit, on its parent, by that file's "Batches"
@@ -326,12 +357,14 @@ Plain language, short, grouped under these headings, each with its count:
   backlog.
 - **In progress**: `#N title`, with its review link when it has one.
 - **Blocked**: `#N title`, what it waits on from its `Blocked:` comment, and its review
-  link when it has one.
+  link when it has one. Then the lane moves the label sync made, and the holds cleared.
 - **Needs Attention**: everything grooming could not settle by itself, each with the
   ticket and the one thing someone must do: unplanned or unlabelled tickets and why,
   missing context files, a missing lane or priority on the board, repos not in the
   registry, closed-but-unmerged reviews, tickets in the done lane that are open,
   abandoned or contradictory labels, descriptions with no acceptance criteria, failed
-  writes, and Ready tickets with no assignee (`work-tickets` will not pick those up).
+  writes, Ready tickets with no assignee (`work-tickets` will not pick those up), and step 3's
+  dependency report (cycles, tracker dependencies, merged dependencies, stale reviews), each
+  with the re-point to make.
 - **Counts**: plans that already existed, plans written, labels added, milestones set from a
   parent, tickets held.

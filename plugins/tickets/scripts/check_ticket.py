@@ -3,7 +3,9 @@
 
 `write-ticket` fills `skills/write-ticket/assets/ticket-template.md`. Its Agent Instructions
 sections 1, 2, 3 and 5 are boilerplate that must be copied exactly, section 4 differs only in
-the audience on its first bullet, and every top section must hold real content. The workers
+the audience on its first bullet, and every top section must hold real content. A dependency
+is a native blocked-by link set after filing (**add-blocker**), so a `Depends on:`,
+`Blocked by:` or `Blocked on:` line in the body is a problem. The workers
 that build the ticket rely on that shape, so this script checks it the same way every time.
 
 Usage:
@@ -31,7 +33,7 @@ DEFAULT_TEMPLATE = (
     / "assets"
     / "ticket-template.md"
 )
-TOP_SECTIONS = ("Context", "Acceptance Criteria", "Out of scope", "Dependencies", "Agent Prompt")
+TOP_SECTIONS = ("Context", "Acceptance Criteria", "Out of scope", "Agent Prompt")
 OPTIONAL_SECTIONS = ("Out of scope",)
 # More acceptance bullets than this means the ticket should be split (write-ticket step 3).
 MAX_ACCEPTANCE_BULLETS = 7
@@ -39,6 +41,8 @@ AUDIENCE_PREFIX = (
     "- Follow and reuse existing styles and UI — improve only to meet best industry standards for "
 )
 INSTRUCTIONS_HEADING = "## Agent Instructions"
+# A dependency written as a body line; dependencies are blocked-by links (plan-one-ticket.md).
+DEPENDENCY_LINE = re.compile(r"(?im)^\W*(?:depends on|blocked (?:by|on))\b:?")
 
 
 def split_sections(text: str) -> tuple[dict[str, str], str]:
@@ -90,10 +94,9 @@ def check(body: str, template: str) -> tuple[list[str], int]:
                 f"section '## {name}' still has a template placeholder in angle brackets"
             )
 
-    deps = body_top.get("Dependencies", "")
-    if deps and not re.search(r"(?m)^Depends on:\s*[^<\s]", deps):
+    if DEPENDENCY_LINE.search(body):
         problems.append(
-            "section '## Dependencies' needs a 'Depends on:' line naming issues, or None"
+            "a dependency line in the body; link each dependency with add-blocker after filing"
         )
 
     bullets = len(re.findall(r"(?m)^- ", body_top.get("Acceptance Criteria", "")))
