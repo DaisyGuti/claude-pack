@@ -1,6 +1,6 @@
 {
   "name": "team-comms",
-  "description": "Slack thread summaries and replies, status updates, standups, design docs and decision records.",
+  "description": "Slack thread summaries and replies, status updates, standups, design docs, decision records, and an editing pass for clear, concise writing.",
   "author": {
     "name": "Daisy Gutierrez"
   }

@@ -1,0 +1,39 @@
+Third-party material in the clean-writing skill: AminBlg/SimpleEnglish
+
+Source repository: https://github.com/AminBlg/SimpleEnglish (read at commit 300432a)
+License: MIT (full text below), Copyright (c) 2026 AminBlg
+Source files used:
+  - skills/simple-english/SKILL.md
+  - skills/simple-english/references/rule-catalog.md
+  - skills/simple-english/references/word-swaps.md
+  - skills/simple-english/references/use-cases.md
+
+Where it appears in this skill:
+  - The "Plain English" pass in SKILL.md and references/plain-english.md condense and
+    restate the document rules, the modal ladder and the use-case patterns.
+  - The word-swap table and the AI-writing signs in references/slop-patterns.md are
+    adapted from word-swaps.md and the rule catalog's "Signs of AI Writing".
+The text was shortened and reworded for this skill. No ASD-STE100 standard or dictionary
+text is included.
+
+MIT License
+
+Copyright (c) 2026 AminBlg
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
