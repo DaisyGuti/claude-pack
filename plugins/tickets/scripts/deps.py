@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Find the dependency holds on a board that can never clear, or should already have.
 
-`daily-grooming` step 3 hands this script every open ticket on the board, plus each
-dependency it confirmed closed. A ticket depends on every issue its body names on a
-`Depends on:`, `Blocked by:` or `Blocked on:` line. Two more kinds of edge are implied, because
-a ticket closes only after them:
+`daily-grooming` step 3 hands this script the board as `links.py fetch` writes it: every open
+ticket with its native blocked-by links (`blocked_by`), and every issue those links name. A
+ticket depends on each issue it is blocked by. Two more kinds of edge are implied, because a
+ticket closes only after them:
 
 - a tracker waits on its parts: an issue is a tracker when another ticket's body says
   `Part <N> of <M>` on a line naming it (`Part 2 of 5, cut by layer from #12`), or when its
@@ -15,33 +15,33 @@ It reports, the same way on every run:
 
 - **cycles**: each chain of edges that leads back to where it started, so none of its tickets
   can ever move;
-- **tracker dependencies**: a `Depends on:` that names a tracker or a batch parent, which
-  closes last. It names the open parts (or children) to name instead, and `name_instead` when
-  exactly one is open;
-- **merged dependencies**: a `Depends on:` that names an open issue a merged review `Refs`
+- **tracker dependencies**: a blocked-by link to a tracker or a batch parent, which closes
+  last. It names the open parts (or children) to link instead, and `name_instead` when exactly
+  one is open;
+- **merged dependencies**: a blocked-by link to an open issue a merged review `Refs`
   (**merged-reviews**): some or all of its work is on the default branch, so a person checks
   whether the issue is done before anything keeps waiting on it;
-- **cleared**: an open ticket whose every named dependency is closed;
-- **unknown**: a named issue that is not in the input, which the caller checks with
-  **issue-state** and adds before running again.
+- **cleared**: an open ticket whose every blocker is closed;
+- **unknown**: a blocker that is not in the input, which the caller checks with **issue-state**
+  and adds before running again.
 
 Usage:
     deps.py TICKETS_FILE
 
-TICKETS_FILE is JSON: {"tickets": [{"ref", "repo", "state", "title", "body", "parts": [...],
-"children": [...], "merged_reviews": [...]}]}. `ref` is `#<n>` or `<repo>#<n>`; `repo` is the
-registry Remote (`owner/repo`, `group/sub/project`); `state` is `open` or `closed`. Only
-`ref`, `repo` and `state` are required: a closed dependency needs nothing else. Every ref on a
-dependency line counts, so the line holds refs only (plan-one-ticket.md). A ref in a body
-is `#<n>` (the ticket's own repo), `<repo>#<n>` (a bare project name takes the ticket's
-owner) or an issue URL (`.../issues/<n>`, `.../-/issues/<n>`, `.../-/work_items/<n>`).
-`merged_reviews` lists the URLs **merged-reviews** printed for an open issue. A ref listed
-twice is bad input.
+TICKETS_FILE is JSON: {"tickets": [{"ref", "repo", "state", "title", "body", "blocked_by": [...],
+"parts": [...], "children": [...], "merged_reviews": [...]}]}. `ref` is `#<n>` or `<repo>#<n>`;
+`repo` is the registry Remote (`owner/repo`, `group/sub/project`); `state` is `open` or `closed`.
+Only `ref`, `repo` and `state` are required: a closed blocker needs nothing else. A ref is `#<n>`
+(the ticket's own repo), `<repo>#<n>` (a bare project name takes the ticket's owner) or an
+issue URL (`.../issues/<n>`, `.../-/issues/<n>`, `.../-/work_items/<n>`). The body is read
+only for `Part <N> of <M>` lines; a dependency written in a body is not one until
+`links.py migrate` links it. `merged_reviews` lists the URLs **merged-reviews** printed for an
+open issue. A ref listed twice is bad input.
 
 Prints JSON {"cycles": [[{"from", "to", "via"}]], "tracker_dependencies": [{"ticket", "names",
 "kind", "open_parts", "name_instead"}], "merged_dependencies": [{"ticket", "names", "reviews"}],
-"cleared": [{"ticket", "depends_on"}], "unknown": [ref, ...]}. Every ref is printed as
-`<repo>#<n>`. `via` is `depends on`, `part` or `child`. Exit codes: 0 printed, 2 bad input.
+"cleared": [{"ticket", "blocked_by"}], "unknown": [ref, ...]}. Every ref is printed as
+`<repo>#<n>`. `via` is `blocked by`, `part` or `child`. Exit codes: 0 printed, 2 bad input.
 """
 
 from __future__ import annotations
@@ -57,8 +57,6 @@ from pathlib import Path
 if sys.version_info < (3, 11):  # noqa: UP036  (a clear message on an older python3)
     sys.exit("deps.py needs Python 3.11 or newer; install it and run this again")
 
-# The body lines that name a dependency (plan-one-ticket.md step 1, ticket-labels.md "Blocked").
-DEPENDS_LINE = re.compile(r"^\W*(?:depends on|blocked (?:by|on))\b:?(.*)$", re.IGNORECASE)
 # The line a part carries (plan-one-ticket.md step 2): "Part 2 of 5, cut by layer from #12".
 PART_LINE = re.compile(r"\bpart\s+(\d+)\s+of\s+\d+\b", re.IGNORECASE)
 # An issue URL on GitHub (`/issues/<n>`) or GitLab (`/-/issues/<n>`, `/-/work_items/<n>`).
@@ -75,7 +73,7 @@ OPEN, CLOSED = "open", "closed"
 class Via(Enum):
     """Why one ticket waits on another."""
 
-    DEPENDS_ON = "depends on"
+    BLOCKED_BY = "blocked by"
     PART = "part"
     CHILD = "child"
 
@@ -86,7 +84,7 @@ class Ticket:
 
     ref: str
     open: bool
-    depends_on: tuple[str, ...]
+    blocked_by: tuple[str, ...]
     part_of: tuple[tuple[str, int], ...]  # (tracker ref, part number) from its body
     parts: tuple[str, ...]
     children: tuple[str, ...]
@@ -136,17 +134,15 @@ def parse_ticket(entry: dict[str, object]) -> Ticket:
     if not isinstance(body, str):
         raise ValueError(f"ticket {entry['ref']!r}: body must be a string")
     ref = ref_key(repo, str(entry["ref"]))
-    depends: list[str] = []
     part_of: list[tuple[str, int]] = []
     for line in body.splitlines():
-        if match := DEPENDS_LINE.match(line):
-            depends += refs_in(repo, match.group(1))
-        elif (part := PART_LINE.search(line)) and (named := refs_in(repo, line)):
+        if (part := PART_LINE.search(line)) and (named := refs_in(repo, line)):
             part_of.append((named[0], int(part.group(1))))
+    blocked_by = [ref_key(repo, b) for b in string_list(entry, "blocked_by")]
     return Ticket(
         ref=ref,
         open=state == OPEN,
-        depends_on=tuple(r for r in dict.fromkeys(depends) if r != ref),
+        blocked_by=tuple(r for r in dict.fromkeys(blocked_by) if r != ref),
         part_of=tuple(p for p in part_of if p[0] != ref),
         parts=tuple(ref_key(repo, p) for p in string_list(entry, "parts")),
         children=tuple(ref_key(repo, c) for c in string_list(entry, "children")),
@@ -181,7 +177,7 @@ def build_board(tickets: list[Ticket]) -> Board:
             part_numbers.setdefault(ticket.ref, {}).setdefault(part, n)
     edges: dict[str, list[tuple[str, Via]]] = {}
     for ticket in tickets:
-        out = [(d, Via.DEPENDS_ON) for d in ticket.depends_on]
+        out = [(d, Via.BLOCKED_BY) for d in ticket.blocked_by]
         out += [(p, Via.PART) for p in part_numbers.get(ticket.ref, {})]
         out += [(c, Via.CHILD) for c in ticket.children]
         edges[ticket.ref] = out
@@ -275,7 +271,7 @@ def report(board: Board) -> dict[str, object]:
         ticket = board.tickets[ref]
         if not ticket.open:
             continue
-        for dep in ticket.depends_on:
+        for dep in ticket.blocked_by:
             target = board.tickets.get(dep)
             if target is None:
                 unknown.add(dep)
@@ -303,10 +299,10 @@ def report(board: Board) -> dict[str, object]:
                 merged_deps.append(
                     {"ticket": ref, "names": dep, "reviews": list(target.merged_reviews)}
                 )
-        known = [d for d in ticket.depends_on if d in board.tickets]
-        all_known = bool(ticket.depends_on) and len(known) == len(ticket.depends_on)
+        known = [d for d in ticket.blocked_by if d in board.tickets]
+        all_known = bool(ticket.blocked_by) and len(known) == len(ticket.blocked_by)
         if all_known and not any(board.is_open(d) for d in known):
-            cleared.append({"ticket": ref, "depends_on": list(ticket.depends_on)})
+            cleared.append({"ticket": ref, "blocked_by": list(ticket.blocked_by)})
     return {
         "cycles": [
             [{"from": a, "to": b, "via": via.value} for a, b, via in cycle]
