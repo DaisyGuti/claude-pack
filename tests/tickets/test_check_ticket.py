@@ -35,10 +35,6 @@ The signup form accepts an email with no domain, so invalid accounts reach the m
 
 - Checking that the mailbox exists.
 
-## Dependencies
-
-Depends on: None
-
 ## Agent Prompt
 
 > Reject emails with no top-level domain in `src/signup.ts` and add a test. *If any step requires
@@ -74,9 +70,10 @@ def test_out_of_scope_may_be_omitted() -> None:
     assert problems_for(body) == []
 
 
-def test_missing_dependencies_line_is_reported() -> None:
-    body = make_body().replace("Depends on: None", "Nothing yet")
-    assert any("Depends on" in p for p in problems_for(body))
+def test_a_dependency_line_in_the_body_is_reported() -> None:
+    """Dependencies are blocked-by links set after filing, never body lines."""
+    body = make_body().replace("## Agent Prompt", "Depends on: #12\n\n## Agent Prompt")
+    assert any("add-blocker" in p for p in problems_for(body))
 
 
 def test_edited_boilerplate_is_reported() -> None:

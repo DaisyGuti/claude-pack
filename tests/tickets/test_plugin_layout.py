@@ -359,14 +359,17 @@ def test_model_label_is_sized_to_the_plans_scope() -> None:
 def test_planning_and_grooming_check_dependencies_with_the_script() -> None:
     """No hold names a tracker or a chain back to itself; the label and the lane agree."""
     planning = flat(PLUGIN / "references" / "plan-one-ticket.md")
-    assert "**Before naming a dependency.**" in planning and "`<scripts>/deps.py`" in planning
+    assert "**A dependency is a blocked-by link.**" in planning
+    assert "**Before linking a dependency.**" in planning and "`<scripts>/deps.py`" in planning
     assert "then **set-lane** with role `blocked`" in planning
     grooming = flat(PLUGIN / "skills" / "daily-grooming" / "references" / "grooming.md")
     audit = grooming[grooming.index("## 3. Audit") : grooming.index("## 3b.")]
     # The findings live in deps.py (tests/tickets/test_deps.py); the audit must run it.
-    assert "Run `<scripts>/deps.py <file>`" in audit and "**merged-reviews**" in audit
+    assert "Run `<scripts>/links.py fetch" in audit and "Run `<scripts>/deps.py <file>`" in audit
     assert "**The blocked label and the blocked lane agree, both ways.**" in audit
-    assert (PLUGIN / "scripts" / "deps.py").is_file()
+    assert (PLUGIN / "scripts" / "deps.py").is_file() and (
+        PLUGIN / "scripts" / "links.py"
+    ).is_file()
 
 
 def test_grooming_cuts_ready_waves_with_the_script() -> None:

@@ -77,8 +77,9 @@ Fill [ticket-template.md](${CLAUDE_SKILL_DIR}/assets/ticket-template.md), every 
 order, into a temporary file. Sections 1 to 3 and 5 of the Agent Instructions are boilerplate:
 copy them exactly. In section 4's first bullet use the audience from the repo's brief.
 
-- Write `None` under Dependencies rather than dropping the heading. A dependency goes on a
-  `Depends on:` line, since the workers' unblock step matches `Depends on:` and `Blocked by:`.
+- Write no dependency in the body. A dependency is a native blocked-by link: once the issue
+  exists, link each one with **add-blocker** (step 4's **Blocked:**), checked first by
+  plan-one-ticket.md, "Before linking a dependency".
 - Omit Out of scope only when there is genuinely nothing a reader would include.
 - **Never invent a concrete detail**: a price, a filename, an error string, a date, a metric, a
   version. Every specific is one you read. For a fact you do not have, write
@@ -87,10 +88,10 @@ copy them exactly. In section 4's first bullet use the audience from the repo's 
   more than two repos. Split it too when one ticket would change the database schema, the API
   and the console together: a worker has a fixed turn budget and tickets of that size have
   run out of it with nothing committed. Cut by layer, one ticket each, and chain them with
-  `Depends on:` lines.
+  blocked-by links (**add-blocker**) once they are filed.
 
 Then run `<scripts>/check_ticket.py <the file>`. It prints the problems (a placeholder left in,
-edited boilerplate, a missing `Depends on:` line, too many acceptance bullets) and exits 1 when
+edited boilerplate, a dependency written as a body line, too many acceptance bullets) and exits 1 when
 there are any. Fix them and run it again until it exits 0.
 
 ## 4. Assign the labels, priority and lane
@@ -108,11 +109,13 @@ there are any. Fix them and run it again until it exits 0.
   ready lane: step 5's **Plan it** moves the ticket there once it has a `### Final Plan`.
 - **Assignee:** only with `--assignee`; `me` is **current-user**. Otherwise leave the ticket
   unassigned.
-- **Blocked:** when a `Depends on:` issue is still open (**issue-state**), the ticket gets the
-  registry's blocked label and a `Blocked: dependency` comment naming each open dependency
-  (shape in ticket-labels.md), and goes to the blocked lane: the label and the lane always
-  agree. Name the issue that does the work, never a tracker or batch parent, and never one
-  whose own dependencies lead back here (plan-one-ticket.md, "Before naming a dependency").
+- **Blocked:** a dependency is a blocked-by link (**add-blocker**), never a `Depends on:` line
+  in the body. When the ticket waits on an open issue (**issue-state**), link it, then the
+  ticket gets the registry's blocked label and a `Blocked: dependency` comment naming each
+  linked issue (shape in ticket-labels.md), and goes to the blocked lane: the label and the
+  lane always agree. Link the issue that does the work, never a tracker, batch parent or
+  review (a review's issue instead), and never one whose own blockers lead back here
+  (plan-one-ticket.md, "Before linking a dependency").
   `daily-grooming` frees it when the last dependency closes.
 
 ## 5. File it

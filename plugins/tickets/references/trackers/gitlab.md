@@ -58,6 +58,9 @@ command for one. `jq` must be installed. When the installed `glab` rejects a fla
 - list-open-reviews
 - review-state
 - merged-reviews
+- list-blockers
+- add-blocker
+- remove-blocker
 - Batch parents
 - list-parents
 - read-parent
@@ -824,6 +827,56 @@ Checked 2026-11-25 with `glab` 1.130.0 against a self-managed GitLab 19.5 projec
 issue whose work merged through `Refs` merge requests, six merged merge requests mention it and
 the second `select` kept the two with a `Refs` line; for an issue only mentioned in other merge
 requests' prose it printed nothing.
+
+## list-blockers
+
+Contract: for one issue, the issues it is blocked by and the issues it blocks (issue links of
+type `is_blocked_by` and `blocks`), each as `{ref, state}`, `ref` written `group/project#<n>`.
+A dependency is this link and nothing else: a `Depends on:` line in a body is not one.
+
+```bash
+glab api --hostname <host> "projects/<enc>/issues/<n>/links" | jq -c '.[]
+  | select(.link_type == "is_blocked_by" or .link_type == "blocks")
+  | {link: .link_type, ref: .references.full, state: (if .state == "opened" then "open" else .state end), issue_link_id}'
+```
+
+`link` `is_blocked_by` is a blocker, `blocks` an issue this one blocks; keep `issue_link_id` for
+**remove-blocker**. The `blocks` link types need GitLab Premium or Ultimate; on Free an issue
+link is only `relates_to`. For a whole project at once, `scripts/links.py fetch` reads every open
+issue's `blockedByIssues` in one paged GraphQL query; that field leaves out a closed blocker, so
+the script reads a held ticket's blockers with this command. Checked 2026-11-25 with `glab`
+1.130.0 against a self-managed GitLab 19.5 (Premium) project: an issue blocked by one open and
+two closed issues listed all three here, while `blockedByIssues` listed only the open one.
+
+## add-blocker
+
+Contract: marks issue `<n>` as blocked by another issue (`<blocker>`, in this project or
+another). Link an issue, never a review: a ticket waiting on a merge request is linked to that
+merge request's issue.
+
+```bash
+glab api --hostname <host> "projects/<blocker enc>" | jq .id
+glab api --hostname <host> -X POST "projects/<enc>/issues/<n>/links" \
+  -f target_project_id=<id> -f target_issue_iid=<blocker n> -f link_type=is_blocked_by
+```
+
+The first command gives the blocker's project id. UNVERIFIED: a link actually made. No
+project could be written for the check (creating one answered 403, and the real board stays
+untouched until its owner approves the migration), so the call ran only with a target issue
+that does not exist, which answered `404 Not found` and changed nothing, and with an unknown
+`link_type`, which answered `400 link_type does not have a valid value`: the path and field
+names are right, and `is_blocked_by` is a type the API takes.
+
+## remove-blocker
+
+Contract: removes the link that marks issue `<n>` as blocked by `<blocker>`.
+
+```bash
+glab api --hostname <host> -X DELETE "projects/<enc>/issues/<n>/links/<issue_link_id>"
+```
+
+`<issue_link_id>` comes from **list-blockers** on `<n>`. UNVERIFIED, as for **add-blocker**:
+it ran only with a link id that does not exist, which answered `404 Not found`.
 
 ## Batch parents
 

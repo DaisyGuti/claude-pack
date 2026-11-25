@@ -69,8 +69,9 @@ needs access a worker does not have, or a failure the worker could not get past.
 **The label and the blocked lane always agree.** On an issue the label goes on together with
 a move to the blocked lane, from whatever lane it sat in, a ticket filed with a dependency
 still open included; a labelled issue never waits in the backlog or ready lane. A dependency
-names the issue that does the work, never a tracker or batch parent that closes last, and
-never an issue that waits on this one (plan-one-ticket.md, "Before naming a dependency"). On a review that
+is a blocked-by link to the issue that does the work, never to a tracker or batch parent that
+closes last, a review, or an issue that waits on this one (plan-one-ticket.md, "Before linking
+a dependency"). On a review that
 must not merge yet, the label goes on the review; merge automation and people both read it
 as "do not merge". No skill works or plans a ticket that carries the label.
 
@@ -91,7 +92,8 @@ Unblocks when: <the concrete event or action that clears it>.
 
 `<kind>` is exactly one of:
 
-- `dependency`: a `Depends on:` issue is still open. Name each one.
+- `dependency`: an issue this one is blocked by (a native blocked-by link, **add-blocker**) is
+  still open. Name each linked issue, and in `Unblocks when:` say they close.
 - `decision`: a choice the ticket cannot settle. List the options, each with its
   consequence, and recommend one.
 - `live action`: a step that needs a credential, a dashboard, a real account or real money.
@@ -103,7 +105,7 @@ When the ticket, the repo's `CLAUDE.md` or the registry names who can clear a ki
 approver, a team), mention them in the comment. Never guess a person.
 
 **Clearing it.** Only a `dependency` block clears itself: when the last open issue a blocked
-ticket depends on closes and that ticket's most recent `Blocked:` comment has the kind
+ticket is linked as blocked by closes and that ticket's most recent `Blocked:` comment has the kind
 `dependency`, the label comes off with a comment saying so. `daily-grooming` does it on its
 next pass after the issue closes, whether a merged review closed it or a person did. A
 worker never closes an issue, so it never clears one. A person clears every other kind.

@@ -48,8 +48,10 @@ old path to delete, a test to cut).
    - **one** targeted search for the primary symbol or file the ticket names.
 
    That is all. Do not survey the repo. Other tickets are read only in item 6.
-5. For each issue the body names on a `Depends on:`, `Blocked by:` or `Blocked on:` line,
-   run **issue-state**, and check each open one by step 2's "Before naming a dependency".
+5. **list-blockers** for the ticket: its dependencies are its blocked-by links, each with its
+   state. An issue the body still names on an old `Depends on:`, `Blocked by:` or `Blocked
+   on:` line, with no link yet, is a candidate: run **issue-state** on it. Check each open
+   blocker and candidate by step 2's "Before linking a dependency".
 6. **Parent, neighbours and duplicates.** Run **search-issues** in the ticket's repo on two
    or three keywords from its title and primary symbol (a grooming pass already holds the
    board's items: use those). From that, and **read-parent** when batching is on, find:
@@ -68,51 +70,54 @@ old path to delete, a test to cut).
 
 Do not write a plan, and hold the ticket, in three cases:
 
-- **A dependency is still open** (step 1.5) and passes "Before naming a dependency" below:
-  kind `dependency`, naming each open issue.
+- **A dependency is still open** (step 1.5) and passes "Before linking a dependency" below:
+  kind `dependency`, linked as below.
 - **The ticket is too vague to plan.** A section would need more than a paragraph, or you
   cannot state what done looks like. Expanding the plan is the wrong response: use kind
   `decision`, and list the missing facts as questions, each with your recommended answer.
 - **The ticket is too big for one worker.** It would change the database schema, the API and
   the console together. A worker has a fixed turn budget, and tickets of that size have run
   out of it with nothing committed. Use kind `decision`: recommend cutting it by layer, one
-  ticket each chained with `Depends on:` lines, and name what each piece covers.
+  ticket each chained with blocked-by links, and name what each piece covers.
 
-**Before naming a dependency.** A hold that waits on something that waits on it never clears,
-so check every issue before it goes on a `Depends on:` line or in a `Blocked: dependency`
-comment, whether this ticket's body named it or the plan adds it:
+**A dependency is a blocked-by link.** The tracker's native link (**add-blocker**) is the one
+record that a ticket waits on another, and the only one `deps.py` and grooming read. Never
+write a dependency as a `Depends on:` line in the body; an old line is linked (once it passes
+the checks below) and its text left as it is. A link names an issue, never a review: a ticket
+waiting on a merge or pull request is linked to that review's issue.
 
-1. **read-issue** it and each open issue on its own `Depends on:`, `Blocked by:` or `Blocked
-   on:` lines, two levels down. A chain that leads back to this ticket, or to a ticket this
-   one was cut from, is a cycle: do not name that issue. Name the one link in the chain that
-   does the work this ticket needs, or hold with kind `decision` when none does, and say which
-   chain it was.
-2. **A tracker or a batch parent closes last**, so never name one. An issue is a tracker when
+**Before linking a dependency.** A hold that waits on something that waits on it never clears,
+so check every issue before **add-blocker** links it, and every blocker already linked:
+
+1. **list-blockers** on it, and on each of its open blockers, two levels down. A chain that
+   leads back to this ticket, or to a ticket this one was cut from, is a cycle: do not link
+   that issue (and **remove-blocker** it when it is already linked). Link the one issue in
+   the chain that does the work this ticket needs, or hold with kind `decision` when none
+   does, and say which chain it was.
+2. **A tracker or a batch parent closes last**, so never link one. An issue is a tracker when
    it was cut into parts (its parts' bodies say `Part <N> of <M>` and name it) or a batch
-   parent when its title starts with `Batch: `. Name the open part or child whose work this
+   parent when its title starts with `Batch: `. Link the open part or child whose work this
    ticket needs instead.
 3. **Check work that already merged.** Run **merged-reviews** on each open issue. One that
    prints a review has some or all of its work on the default branch (`Refs` leaves the issue
-   open). Read the review: when it did what this ticket needs, do not name the issue, and say
+   open). Read the review: when it did what this ticket needs, do not link the issue, and say
    in the returned line that it may be ready to close; when what this ticket needs is still
-   to come, name it.
-
-**The line holds refs only.** A `Depends on:` line is the refs, comma-separated, and nothing
-else; any note goes on its own line below. Every ref on the line counts as a dependency, a ref
-in a note included.
+   to come, link it.
 
 On a grooming pass, `<scripts>/deps.py` (its docstring holds the input) does all three for
 the whole board at once; use its report rather than reading the chains again.
 
 **Cutting a ticket into parts.** When a person accepts a cut (or asks for one) and the parts
 are filed, each part's body opens with `Part <N> of <M>, cut by layer from <ref>`, so
-`deps.py` and the next planner see the family. In the same step, **search-issues** for the
-cut ticket's ref and re-point every open ticket that names it on a `Depends on:` line, or in
-the latest `Blocked: dependency` comment, to the specific part it needs (**edit-issue** the
-line, then **comment** the change). A part never names the ticket it was cut from.
+`deps.py` and the next planner see the family, and the parts are chained with **add-blocker**.
+In the same step, **list-blockers** on the cut ticket and re-point every open ticket it
+`blocks` to the specific part it needs: **remove-blocker** the cut ticket, **add-blocker** the
+part, then **comment** the change. A part is never blocked by the ticket it was cut from.
 
 Holding follows [ticket-labels.md](ticket-labels.md), "Blocked": **ensure-label** and
-**add-label** for the registry's blocked label, then **comment** in the `Blocked:` shape,
+**add-label** for the registry's blocked label, then, for a `dependency` hold, **add-blocker**
+for each open dependency that passed the checks above, then **comment** in the `Blocked:`
+shape (it stays the reason a person reads; its `Unblocks when:` names the linked issues),
 then **set-lane** with role `blocked` from whatever lane it sits in. The label and the
 blocked lane always agree: a held ticket never waits in the backlog or ready lane. Return
 `held: <kind>`. In a dry run, print what you would post and write nothing.

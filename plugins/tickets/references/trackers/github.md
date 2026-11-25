@@ -46,6 +46,9 @@ improvise a command for one. When the installed `gh` rejects a flag, run
 - list-open-reviews
 - review-state
 - merged-reviews
+- list-blockers
+- add-blocker
+- remove-blocker
 - Batch parents
 - list-parents
 - read-parent
@@ -539,6 +542,50 @@ prose included; the body test keeps the ones with a `Refs` line. Checked 2026-11
 2.103.0 on a throwaway private repo: an issue, then a pull request with `Refs #<n>` in its body,
 squash-merged; the issue stayed open, the second command printed the pull request with its
 merge time, and the third printed `main`.
+
+## list-blockers
+
+Contract: for one issue, the issues it is blocked by and the issues it blocks (native issue
+dependencies), each as `{ref, state}`, `ref` written `owner/repo#<n>`. A dependency is this
+link and nothing else: a `Depends on:` line in a body is not one.
+
+```bash
+gh api --paginate "repos/<remote>/issues/<n>/dependencies/blocked_by?per_page=100" \
+  --jq '.[] | {ref: ((.repository_url | sub(".*/repos/"; "")) + "#" + (.number | tostring)), state}'
+gh api --paginate "repos/<remote>/issues/<n>/dependencies/blocking?per_page=100" \
+  --jq '.[] | {ref: ((.repository_url | sub(".*/repos/"; "")) + "#" + (.number | tostring)), state}'
+```
+
+The first prints the blockers, the second the issues it blocks. A closed blocker is listed with
+`state` `closed`. For a whole repo at once, `scripts/links.py fetch` reads every open issue's
+`blockedBy` in one paged GraphQL query (it lists closed blockers too). Checked 2026-11-25 with
+`gh` 2.103.0 on a throwaway private repo: both commands, before and after the blocker closed.
+
+## add-blocker
+
+Contract: marks issue `<n>` as blocked by another issue (`<blocker>`, in this repo or another).
+Link an issue, never a review: a ticket waiting on a pull request is linked to that pull
+request's issue.
+
+```bash
+gh api "repos/<blocker remote>/issues/<blocker n>" --jq .id
+gh api -X POST "repos/<remote>/issues/<n>/dependencies/blocked_by" -F issue_id=<id>
+```
+
+The first command gives the blocker's numeric id (not its number). Checked 2026-11-25 on the
+throwaway repo: the link appeared in **list-blockers** on both issues, and `links.py migrate
+--apply` added one the same way.
+
+## remove-blocker
+
+Contract: removes the link that marks issue `<n>` as blocked by `<blocker>`.
+
+```bash
+gh api "repos/<blocker remote>/issues/<blocker n>" --jq .id
+gh api -X DELETE "repos/<remote>/issues/<n>/dependencies/blocked_by/<id>"
+```
+
+Checked 2026-11-25 on the throwaway repo: **list-blockers** printed nothing after it.
 
 ## Batch parents
 

@@ -12,10 +12,6 @@
 
 - <Only what a reader would otherwise reasonably include. Say which version it belongs to when it is deferred.>
 
-## Dependencies
-
-Depends on: <#87, group/project#66, or None>
-
 ## Agent Prompt
 
 > <One paragraph a worker can act on without reading the rest. State the target, the constraints, and the numbers. End with: *If any step requires credentials the developer must enter manually, stop and prompt the user rather than guessing.*>

@@ -16,9 +16,11 @@ body, and every issue named in the latest `**Blocked: dependency**` comment of a
 the blocked label, and plans one blocked-by link per ref. It does not link, and lists with the
 reason, a ref to a review (an MR or pull request: link that review's issue instead), to an issue
 that is closed or missing, or to a tracker or batch parent (with its open parts). It then runs
-`deps.py`'s cycle check on the links as they would be. Without `--apply` it changes nothing.
-With `--apply` it adds each planned link, except those on a cycle, and leaves the body text
-as it is.
+`deps.py`'s cycle check on the links as they would be. It links only within the `--repo`
+list, and reads a `Blocked:` comment only from someone who can write to the repo, since what
+it reads decides what `--apply` adds; a person reads the dry run before anyone applies it.
+Without `--apply` it changes nothing. With `--apply` it adds each planned link, except those
+on a cycle, and leaves the body text as it is.
 
 Usage:
     links.py fetch --tracker {github,gitlab} --host HOST --blocked-label NAME --repo REMOTE...
@@ -57,6 +59,9 @@ DEPENDENCY_KIND = "dependency"
 REVIEW_REF = re.compile(
     r"(?<![\w!])!(?P<n>\d+)\b|https?://\S+?/(?:-/merge_requests|pull)/(?P<url_n>\d+)"
 )
+# Who can write to a repo: GitHub's comment author association, GitLab's Developer access level.
+WRITERS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
+DEVELOPER_ACCESS = 30
 # A batch parent's title (batches.md, "A batch parent's title").
 BATCH_TITLE = "Batch: "
 NOT_FOUND = re.compile(r"HTTP 404\b|404 Not found|Could not resolve to")
@@ -232,7 +237,14 @@ class GitHub(Tracker):
     def latest_blocked_comment(self, ref: str) -> str | None:
         repo, n = split_ref(ref)
         out = self.api("--paginate", f"repos/{repo}/issues/{n}/comments?per_page=100")
-        bodies = [c["body"] or "" for page in json_documents(out) for c in page]
+        # Only a comment by someone who can write to the repo counts: on a public repo anyone
+        # may comment, and a comment here decides which links `--apply` adds.
+        bodies = [
+            c["body"] or ""
+            for page in json_documents(out)
+            for c in page
+            if c.get("author_association") in WRITERS
+        ]
         return next((b for b in reversed(bodies) if BLOCKED_COMMENT.match(b)), None)
 
     def merged_reviews(self, ref: str) -> list[str]:
@@ -284,6 +296,7 @@ class GitLab(Tracker):
     def __init__(self, host: str, run: Run = run_cli) -> None:
         super().__init__(host, run)
         self.projects: dict[str, dict[str, Any]] = {}
+        self.writers: dict[tuple[str, int], bool] = {}
 
     def project(self, repo: str) -> dict[str, Any]:
         if repo not in self.projects:
@@ -345,9 +358,27 @@ class GitLab(Tracker):
             "&per_page=100",
         )  # fmt: skip
         for note in json_documents(out):
-            if not note.get("system") and BLOCKED_COMMENT.match(note.get("body") or ""):
-                return str(note["body"])
+            body = note.get("body") or ""
+            if note.get("system") or not BLOCKED_COMMENT.match(body):
+                continue
+            # Only a comment by a Developer or above counts (see GitHub's note above).
+            if self.can_write(repo, int(note["author"]["id"])):
+                return str(body)
         return None
+
+    def can_write(self, repo: str, user_id: int) -> bool:
+        key = (repo, user_id)
+        if key not in self.writers:
+            try:
+                member = json_documents(
+                    self.api(f"projects/{quote(repo, safe='')}/members/all/{user_id}")
+                )[0]
+                self.writers[key] = int(member.get("access_level", 0)) >= DEVELOPER_ACCESS
+            except TrackerError as err:
+                if not NOT_FOUND.search(str(err)):
+                    raise
+                self.writers[key] = False
+        return self.writers[key]
 
     def merged_reviews(self, ref: str) -> list[str]:
         repo, n = split_ref(ref)
@@ -392,6 +423,7 @@ class Board:
 
     issues: list[Issue]
     blocked_label: str
+    repos: frozenset[str] = frozenset()
 
     def held(self, issue: Issue) -> bool:
         return self.blocked_label in issue.labels
@@ -405,7 +437,7 @@ def read_board(tracker: Tracker, repos: Sequence[str], blocked_label: str) -> Bo
                 # The board-wide read may leave out a closed blocker; a held ticket needs them all.
                 issue = replace(issue, blockers=tuple(tracker.blockers(issue.ref)))
             issues.append(issue)
-    return Board(issues, blocked_label)
+    return Board(issues, blocked_label, frozenset(repo.lower() for repo in repos))
 
 
 def deps_input(
@@ -518,6 +550,11 @@ def plan_migration(
                 seen.add(named)
                 if named in linked:
                     plan.already.append(Planned(issue.ref, named, source))
+                    continue
+                if board.repos and split_ref(named)[0] not in board.repos:
+                    plan.not_linked.append(
+                        NotLinked(issue.ref, named, "outside the named repos", source)
+                    )
                     continue
                 if named not in resolved:
                     in_board = by_ref.get(named)
