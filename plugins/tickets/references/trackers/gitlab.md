@@ -876,9 +876,10 @@ Contract: removes the link that marks issue `<n>` as blocked by `<blocker>`.
 glab api --hostname <host> -X DELETE "projects/<enc>/issues/<n>/links/<issue_link_id>"
 ```
 
-`<issue_link_id>` comes from **list-blockers** on `<n>`. UNVERIFIED: no real link was removed
-(the board's links are its record); the call ran only with a link id that does not exist,
-which answered `404 Not found`.
+`<issue_link_id>` comes from **list-blockers** on `<n>`. Checked 2026-11-25 against the same
+self-managed GitLab 19.5 (Premium) project: four real `is_blocked_by` links were removed this
+way; afterwards each blocked issue listed only its other blockers and the blocker listed no
+`blocks` link. A link id that does not exist answers `404 Not found`.
 
 ## Batch parents
 
