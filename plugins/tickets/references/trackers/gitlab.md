@@ -860,12 +860,13 @@ glab api --hostname <host> -X POST "projects/<enc>/issues/<n>/links" \
   -f target_project_id=<id> -f target_issue_iid=<blocker n> -f link_type=is_blocked_by
 ```
 
-The first command gives the blocker's project id. UNVERIFIED: a link actually made. No
-project could be written for the check (creating one answered 403, and the real board stays
-untouched until its owner approves the migration), so the call ran only with a target issue
-that does not exist, which answered `404 Not found` and changed nothing, and with an unknown
-`link_type`, which answered `400 link_type does not have a valid value`: the path and field
-names are right, and `is_blocked_by` is a type the API takes.
+The first command gives the blocker's project id. GitLab stores the link from the blocker's
+side: the answer reads `link_type: blocks` with the blocker as `source_issue`. Checked
+2026-11-25 with `glab` 1.130.0 against a self-managed GitLab 19.5 (Premium) project: one real
+link made this way read `is_blocked_by` on the blocked issue and `blocks` on the blocker,
+**list-blockers** returned it, and neither issue's title, labels, assignees, milestone, weight
+or description changed. Earlier, a target issue that does not exist answered `404 Not found`
+and an unknown `link_type` answered `400 link_type does not have a valid value`.
 
 ## remove-blocker
 
@@ -875,8 +876,9 @@ Contract: removes the link that marks issue `<n>` as blocked by `<blocker>`.
 glab api --hostname <host> -X DELETE "projects/<enc>/issues/<n>/links/<issue_link_id>"
 ```
 
-`<issue_link_id>` comes from **list-blockers** on `<n>`. UNVERIFIED, as for **add-blocker**:
-it ran only with a link id that does not exist, which answered `404 Not found`.
+`<issue_link_id>` comes from **list-blockers** on `<n>`. UNVERIFIED: no real link was removed
+(the board's links are its record); the call ran only with a link id that does not exist,
+which answered `404 Not found`.
 
 ## Batch parents
 
