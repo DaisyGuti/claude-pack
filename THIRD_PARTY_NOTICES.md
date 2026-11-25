@@ -11,6 +11,7 @@ carries that project's license text in its own folder, and this file lists it.
 | [`ui-design:react-best-practices`](plugins/ui-design/skills/react-best-practices) | [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) at `063bee9` | MIT | [`LICENSE.txt`](plugins/ui-design/skills/react-best-practices/LICENSE.txt) |
 | [`ui-design:react-native-skills`](plugins/ui-design/skills/react-native-skills) | [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) at `063bee9` | MIT | [`LICENSE.txt`](plugins/ui-design/skills/react-native-skills/LICENSE.txt) |
 | [`ui-design:ux-review`](plugins/ui-design/skills/ux-review) (two reference files, partly) | [phazurlabs/sumi](https://github.com/phazurlabs/sumi) | Apache-2.0 | [`LICENSE.txt`](plugins/ui-design/skills/ux-review/LICENSE.txt) |
+| [`team-comms:clean-writing`](plugins/team-comms/skills/clean-writing) (the plain-English rules and word swaps) | [AminBlg/SimpleEnglish](https://github.com/AminBlg/SimpleEnglish) at `300432a` | MIT | [`LICENSE.txt`](plugins/team-comms/skills/clean-writing/LICENSE.txt) |
 
 ## Notes
 
@@ -28,6 +29,10 @@ carries that project's license text in its own folder, and this file lists it.
 - **phazurlabs/sumi.** In `ux-review`, `references/critique-protocol.md` and three sections
   of `references/accessibility.md` are adapted from sumi's commands and skills. The files
   were modified; the rest of the skill was written for this pack.
+- **AminBlg/SimpleEnglish.** In `clean-writing`, the plain-English pass in `SKILL.md`,
+  `references/plain-english.md` and the word-swap table in `references/slop-patterns.md` are
+  adapted from the `simple-english` skill and its references. The text was shortened and
+  reworded. It holds no ASD-STE100 standard or dictionary text.
 - **CIS Google Cloud Platform Foundation Benchmark IDs, via Prowler.** The recommendation
   IDs and titles in
   [`plugins/secure-build/skills/gcp-review/references/cis-gcp-map.json`](plugins/secure-build/skills/gcp-review/references/cis-gcp-map.json)

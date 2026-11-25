@@ -1,6 +1,7 @@
 # team-comms
 
-Slack catch-ups and drafts, standups and weekly updates, design docs and decision records.
+Slack catch-ups and drafts, standups and weekly updates, design docs and decision records, and
+an editing pass that makes writing clear and concise.
 
 ## What it carries
 
@@ -12,8 +13,13 @@ Slack catch-ups and drafts, standups and weekly updates, design docs and decisio
 | `status-update` | Build a standup or weekly update from your git commits, pull requests or merge requests and tickets on GitHub (`gh`) or GitLab (`glab`). |
 | `design-doc` | Write an R&D design doc or RFC with a required security and compliance section, saved in the repo's docs folder. |
 | `adr` | Write a numbered architecture decision record in MADR format, with superseded records linked. |
+| `clean-writing` | Edit a doc, README, ADR, PR or MR body, ticket, message or docs folder: remove AI slop and filler, use plain English, say each fact once, and give a long document a purpose line and contents list. Proposes a numbered table of rewrites and edits a file only after you approve rows, unless you ask it to apply directly. |
 
 Skills show as `/team-comms:<skill>` and Claude also picks them up from what you ask.
+
+| Agent | Use it to |
+| --- | --- |
+| `writing-editor` | Run `clean-writing` on the files in its brief, one agent per file or folder in parallel. Returns the proposed rewrites, or applies the rows you approved. |
 
 ## Install alongside
 
@@ -35,6 +41,7 @@ All scripts use the Python 3.11+ standard library.
 | `scripts/slack_helpers.py` | `slack-catchup` | Resolves "since yesterday" to a Slack timestamp and builds message links |
 | `scripts/collect_activity.py` | `status-update` | Gathers commits, pull or merge requests, reviews and tickets as JSON |
 | `scripts/doc_tool.py` | `design-doc`, `adr` | Finds the docs folder, numbers files, edits ADR status, checks completeness |
+| `scripts/check_facts.py` | `clean-writing` | Lists the numbers, units, links, inline code and code blocks an edit dropped |
 
 ## Tests and evals
 

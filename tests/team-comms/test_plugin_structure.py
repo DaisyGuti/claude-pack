@@ -37,7 +37,7 @@ MIN_EVALS_PER_SKILL = 3
 
 
 def frontmatter(path: Path) -> dict[str, str]:
-    """Read the frontmatter keys; supports plain, quoted and folded (>-) scalar values."""
+    """Read the frontmatter keys: plain, quoted and folded (>-) scalars, and block lists."""
     lines = path.read_text(encoding="utf-8").splitlines()
     assert lines and lines[0] == "---", f"{path}: opening --- must be line 1"
     fields: dict[str, str] = {}
@@ -51,7 +51,7 @@ def frontmatter(path: Path) -> dict[str, str]:
         match = re.match(r"^([A-Za-z][\w-]*):\s*(.*)$", line)
         assert match, f"{path}: cannot read frontmatter line {line!r}"
         key, value = match.group(1), match.group(2).strip()
-        if value in {">-", ">", "|", "|-"}:
+        if value in {"", ">-", ">", "|", "|-"}:  # a block scalar or a block list follows
             fields[key] = ""
             continue
         key = None
@@ -76,6 +76,7 @@ def markdown_files(*, include_assets: bool = False) -> list[Path]:
 def test_the_expected_skills_exist() -> None:
     assert SKILLS == [
         "adr",
+        "clean-writing",
         "design-doc",
         "slack-catchup",
         "slack-draft",
@@ -210,6 +211,38 @@ def test_no_personal_paths_or_secrets_ship_in_the_plugin(load_script) -> None:
         if "evals" in path.parts:
             continue  # eval prompts carry the documented example key on purpose
         assert not lint.check_secrets(text), f"{path} looks like it holds a secret"
+
+
+AGENTS = sorted((PLUGIN / "agents").glob("*.md"))
+# Plugin agents silently ignore these fields (authoring guide G70).
+IGNORED_IN_PLUGIN_AGENTS = {"permissionMode", "hooks", "mcpServers", "initialPrompt"}
+
+
+@pytest.mark.parametrize("path", AGENTS, ids=lambda p: p.stem)
+def test_agent_frontmatter_preloads_a_real_skill_and_no_skill_tool(path: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    fields = frontmatter(path)
+    assert fields["name"] == path.stem
+    assert fields["description"]
+    assert not set(fields) & IGNORED_IN_PLUGIN_AGENTS
+    tools = {t.strip() for t in fields["tools"].split(",")}
+    assert "Skill" not in tools, "list skills under skills:, never in tools"
+    preloaded = re.findall(r"^  - team-comms:([\w-]+)$", text, re.M)
+    assert preloaded, f"{path.name} preloads no team-comms skill"
+    for skill in preloaded:
+        assert skill in SKILLS, f"{path.name} preloads {skill}, which does not exist"
+
+
+@pytest.mark.parametrize("path", AGENTS, ids=lambda p: p.stem)
+def test_each_agent_has_a_delegation_eval(path: Path) -> None:
+    texts = [
+        g.read_text(encoding="utf-8")
+        for case in sorted((PLUGIN / "evals").glob(f"{path.stem}-agent-*"))
+        for g in case.glob("graders/*.md")
+    ]
+    assert any(
+        "tool: Agent" in t and f"team-comms:{path.stem}" in t and "min: 0" not in t for t in texts
+    ), f"{path.stem} needs an eval case that expects the delegation"
 
 
 def test_scripts_are_executable_python_with_a_shebang() -> None:

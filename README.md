@@ -31,7 +31,7 @@ GitHub and GitLab are both supported wherever a tracker, pull request or CI is i
 | [`security`](plugins/security) | Threat modeling, one merged scan from the free scanners, government compliance mapping, and a security-auditor agent |
 | [`secure-build`](plugins/secure-build) | Hardened Dockerfiles and CI, image scanning, SBOMs and signing, a read-only Google Cloud review, and GitHub-to-GitLab migration |
 | [`guardrails`](plugins/guardrails) | Hooks that block risky commands, secret leaks and pushes to the main branch while Claude works |
-| [`team-comms`](plugins/team-comms) | Slack catch-ups and drafts, status updates and standups, design docs and decision records |
+| [`team-comms`](plugins/team-comms) | Slack catch-ups and drafts, status updates and standups, design docs and decision records, and a writing cleanup pass with its editor agent |
 
 ## Every skill and agent
 
@@ -125,6 +125,8 @@ carry their own dry-run or confirmation step.
 | `/team-comms:status-update` | A standup or weekly update from your commits, pull requests and tickets |
 | `/team-comms:design-doc` | A design doc with a required security and compliance section |
 | `/team-comms:adr` | A numbered architecture decision record in MADR format |
+| `/team-comms:clean-writing` | Edits a doc, README, ADR, PR or MR body, ticket, message or docs folder: removes AI slop and filler, puts it in plain English and organizes long documents, keeping every fact. Proposes a numbered table of rewrites before it edits a file |
+| `@agent-team-comms:writing-editor` | Runs `clean-writing` on the files in its brief, one agent per file or folder, and returns the proposed rewrites or applies approved ones |
 
 ## Install on a new machine
 
