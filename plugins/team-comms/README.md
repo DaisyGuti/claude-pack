@@ -41,7 +41,7 @@ All scripts use the Python 3.11+ standard library.
 | `scripts/slack_helpers.py` | `slack-catchup` | Resolves "since yesterday" to a Slack timestamp and builds message links |
 | `scripts/collect_activity.py` | `status-update` | Gathers commits, pull or merge requests, reviews and tickets as JSON |
 | `scripts/doc_tool.py` | `design-doc`, `adr` | Finds the docs folder, numbers files, edits ADR status, checks completeness |
-| `scripts/check_facts.py` | `clean-writing` | Lists the numbers, links, inline code and code blocks an edit dropped |
+| `scripts/check_facts.py` | `clean-writing` | Lists the numbers, units, links, inline code and code blocks an edit dropped |
 
 ## Tests and evals
 

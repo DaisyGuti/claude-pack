@@ -10,8 +10,8 @@ carries that project's license text in its own folder, and this file lists it.
 | [`ui-design:composition-patterns`](plugins/ui-design/skills/composition-patterns) | [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) at `063bee9` | MIT | [`LICENSE.txt`](plugins/ui-design/skills/composition-patterns/LICENSE.txt) |
 | [`ui-design:react-best-practices`](plugins/ui-design/skills/react-best-practices) | [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) at `063bee9` | MIT | [`LICENSE.txt`](plugins/ui-design/skills/react-best-practices/LICENSE.txt) |
 | [`ui-design:react-native-skills`](plugins/ui-design/skills/react-native-skills) | [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) at `063bee9` | MIT | [`LICENSE.txt`](plugins/ui-design/skills/react-native-skills/LICENSE.txt) |
-| [`team-comms:clean-writing`](plugins/team-comms/skills/clean-writing) (the plain-English rules and word swaps) | [AminBlg/SimpleEnglish](https://github.com/AminBlg/SimpleEnglish) at `300432a` | MIT | [`LICENSE.txt`](plugins/team-comms/skills/clean-writing/LICENSE.txt) |
 | [`ui-design:ux-review`](plugins/ui-design/skills/ux-review) (two reference files, partly) | [phazurlabs/sumi](https://github.com/phazurlabs/sumi) | Apache-2.0 | [`LICENSE.txt`](plugins/ui-design/skills/ux-review/LICENSE.txt) |
+| [`team-comms:clean-writing`](plugins/team-comms/skills/clean-writing) (the plain-English rules and word swaps) | [AminBlg/SimpleEnglish](https://github.com/AminBlg/SimpleEnglish) at `300432a` | MIT | [`LICENSE.txt`](plugins/team-comms/skills/clean-writing/LICENSE.txt) |
 
 ## Notes
 

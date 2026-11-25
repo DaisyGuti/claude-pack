@@ -40,7 +40,7 @@ What AI-flavored writing does, with a rewrite for each. Read it for the slop pas
 
 | Before | After |
 | --- | --- |
-| The credential rows rest on the built artifact rather than on reading the build script, because a guard that never fires looks identical to one that has nothing to catch. | The credential check reads the built artifact. It does not read the build script. |
+| The credential rows rest on the built artifact rather than on reading the build script, because a guard that never fires looks identical to one that has nothing to catch. | `The credential relies on the built artifact, not the build script.` |
 | Two deployments exist and only one of them is assessed here | This document assesses one of two deployments. |
 | A row whose control lives elsewhere names the system that supplies it | Each row names its control's system. |
 | A figure can be compared with the same figure last month. That is what run_line being rows rather than one stored document buys. | Figures can be compared historically. |
