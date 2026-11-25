@@ -19,13 +19,15 @@ that is closed or missing, or to a tracker or batch parent (with its open parts)
 `deps.py`'s cycle check on the links as they would be. It links only within the `--repo`
 list, and reads a `Blocked:` comment only from someone who can write to the repo, since what
 it reads decides what `--apply` adds; a person reads the dry run before anyone applies it.
-Without `--apply` it changes nothing. With `--apply` it adds each planned link, except those
-on a cycle, and leaves the body text as it is.
+`--milestone` and `--label` narrow it to blocked tickets in that milestone carrying every
+named label (a board view); a blocker may be anywhere. Without `--apply` it changes nothing.
+With `--apply` it adds each planned link, except those on a cycle, and leaves the body text as
+it is.
 
 Usage:
     links.py fetch --tracker {github,gitlab} --host HOST --blocked-label NAME --repo REMOTE...
     links.py migrate --tracker {github,gitlab} --host HOST --blocked-label NAME --repo REMOTE...
-        [--apply]
+        [--milestone TITLE] [--label NAME]... [--apply]
 
 Exit codes: 0 done, 1 a tracker call failed (or, with --apply, a link could not be added),
 2 bad input.
@@ -129,6 +131,22 @@ class Issue:
     body: str
     labels: tuple[str, ...]
     blockers: tuple[tuple[str, str], ...]
+    milestone: str | None = None
+
+
+@dataclass(frozen=True)
+class Scope:
+    """Which blocked tickets `migrate` links: in this milestone and carrying every label."""
+
+    milestone: str | None = None
+    labels: tuple[str, ...] = ()
+
+    def covers(self, issue: Issue) -> bool:
+        in_milestone = self.milestone is None or issue.milestone == self.milestone
+        return in_milestone and all(label in issue.labels for label in self.labels)
+
+
+EVERY_TICKET = Scope()
 
 
 class Tracker:
@@ -178,7 +196,7 @@ class GitHub(Tracker):
   repository(owner: $owner, name: $name) {
     issues(states: OPEN, first: 100, after: $endCursor) {
       pageInfo { hasNextPage endCursor }
-      nodes { number title body labels(first: 50) { nodes { name } }
+      nodes { number title body milestone { title } labels(first: 50) { nodes { name } }
         blockedBy(first: 100) { nodes { number state repository { nameWithOwner } } } }
     }
   }
@@ -205,6 +223,7 @@ class GitHub(Tracker):
                         body=node["body"] or "",
                         labels=tuple(label["name"] for label in node["labels"]["nodes"]),
                         blockers=blockers,
+                        milestone=(node.get("milestone") or {}).get("title"),
                     )
                 )
         return issues
@@ -287,7 +306,7 @@ class GitLab(Tracker):
   project(fullPath: $path) {
     issues(state: opened, first: 100, after: $endCursor) {
       pageInfo { hasNextPage endCursor }
-      nodes { iid title description labels { nodes { title } }
+      nodes { iid title description milestone { title } labels { nodes { title } }
         blockedByIssues { nodes { state reference(full: true) } } }
     }
   }
@@ -326,6 +345,7 @@ class GitLab(Tracker):
                         body=node["description"] or "",
                         labels=tuple(label["title"] for label in node["labels"]["nodes"]),
                         blockers=blockers,
+                        milestone=(node.get("milestone") or {}).get("title"),
                     )
                 )
         return issues
@@ -528,7 +548,10 @@ def named_dependencies(issue: Issue, comment: str | None) -> list[tuple[str, str
 
 
 def plan_migration(
-    board: Board, resolve: Callable[[str], Resolved], comments: dict[str, str | None]
+    board: Board,
+    resolve: Callable[[str], Resolved],
+    comments: dict[str, str | None],
+    scope: Scope = EVERY_TICKET,
 ) -> Migration:
     """The links to add, and each named ref that is not linked with why. Calls no write."""
     plan = Migration()
@@ -536,6 +559,8 @@ def plan_migration(
     by_ref = {issue.ref: issue for issue in board.issues}
     resolved: dict[str, Resolved] = {}
     for issue in board.issues:
+        if not scope.covers(issue):
+            continue
         linked = {b for b, _ in issue.blockers}
         seen: set[str] = set()
         for text, source in named_dependencies(issue, comments.get(issue.ref)):
@@ -585,14 +610,20 @@ def plan_migration(
     return plan
 
 
-def migrate(tracker: Tracker, repos: Sequence[str], blocked_label: str, apply: bool) -> int:
+def migrate(
+    tracker: Tracker,
+    repos: Sequence[str],
+    blocked_label: str,
+    apply: bool,
+    scope: Scope = EVERY_TICKET,
+) -> int:
     board = read_board(tracker, repos, blocked_label)
     comments = {
         issue.ref: tracker.latest_blocked_comment(issue.ref)
         for issue in board.issues
-        if board.held(issue)
+        if board.held(issue) and scope.covers(issue)
     }
-    plan = plan_migration(board, tracker.resolve, comments)
+    plan = plan_migration(board, tracker.resolve, comments, scope)
     verb = "add" if apply else "would add"
     for link in plan.links:
         note = "  (on a cycle: not added)" if plan.on_a_cycle(link) else ""
@@ -633,13 +664,20 @@ def main(argv: list[str] | None = None) -> int:
         cmd.add_argument("--repo", action="append", required=True, help="a registry Remote")
         if name == "migrate":
             cmd.add_argument("--apply", action="store_true", help="add the links")
+            cmd.add_argument("--milestone", help="only tickets in this milestone")
+            cmd.add_argument(
+                "--label", action="append", default=[], help="only tickets with this label"
+            )
     args = parser.parse_args(argv)
+    # Each line shows as it is printed, so a long run can be watched and stopped.
+    sys.stdout.reconfigure(line_buffering=True)  # type: ignore[union-attr]
     tracker = TRACKERS[args.tracker](args.host)
     try:
         if args.command == "fetch":
             print(json.dumps(fetch(tracker, args.repo, args.blocked_label), indent=2))
             return 0
-        return migrate(tracker, args.repo, args.blocked_label, args.apply)
+        scope = Scope(args.milestone, tuple(args.label))
+        return migrate(tracker, args.repo, args.blocked_label, args.apply, scope)
     except (TrackerError, KeyError, TypeError, ValueError) as exc:
         print(f"links.py: {exc}", file=sys.stderr)
         return EXIT_TRACKER
