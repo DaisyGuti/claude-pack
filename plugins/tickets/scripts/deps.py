@@ -66,7 +66,7 @@ ISSUE_URL = re.compile(
 # Any other URL is not a ticket ref (`.../merge_requests/4`, a `#fragment`).
 OTHER_URL = re.compile(r"https?://\S+")
 # `#12`, `app#12` or `group/app#12`, not inside a word.
-SHORT_REF = re.compile(r"(?<![\w/#.-])(?P<repo>[\w.-]+(?:/[\w.-]+)*)?#(?P<n>\d+)\b")
+SHORT_REF = re.compile(r"(?<![\w/#.-])(?P<repo>[\w.-]*\w(?:/[\w.-]*\w)*)?(?<![.-])#(?P<n>\d+)\b")
 OPEN, CLOSED = "open", "closed"
 
 

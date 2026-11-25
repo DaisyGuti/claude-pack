@@ -130,3 +130,8 @@ def test_the_same_board_gives_the_same_report(tmp_path: Path) -> None:
     # Separate processes, so a set or hash order leaking into the output would show.
     outputs = {run_script(tmp_path, {"tickets": CIRCULAR_BOARD}).stdout for _ in range(3)}
     assert len(outputs) == 1 and json.loads(outputs.pop())["cycles"]
+
+
+def test_a_ref_after_a_hyphen_is_not_a_repo_name() -> None:
+    """ "post-#12" in prose is not a repo called `post-`; "lib#3" is a repo."""
+    assert deps.refs_in("acme/app", "post-#12, then lib#3 and #4") == ["acme/lib#3", "acme/app#4"]
