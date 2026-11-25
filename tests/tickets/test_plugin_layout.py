@@ -336,7 +336,7 @@ def test_ready_means_planned_in_planning_and_grooming() -> None:
     assert "**Ready means planned.**" in triage
     assert "| Planned, with no open blocker | ready |" in triage
     assert "| Not planned yet | backlog until step 7 plans it" in triage
-    assert "carries the blocked label and sits in the ready lane" in triage
+    assert "A labelled ticket never waits in the backlog." in triage
     for doc in (
         PLUGIN / "skills" / "daily-grooming" / "SKILL.md",
         PLUGIN / "README.md",
@@ -354,6 +354,19 @@ def test_model_label_is_sized_to_the_plans_scope() -> None:
     assert "tricky invariants" in section
     planning = flat(PLUGIN / "references" / "plan-one-ticket.md")
     assert "Size it to the plan's scope" in planning
+
+
+def test_planning_and_grooming_check_dependencies_with_the_script() -> None:
+    """No hold names a tracker or a chain back to itself; the label and the lane agree."""
+    planning = flat(PLUGIN / "references" / "plan-one-ticket.md")
+    assert "**Before naming a dependency.**" in planning and "`<scripts>/deps.py`" in planning
+    assert "then **set-lane** with role `blocked`" in planning
+    grooming = flat(PLUGIN / "skills" / "daily-grooming" / "references" / "grooming.md")
+    audit = grooming[grooming.index("## 3. Audit") : grooming.index("## 3b.")]
+    # The findings live in deps.py (tests/tickets/test_deps.py); the audit must run it.
+    assert "Run `<scripts>/deps.py <file>`" in audit and "**merged-reviews**" in audit
+    assert "**The blocked label and the blocked lane agree, both ways.**" in audit
+    assert (PLUGIN / "scripts" / "deps.py").is_file()
 
 
 def test_grooming_cuts_ready_waves_with_the_script() -> None:

@@ -64,9 +64,13 @@ comment saying what it is blocked on. No label names a person, and there is no s
 
 **When it goes on.** Whenever work stops on something the person or agent running it
 cannot clear: an open dependency, a decision the ticket does not settle, a live step that
-needs access a worker does not have, or a failure the worker could not get past. On an
-issue someone has started, the label goes on together with a move to the blocked lane. A
-ticket filed with a dependency still open keeps the lane it was filed in. On a review that
+needs access a worker does not have, or a failure the worker could not get past.
+
+**The label and the blocked lane always agree.** On an issue the label goes on together with
+a move to the blocked lane, from whatever lane it sat in, a ticket filed with a dependency
+still open included; a labelled issue never waits in the backlog or ready lane. A dependency
+names the issue that does the work, never a tracker or batch parent that closes last, and
+never an issue that waits on this one (plan-one-ticket.md, "Before naming a dependency"). On a review that
 must not merge yet, the label goes on the review; merge automation and people both read it
 as "do not merge". No skill works or plans a ticket that carries the label.
 
@@ -102,8 +106,9 @@ approver, a team), mention them in the comment. Never guess a person.
 ticket depends on closes and that ticket's most recent `Blocked:` comment has the kind
 `dependency`, the label comes off with a comment saying so. `daily-grooming` does it on its
 next pass after the issue closes, whether a merged review closed it or a person did. A
-worker never closes an issue, so it never clears one. A person clears every other kind:
-remove the label, move the ticket back to the ready lane (or the backlog lane), and comment
+worker never closes an issue, so it never clears one. A person clears every other kind.
+Clearing is one step, whoever does it: remove the label, move the ticket out of the blocked
+lane (to the ready lane when it has a `### Final Plan`, else the backlog lane), and comment
 what changed. A blocked label with no `Blocked:` comment is never cleared automatically;
 whoever finds one asks on the ticket what it is waiting for.
 

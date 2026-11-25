@@ -110,8 +110,10 @@ there are any. Fix them and run it again until it exits 0.
   unassigned.
 - **Blocked:** when a `Depends on:` issue is still open (**issue-state**), the ticket gets the
   registry's blocked label and a `Blocked: dependency` comment naming each open dependency
-  (shape in ticket-labels.md). It keeps the lane it was filed in. `daily-grooming` frees it
-  when the last dependency closes.
+  (shape in ticket-labels.md), and goes to the blocked lane: the label and the lane always
+  agree. Name the issue that does the work, never a tracker or batch parent, and never one
+  whose own dependencies lead back here (plan-one-ticket.md, "Before naming a dependency").
+  `daily-grooming` frees it when the last dependency closes.
 
 ## 5. File it
 

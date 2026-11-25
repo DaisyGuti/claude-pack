@@ -45,6 +45,7 @@ improvise a command for one. When the installed `gh` rejects a flag, run
 - list-open-issues
 - list-open-reviews
 - review-state
+- merged-reviews
 - Batch parents
 - list-parents
 - read-parent
@@ -511,6 +512,29 @@ Contract: `open`, `merged` or `closed` for one review (a closed review that was 
 ```bash
 gh pr view <n> --repo <remote> --json state --jq '.state | ascii_downcase'
 ```
+
+## merged-reviews
+
+Contract: the merged reviews in the same repo that name one issue and merged into the repo's
+default branch, as `{number, url, merged_at}`, one per line; nothing when there are none. A
+review that names the issue without closing it (`Refs #<n>`) lands here while the issue stays
+open: its work is on the default branch, so nothing should wait on the issue any longer.
+
+```bash
+gh repo view <remote> --json defaultBranchRef --jq .defaultBranchRef.name
+gh api --paginate "repos/<remote>/issues/<n>/timeline?per_page=100" --jq '.[]
+  | select(.event == "cross-referenced" and .source.issue.pull_request.merged_at != null)
+  | .source.issue | select(.repository.full_name == "<remote>")
+  | {number, url: .html_url, merged_at: .pull_request.merged_at}'
+gh pr view <number> --repo <remote> --json baseRefName --jq .baseRefName
+```
+
+The first command gives the default branch, once per repo. Run the third once per review the
+second prints, and keep the ones whose base is the default branch. A review that mentions the
+issue leaves a `cross-referenced` event on its timeline whatever the keyword. Checked
+2026-11-25 with `gh` 2.103.0 on a throwaway private repo: an issue, then a pull request with
+`Refs #<n>` in its body, squash-merged; the issue stayed open, the second command printed the
+pull request with its merge time, and the third printed `main`.
 
 ## Batch parents
 
