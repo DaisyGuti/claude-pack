@@ -91,9 +91,15 @@ comment, whether this ticket's body named it or the plan adds it:
    it was cut into parts (its parts' bodies say `Part <N> of <M>` and name it) or a batch
    parent when its title starts with `Batch: `. Name the open part or child whose work this
    ticket needs instead.
-3. **Work already merged frees nothing.** Run **merged-reviews** on each open issue. One that
-   prints a review has its work on the default branch (a review that only said `Refs` leaves
-   its issue open): do not name it, and say in the returned line that it may be ready to close.
+3. **Check work that already merged.** Run **merged-reviews** on each open issue. One that
+   prints a review has some or all of its work on the default branch (`Refs` leaves the issue
+   open). Read the review: when it did what this ticket needs, do not name the issue, and say
+   in the returned line that it may be ready to close; when what this ticket needs is still
+   to come, name it.
+
+**The line holds refs only.** A `Depends on:` line is the refs, comma-separated, and nothing
+else; any note goes on its own line below. Every ref on the line counts as a dependency, a ref
+in a note included.
 
 On a grooming pass, `<scripts>/deps.py` (its docstring holds the input) does all three for
 the whole board at once; use its report rather than reading the chains again.

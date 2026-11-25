@@ -136,9 +136,8 @@ Check, using the bodies and labels already fetched:
   - each **tracker dependency** goes under Needs Attention as `#<ticket> names <tracker or
     parent>; name <name_instead> instead`, or with its `open_parts` to choose from when
     `name_instead` is null;
-  - each **merged dependency** goes under Needs Attention: its work is on the default branch
-    through the reviews listed, so the issue may be ready to close and the ticket naming it
-    should drop it;
+  - each **merged dependency** goes under Needs Attention with its reviews: a person reads them
+    and either closes the issue (its work is done) or keeps it named (more is to come);
   - **cleared** is the next item.
 
   Grooming never edits a `Depends on:` line itself: a person, or the next plan of that

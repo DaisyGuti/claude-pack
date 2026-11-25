@@ -18,8 +18,9 @@ It reports, the same way on every run:
 - **tracker dependencies**: a `Depends on:` that names a tracker or a batch parent, which
   closes last. It names the open parts (or children) to name instead, and `name_instead` when
   exactly one is open;
-- **merged dependencies**: a `Depends on:` that names an open issue whose work already merged
-  to the default branch (a merged review that names it, usually with `Refs`, without closing it);
+- **merged dependencies**: a `Depends on:` that names an open issue a merged review `Refs`
+  (**merged-reviews**): some or all of its work is on the default branch, so a person checks
+  whether the issue is done before anything keeps waiting on it;
 - **cleared**: an open ticket whose every named dependency is closed;
 - **unknown**: a named issue that is not in the input, which the caller checks with
   **issue-state** and adds before running again.
@@ -30,7 +31,8 @@ Usage:
 TICKETS_FILE is JSON: {"tickets": [{"ref", "repo", "state", "title", "body", "parts": [...],
 "children": [...], "merged_reviews": [...]}]}. `ref` is `#<n>` or `<repo>#<n>`; `repo` is the
 registry Remote (`owner/repo`, `group/sub/project`); `state` is `open` or `closed`. Only
-`ref`, `repo` and `state` are required: a closed dependency needs nothing else. A ref in a body
+`ref`, `repo` and `state` are required: a closed dependency needs nothing else. Every ref on a
+dependency line counts, so the line holds refs only (plan-one-ticket.md). A ref in a body
 is `#<n>` (the ticket's own repo), `<repo>#<n>` (a bare project name takes the ticket's
 owner) or an issue URL (`.../issues/<n>`, `.../-/issues/<n>`, `.../-/work_items/<n>`).
 `merged_reviews` lists the URLs **merged-reviews** printed for an open issue. A ref listed

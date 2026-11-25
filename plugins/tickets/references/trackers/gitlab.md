@@ -800,24 +800,30 @@ GitLab's states are `opened`, `closed`, `locked` and `merged`; `locked` is the s
 
 ## merged-reviews
 
-Contract: the merged reviews in the same repo that name one issue and merged into the repo's
-default branch, as `{number, url, merged_at}`, one per line; nothing when there are none. A
-review that names the issue without closing it (`Refs #<n>`) lands here while the issue stays
-open: its work is on the default branch, so nothing should wait on the issue any longer.
+Contract: the merged reviews in the same repo whose description has a `Refs` line naming one
+issue and that merged into the repo's default branch, as `{number, url, merged_at}`, one per
+line; nothing when there are none. Such a review leaves the issue open, and its work is on the
+default branch: maybe all of it, maybe only a part (a worker writes `Refs` for a change that
+finishes part of a ticket), so a person reads it before anything stops waiting on the issue. A
+review that only mentions the issue in prose does not count.
 
 ```bash
 glab api --hostname <host> "projects/<enc>" | jq -c '{id, default_branch}'
 glab api --hostname <host> --paginate --output ndjson "projects/<enc>/issues/<n>/related_merge_requests?per_page=100" |
   jq -c --argjson pid <project id> --arg branch <default branch> \
-  'select(.state == "merged" and .project_id == $pid and .target_branch == $branch) | {number: .iid, url: .web_url, merged_at}'
+  'select(.state == "merged" and .project_id == $pid and .target_branch == $branch)
+  | select((.description // "") | split("\n") | any(test("^\\W*refs?\\b"; "i") and test("(#|/issues/|/work_items/)<n>(\\D|$)")))
+  | {number: .iid, url: .web_url, merged_at}'
 ```
 
 The first command gives the project's numeric id and default branch, once per repo.
 `related_merge_requests` lists every merge request that mentions the issue, whatever the
-keyword, in any state and project; the `select` keeps the merged ones into this project's
-default branch. Checked 2026-11-25 with `glab` 1.130.0 against a self-managed GitLab 19.5
-project: an open issue whose work merged through a merge request that only said `Refs` printed
-six merged merge requests into `main`, and its `closed_by` list was empty.
+keyword, a mention in prose included, in any state and project; the first `select` keeps the
+merged ones into this project's default branch and the second the ones with a `Refs` line.
+Checked 2026-11-25 with `glab` 1.130.0 against a self-managed GitLab 19.5 project: for an open
+issue whose work merged through `Refs` merge requests, six merged merge requests mention it and
+the second `select` kept the two with a `Refs` line; for an issue only mentioned in other merge
+requests' prose it printed nothing.
 
 ## Batch parents
 
